@@ -12,17 +12,18 @@
 
 static bool otaRemoveTree(const std::string &path) {
     struct stat64 st;
-    if (lstat64(path.c_str(), &st)) return errno == ENOENT;
+    if (lstat64(path.c_str(), &st)) { if (errno == ENOENT) return true; fprintf(stderr, "OTA: cannot stat %s: %s\n", path.c_str(), strerror(errno)); return false; }
     if (!S_ISDIR(st.st_mode)) return unlink(path.c_str()) == 0;
     DIR *dir = opendir(path.c_str());
     if (!dir) return false;
     bool ok = true;
-    while (struct dirent *entry = readdir(dir)) {
+    while (struct dirent64 *entry = readdir64(dir)) {
         std::string name(entry->d_name);
         if (name != "." && name != "..") ok = otaRemoveTree(path + "/" + name) && ok;
     }
     closedir(dir);
-    return ok && rmdir(path.c_str()) == 0;
+    if (!ok || rmdir(path.c_str())) { fprintf(stderr, "OTA: cannot remove %s: %s\n", path.c_str(), strerror(errno)); return false; }
+    return true;
 }
 
 static bool otaStagePackage(const std::string &checksum, const std::string &revision) {
