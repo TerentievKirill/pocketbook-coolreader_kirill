@@ -12,6 +12,10 @@ build="${CR3_BUILD_DIR:-$root/work/build-touch-hd3-fw6}"
 revision="${CR3_REVISION:-dev}"
 # Skin archives are built on the host, never with the SDK target executable.
 host_zip=$(command -v zip) || { echo "Install the host zip utility" >&2; exit 1; }
+python3 "$root/tools/test-ota-launcher.py"
+mkdir -p "$build"
+c++ -std=c++11 "$root/tests/ota-version.cpp" -o "$build/ota-version-host"
+"$build/ota-version-host"
 cmake -S "$root" -B "$build" \
     -DCMAKE_TOOLCHAIN_FILE="$root/tools/toolchain-touch-hd3.cmake" \
     -DZIP_EXECUTABLE="$host_zip" \
@@ -19,7 +23,7 @@ cmake -S "$root" -B "$build" \
     -DCMAKE_BUILD_TYPE=Release -DCMAKE_SKIP_RPATH=ON \
     -DCMAKE_C_FLAGS_RELEASE='-O2 -g -DNDEBUG' \
     -DCMAKE_CXX_FLAGS_RELEASE='-O2 -g -DNDEBUG -fno-strict-aliasing -fno-delete-null-pointer-checks' \
-    -DGUI=CRGUI_PB -DDEVICE_NAME=pb360 -DTARGET_TYPE=ARM \
+    -DCR3_RELEASE_VERSION="${CR3_RELEASE_VERSION:-1.0.0}" -DGUI=CRGUI_PB -DDEVICE_NAME=pb360 -DTARGET_TYPE=ARM \
     -DMAX_IMAGE_SCALE_MUL=2 -DPOCKETBOOK_PRO=ON \
     -DPOCKETBOOK_PRO_FW5=ON -DPOCKETBOOK_FW6=ON \
     -DBACKGROUND_CACHE_FILE_CREATION=ON -DENABLE_PB_DB_STATE=OFF

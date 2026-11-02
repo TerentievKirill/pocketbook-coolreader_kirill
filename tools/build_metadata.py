@@ -4,7 +4,7 @@ import hashlib
 import subprocess
 
 REQUIRED_TESTS = {
-    'reference-initialization', 'css-null-ancestor', 'skin-language-symbol',
+    'ota-package', 'reference-initialization', 'css-null-ancestor', 'skin-language-symbol',
     'dependency-compatibility', 'web-tls', 'standby-frontlight',
     'document-render', 'reading-state-migration', 'dictionary-safety', 'history-persistence', 'archive-boundaries', 'atomic-faults',
 }

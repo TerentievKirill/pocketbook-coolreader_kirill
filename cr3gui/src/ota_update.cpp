@@ -40,7 +40,8 @@ bool OTA_isNewVersion() {
     }
     lString32 url = lString32(OTA_VERSION);
     url.replace(lString32("[BRANCH]"), OTA_branch);
-    const char * response = web::get(UnicodeToUtf8(url).c_str()).c_str();
+    const std::string body = web::get(UnicodeToUtf8(url).c_str());
+    const char * response = body.c_str();
     if( strlen(response) > 5 &&
         strlen(response) <= OTA_VERSION_MAX_LENGTH &&
         strcmp(CR_PB_VERSION, response) != 0
@@ -62,7 +63,8 @@ bool OTA_isNewVersion() {
  */
 bool OTA_downloadExists(const lString32 url) {
     CRLog::trace("OTA_downloadExists(%s)", UnicodeToUtf8(url).c_str());
-    const char * response = web::get(UnicodeToUtf8(url).c_str()).c_str();
+    const std::string body = web::get(UnicodeToUtf8(url).c_str());
+    const char * response = body.c_str();
     if( strlen(response) == strlen(OTA_EXISTS_STR) &&
         strcmp(OTA_EXISTS_STR, response) == 0
         ) {
@@ -85,7 +87,8 @@ lString32 OTA_getLinkedDevice(const lString32 deviceModel) {
     lString32 url = lString32(OTA_LINK_MASK);
     url.replace(lString32("[DEVICE]"), deviceModel);
     url.replace(lString32("[BRANCH]"), OTA_branch);
-    const char * response = web::get(UnicodeToUtf8(url).c_str()).c_str();
+    const std::string body = web::get(UnicodeToUtf8(url).c_str());
+    const char * response = body.c_str();
     if( strlen(response) > 0 && strlen(response) <= OTA_VERSION_MAX_LENGTH ) {
         CRLog::trace("OTA_getLinkedDevice(): Got device: %s", response);
         return lString32(response);
@@ -125,6 +128,10 @@ void OTA_DL_dialog_handler(int button) {
     FILE *marker;
     char buffer[2] = "x";
     marker = fopen(OTA_RESTART_MARK, "wb");
+    if (!marker) {
+        Message(ICON_ERROR, "CoolReader", "Could not schedule restart. Restart CoolReader manually.", 3000);
+        return;
+    }
     fwrite(buffer, 1, 1, marker);
     fclose(marker);
 
@@ -256,12 +263,12 @@ bool OTA_updateFrom(const lString32 url) {
  *
  * @return  true launched download
  */
+#ifdef POCKETBOOK_FW6
+#include "ota_fw6.h"
+#endif
 bool OTA_update(const char *branch) {
 #ifdef POCKETBOOK_FW6
-    // Upstream OTA packages contain the incompatible firmware-5 binary.
-    Message(ICON_INFORMATION, "CoolReader",
-            "Install updates for this Touch HD 3 build manually.", 3000);
-    return false;
+    return OTA_updateFW6(branch);
 #endif
 
     CRLog::trace("OTA_update(%s)", branch);

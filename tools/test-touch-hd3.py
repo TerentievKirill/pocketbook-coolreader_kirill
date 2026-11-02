@@ -53,6 +53,14 @@ with zipfile.ZipFile(legacy, 'w') as z:
 # Replace a UTF-8 character with an invalid leading byte, preserving header lengths.
 bad = (out / 'utf8-stored.zip').read_bytes().replace('Т'.encode(), b'\xc0\x80')
 (out / 'invalid-utf8.zip').write_bytes(bad)
+# OTA fixtures cover verified extraction, corruption, traversal and release identity.
+for name in ('good', 'wrong-version', 'traversal', 'missing-binary'):
+    with zipfile.ZipFile(out / ('ota-' + name + '.zip'), 'w', zipfile.ZIP_DEFLATED) as archive:
+        entries = {'release-version.txt': '1.0.0\n', 'bin/cr3-pb.app': 'binary', 'cr3-defaults.ini': 'defaults', 'skins/pb631fw5.cr3skin': 'skin'}
+        if name == 'wrong-version': entries['release-version.txt'] = '0.9.0\n'
+        if name == 'traversal': entries['../escaped'] = 'bad'
+        if name == 'missing-binary': del entries['bin/cr3-pb.app']
+        for entry, data in entries.items(): archive.writestr('system/share/cr3/' + entry, data)
 # A small EPUB exercises the new parser, CSS and image/page-painting path.
 def png_chunk(kind, data):
     return struct.pack('!I', len(data)) + kind + data + struct.pack('!I', zlib.crc32(kind + data) & 0xffffffff)
@@ -123,6 +131,7 @@ for name, sources, engine, arguments in [
     ('web-tls', ['tests/web-tls.cpp', 'cr3gui/src/web.cpp'], True, [tls_url, out / 'trusted.crt', out / 'untrusted.crt', out]),
     ('dictionary-safety', ['tests/dictionary-safety.cpp'], True, []),
     ('history-persistence', ['tests/history-persistence.cpp'], True, [out]),
+    ('ota-package', ['tests/ota-package.cpp'], True, [out]),
     ('archive-boundaries', ['tests/archive-boundaries.cpp'], True, [out]),
     ('atomic-faults', ['tests/atomic-faults.cpp'], True, [out]),
 ]:

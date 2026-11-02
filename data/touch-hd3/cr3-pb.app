@@ -23,9 +23,42 @@ if [ -f "$1" ]; then
         rm -f "$last_book_temp"
     fi
 fi
+share=/mnt/ext1/system/share/cr3
+pending=/mnt/ext1/system/share/cr3-ota-new
+backup=/mnt/ext1/system/share/cr3-ota-old
+# Recover an interrupted directory switch before starting the executable.
+if [ ! -d "$share" ] && [ -d "$backup" ]; then
+    mv "$backup" "$share" || exit 1
+fi
 while :; do
+    if [ -f "$pending/.ready" ] && [ -x "$pending/bin/cr3-pb.app" ]; then
+        merged=/mnt/ext1/system/share/cr3-ota-merged
+        rm -rf "$merged"
+        # Merge into a copy so user-added fonts/assets and last-book.txt survive.
+        if cp -R "$share" "$merged" && cp -R "$pending/." "$merged/"; then
+            rm -rf "$backup"
+            if mv "$share" "$backup"; then
+                if mv "$merged" "$share"; then
+                    touch "$share/.ota-first-run"
+                    rm -f "$share/.ready"
+                    rm -rf "$pending"
+                else
+                    mv "$backup" "$share" || exit 1
+                fi
+            fi
+        fi
+    fi
     /mnt/ext1/system/share/cr3/bin/cr3-pb.app "$@" > /mnt/ext1/system/cr3-pb.normal.log 2> /mnt/ext1/system/cr3-pb.crash.log
     status=$?
+    if [ -f "$share/.ota-first-run" ]; then
+        if [ "$status" -ne 0 ] && [ -d "$backup" ]; then
+            rm -rf "$pending"
+            mv "$share" "$pending" && mv "$backup" "$share" || exit 1
+            rm -f "$pending/.ready" /mnt/ext1/.cr3restart
+            continue
+        fi
+        rm -f "$share/.ota-first-run"
+    fi
     [ -f /mnt/ext1/.cr3restart ] || exit "$status"
     rm -f /mnt/ext1/.cr3restart
 done

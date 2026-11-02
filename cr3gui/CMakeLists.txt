@@ -1,3 +1,8 @@
+set(CR3_RELEASE_VERSION "1.0.0" CACHE STRING "Stable OTA version (SemVer)")
+if(NOT CR3_RELEASE_VERSION MATCHES "^(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)$")
+    message(FATAL_ERROR "CR3_RELEASE_VERSION must be MAJOR.MINOR.PATCH")
+endif()
+add_definitions(-DCR3_RELEASE_VERSION="${CR3_RELEASE_VERSION}")
 # PocketBook UI. Other historical GUI source files are absent from this tree.
 set(DEVICE_NAME pb360 CACHE STRING "PocketBook keymap and skin source directory")
 

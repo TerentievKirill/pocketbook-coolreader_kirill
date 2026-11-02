@@ -1,0 +1,75 @@
+// FW6 OTA uses only our PB632 package, never upstream firmware-5 builds.
+#include <openssl/sha.h>
+#include <sys/stat.h>
+#include <dirent.h>
+#include <cerrno>
+#include <set>
+#include <fstream>
+#include <sstream>
+#include "ota_version.h"
+#define FW6_OTA_STAGE FLASHDIR "/system/share/cr3-ota-new"
+#define FW6_OTA_URL "https://pocketbook.nimbushub.eu/"
+
+static bool otaRemoveTree(const std::string &path) {
+    struct stat st;
+    if (lstat(path.c_str(), &st)) return errno == ENOENT;
+    if (!S_ISDIR(st.st_mode)) return unlink(path.c_str()) == 0;
+    DIR *dir = opendir(path.c_str());
+    if (!dir) return false;
+    bool ok = true;
+    while (struct dirent *entry = readdir(dir)) {
+        std::string name(entry->d_name);
+        if (name != "." && name != "..") ok = otaRemoveTree(path + "/" + name) && ok;
+    }
+    closedir(dir);
+    return ok && rmdir(path.c_str()) == 0;
+}
+
+static bool otaStagePackage(const std::string &checksum, const std::string &revision) {
+    const char *zip = FLASHDIR "/.cr3-ota.zip";
+    FILE *file = fopen(zip, "rb");
+    if (!file) return false;
+    SHA256_CTX ctx; SHA256_Init(&ctx);
+    unsigned char buffer[32768], hash[SHA256_DIGEST_LENGTH];
+    size_t count;
+    while ((count = fread(buffer, 1, sizeof(buffer), file))) SHA256_Update(&ctx, buffer, count);
+    bool ok = !ferror(file); fclose(file); SHA256_Final(hash, &ctx);
+    char hex[65];
+    for (int i = 0; i < 32; ++i) sprintf(hex + i * 2, "%02x", hash[i]);
+    if (!ok || checksum != hex) return false;
+    if (!otaRemoveTree(FW6_OTA_STAGE) || mkdir(FW6_OTA_STAGE, 0755)) return false;
+    LVContainerRef archive = LVOpenArchieve(LVOpenFileStream(zip, LVOM_READ));
+    if (archive.isNull()) return false;
+    std::set<std::string> names;
+    unsigned long long total = 0;
+    for (int i = 0; i < archive->GetObjectCount(); ++i) {
+        const LVContainerItemInfo *info = archive->GetObjectInfo(i);
+        std::string name = UnicodeToUtf8(lString32(info->GetName())).c_str();
+        const std::string prefix = "system/share/cr3/";
+        if (name.compare(0, prefix.size(), prefix)) continue;
+        name.erase(0, prefix.size());
+        if (name.empty() || name[0] == '/' || name.find('\\') != std::string::npos || !names.insert(name).second) return false;
+        std::istringstream parts(name); std::string part, target = FW6_OTA_STAGE;
+        while (std::getline(parts, part, '/')) {
+            if (part.empty() || part == "." || part == "..") return false;
+            target += "/" + part;
+            if (parts.peek() != EOF && mkdir(target.c_str(), 0755) && errno != EEXIST) return false;
+        }
+        LVStreamRef input = archive->OpenStream(info->GetName(), LVOM_READ);
+        if (input.isNull() || input->GetSize() > 64 * 1024 * 1024) return false;
+        total += input->GetSize(); if (total > 128 * 1024 * 1024) return false;
+        FILE *out = fopen(target.c_str(), "wb"); if (!out) return false;
+        lvsize_t remaining = input->GetSize();
+        while (remaining) {
+            lvsize_t n = 0;
+            if (input->Read(buffer, remaining < sizeof(buffer) ? remaining : sizeof(buffer), &n) != LVERR_OK || !n || fwrite(buffer, 1, n, out) != n) { fclose(out); return false; }
+            remaining -= n;
+        }
+        if (fclose(out)) return false;
+        if (name == "bin/cr3-pb.app" && chmod(target.c_str(), 0755)) return false;
+    }
+    std::ifstream versionFile(FW6_OTA_STAGE "/release-version.txt");
+    std::string packageVersion; std::getline(versionFile, packageVersion);
+    return packageVersion == revision && names.count("bin/cr3-pb.app") && names.count("cr3-defaults.ini") && names.count("skins/pb631fw5.cr3skin");
+}
+

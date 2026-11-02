@@ -78,7 +78,14 @@ enum CRPbCommands {
 
 #define PB_CR3_CACHE_SIZE (0x100000 * 64)
 
+#ifdef POCKETBOOK_FW6
+#ifndef CR3_RELEASE_VERSION
+#define CR3_RELEASE_VERSION "1.0.0"
+#endif
+#define CR_PB_VERSION CR3_RELEASE_VERSION
+#else
 #define CR_PB_VERSION "0.0.6-17-62.1"
+#endif
 #ifdef POCKETBOOK_FW6
 #define CR_PB_BUILD_DATE "2026-10-22"
 #else

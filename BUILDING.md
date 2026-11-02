@@ -93,3 +93,24 @@ Tests use the existing bundled QEMU when available, otherwise `qemu-arm` on
 PATH. `CR3_QEMU` selects an explicit executable. The firmware runtime and fonts
 must have the layout described in `tests/README.txt`; the Docker bootstrap
 prepares that layout automatically.
+
+## Versioned OTA releases
+
+Set `CR3_RELEASE_VERSION=1.0.0` (SemVer MAJOR.MINOR.PATCH) alongside the build
+revision. Increase the version for every published package; never replace the
+bytes of a published version. The engine version is tracked separately.
+The initial OTA-enabled build requires one USB installation because older FW6
+builds explicitly disabled OTA and their launcher cannot install staged updates.
+After that, Settings → OTA Update reads the PB632/FW6 stable channel from
+https://pocketbook.nimbushub.eu/ota/pb632-fw6.txt and downloads the immutable
+version path. Only newer versions for PB632 firmware U632.6.11.2001 are accepted.
+The package checksum and embedded release version must match before staging.
+On restart, the launcher merges assets in a separate directory and switches it
+into place, preserving configuration, history, last book and custom assets.
+Interrupted switches recover the previous directory; a failed first application
+run rolls back. Keep enough free storage for the ZIP and two copies of assets.
+The installer uses the existing launcher; future launcher changes require USB.
+
+OTA package extraction has an ARM regression for wrong checksums, path traversal,
+missing binaries and wrong versions. The launcher and version comparison also
+have isolated host regressions. Physical-device OTA testing is still required.

@@ -82,6 +82,7 @@ manifest = {
     'device': 'PocketBook Touch HD 3 / PB632 / B288 / ARM Cortex-A7 softfp',
     'target_firmware': 'U632.6.11.2001',
     'revision': args.revision,
+    'release_version': next(line.split('=', 1)[1] for line in (build / 'CMakeCache.txt').read_text().splitlines() if line.startswith('CR3_RELEASE_VERSION:STRING=')),
     'source': source_metadata(root),
     'dependencies': dependencies,
     'engine': json.loads((root / 'crengine/UPSTREAM.json').read_text()),
@@ -93,6 +94,7 @@ manifest = {
 }
 subprocess.run([sys.executable, str(root / 'tools/test-package-assets.py'), str(stage)], check=True)
 manifest['package_asset_validation'] = 'passed'
+(share / 'release-version.txt').write_text(manifest['release_version'] + '\n')
 (stage / 'build-info.json').write_text(json.dumps(manifest, indent=2) + '\n')
 dest = args.dist_dir or root / 'dist'
 dest.mkdir(exist_ok=True)

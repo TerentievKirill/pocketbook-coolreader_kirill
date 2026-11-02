@@ -4,8 +4,9 @@
 #include <limits>
 
 namespace {
-void configureRequest(CURL *curl)
+void configureRequest(CURL *curl, const string &url)
 {
+    curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
     // Firmware CA store is the build default. Respect OpenSSL's standard
@@ -14,7 +15,8 @@ void configureRequest(CURL *curl)
     if (caFile && *caFile)
         curl_easy_setopt(curl, CURLOPT_CAINFO, caFile);
     curl_easy_setopt(curl, CURLOPT_PROTOCOLS_STR, "http,https");
-    curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS_STR, "http,https");
+    curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS_STR,
+        url.find("https://pocketbook.nimbushub.eu/") == 0 ? "https" : "http,https");
     curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 5L);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 15L);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 60L);
@@ -101,7 +103,7 @@ string web::easycurl(const string &url, bool post, const string &postparamstring
           curl_easy_setopt(curl, CURLOPT_POST,1);
           curl_easy_setopt(curl, CURLOPT_POSTFIELDS,postparamstring.c_str());
       }
-      configureRequest(curl);
+      configureRequest(curl, url);
       curl_easy_setopt(curl, CURLOPT_COOKIEFILE, LIB_CURL_COOKIES_FILE);//read from
       curl_easy_setopt(curl, CURLOPT_COOKIEJAR, LIB_CURL_COOKIES_FILE); //write to
  
@@ -167,7 +169,10 @@ bool web::easycurlBinary(const string &url, bool post, const string &postparamst
           curl_easy_setopt(curl, CURLOPT_POST,1);
           curl_easy_setopt(curl, CURLOPT_POSTFIELDS,postparamstring.c_str());
       }
-      configureRequest(curl);
+      configureRequest(curl, url);
+      curl_easy_setopt(curl, CURLOPT_TIMEOUT, 600L);
+      curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 1024L);
+      curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 60L);
       curl_easy_setopt(curl, CURLOPT_COOKIEFILE, LIB_CURL_COOKIES_FILE);//read from
       curl_easy_setopt(curl, CURLOPT_COOKIEJAR, LIB_CURL_COOKIES_FILE); //write to
  
