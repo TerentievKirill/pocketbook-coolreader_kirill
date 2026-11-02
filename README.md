@@ -128,8 +128,8 @@ Optional shaping/SVG integrations are not enabled yet.
 | `data/touch-hd3/` | Launchers, welcome book and device configuration |
 | `thirdparty/`, `tinydict/` | Rendering and document-format dependencies |
 | `tools/`, `tests/` | Build, package and regression tooling |
-| `docs/` | Static download site and installation page |
-| `deploy/nginx/` | Direct nginx hosting configuration and runbook |
+| Website | [Standalone pocketbook-web repository](https://github.com/dderugin/pocketbook-web) |
+| Hosting | [Website configuration and runbook](https://github.com/dderugin/pocketbook-web/tree/main/deploy/nginx) |
 
 CMake builds the PocketBook frontend (`CRGUI_PB`). Historical desktop frontends,
 the obsolete Jinke metadata plugin, older SDK scripts and prebuilt OTA packages

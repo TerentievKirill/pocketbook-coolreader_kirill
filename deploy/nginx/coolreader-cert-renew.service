@@ -1,9 +1,0 @@
-[Unit]
-Description=Renew the CoolReader website TLS certificate
-Wants=network-online.target
-After=network-online.target
-
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/certbot renew --quiet --cert-name coolreader.nimbushub.eu
-PrivateTmp=true
