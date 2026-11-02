@@ -27,4 +27,12 @@ with tempfile.TemporaryDirectory() as tmp:
  shutil.rmtree(share)
  subprocess.run(['sh',str(script)],check=True)
  assert (share/'bin/cr3-pb.app').exists()
+ # A newly installed process that fails on its first run rolls back.
+ (pending/'bin').mkdir(parents=True)
+ (pending/'bin/cr3-pb.app').write_text('#!/bin/sh\nexit 1\n')
+ (pending/'bin/cr3-pb.app').chmod(0o755)
+ (pending/'.ready').write_text('1.0.2\n')
+ subprocess.run(['sh',str(script)],check=True)
+ assert (share/'bin/cr3-pb.app').read_text()=='#!/bin/sh\nexit 0\n'
+ assert not (pending/'.ready').exists()
 print('PASS: incomplete stage, installation, custom assets, last book and interrupted-switch recovery')

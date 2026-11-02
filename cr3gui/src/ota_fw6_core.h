@@ -11,8 +11,8 @@
 #define FW6_OTA_URL "https://pocketbook.nimbushub.eu/"
 
 static bool otaRemoveTree(const std::string &path) {
-    struct stat st;
-    if (lstat(path.c_str(), &st)) return errno == ENOENT;
+    struct stat64 st;
+    if (lstat64(path.c_str(), &st)) return errno == ENOENT;
     if (!S_ISDIR(st.st_mode)) return unlink(path.c_str()) == 0;
     DIR *dir = opendir(path.c_str());
     if (!dir) return false;
