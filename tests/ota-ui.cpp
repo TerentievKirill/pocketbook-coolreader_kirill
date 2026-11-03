@@ -40,10 +40,15 @@ bool OTA_update(const char *branch) { return OTA_updateFW6(branch); }
 void SetHardTimer(const char *, void (*callback)(), int delay) { ++timers;timerCallback=callback;CHECK(delay>0); }
 #include "../cr3gui/src/ota_dispatch.h"
 #include "../cr3gui/src/ota_menu.h"
+class OTATestMenu : public CRMenu {
+public:
+ using CRMenu::CRMenu;
+ using CRMenu::onItemSelect;
+};
 int main() {
  response="1.0.1\n"+std::string(64,'a')+"\n";
  CRGUIWindowManager wm(NULL);
- CRMenu menu(&wm,NULL,1,lString32("Settings"),LVImageSourceRef(),LVFontRef(),LVFontRef());
+ OTATestMenu menu(&wm,NULL,1,lString32("Settings"),LVImageSourceRef(),LVFontRef(),LVFontRef());
  menu.addItem(new CROTAUpdateMenuItem(&menu,123,"OTA Update"));
  CHECK(menu.onItemSelect(0,0));
  // Selection is consumed: no close/destroy and no native dialog during redraw.
