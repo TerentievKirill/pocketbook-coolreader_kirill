@@ -6,7 +6,7 @@ From the repository root:
 CR3_REVISION=local bash tools/docker-build-touch-hd3.sh
 ```
 
-This builds the PocketBook ARM executable, runs all fourteen ARM/QEMU regression
+This builds the PocketBook ARM executable, runs all fifteen ARM/QEMU regression
 groups and package checks, and writes the ZIP, SHA-256 file, test report and
 separate debug symbols into `dist/`. It does not install or publish the build.
 
@@ -117,3 +117,32 @@ have isolated host regressions. Physical-device OTA testing is still required.
 
 OTA UI checks also cover deferred dispatch, retained settings menus, repeated taps,
 explicit OK dismissal, compatibility details and network/manifest/download failures.
+
+OTA checks and downloads use an independent HTTPS transfer driven by UI timers.
+The check presents installed/available versions before downloading, reports real
+byte/percentage progress (bytes only when the length is unknown), allows cancellation,
+verifies the package and offers Restart now / Later. Later installs on the next
+normal application launch. Transfer cancellation removes partial downloads; HTTP,
+TLS/network, checksum, archive and local storage errors stay visible until OK.
+Automatic downloading is never enabled; periodic checks are described below.
+
+Automatic update checks run 30 seconds after the application becomes visible,
+then at most once per day while active. They do not invoke Wi-Fi connection
+helpers, display progress or errors, or wake standby/background tasks. Failures
+retry after 30 minutes. A newer version is announced on the normal reading screen
+after menus/native dialogs close, using Download / Later. Later suppresses the
+same version for 24 hours, including across restarts. Accepted downloads use the
+normal progress, cancellation and restart flow. Settings → Check for updates
+automatically disables/enables these checks; manual OTA Update remains available.
+
+The FW6 status-line menu offers independent frontlight icon, brightness and
+temperature switches. They default off. The icon follows the firmware enabled
+flag; brightness shows 0% while off even if a positive setting is remembered.
+Temperature is the firmware's 0–100 warmth level, not Kelvin; unavailable values
+are omitted. Live checks use weak timers only while the app is visible and
+refresh the reading display only when the state changes.
+
+Compact frontlight status uses a sun/brightness image (slashed when disabled),
+with rendering checks at 8, 12, 16 and 24 pixels and inverted colours. Full menu
+redraws discard clean-row paint caches after native dialogs/network helpers;
+OTA dismissal restores the visible menu without changing its page or selection.

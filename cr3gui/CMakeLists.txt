@@ -1,4 +1,4 @@
-set(CR3_RELEASE_VERSION "1.0.1" CACHE STRING "Stable OTA version (SemVer)")
+set(CR3_RELEASE_VERSION "1.0.2" CACHE STRING "Stable OTA version (SemVer)")
 if(NOT CR3_RELEASE_VERSION MATCHES "^(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)$")
     message(FATAL_ERROR "CR3_RELEASE_VERSION must be MAJOR.MINOR.PATCH")
 endif()
@@ -31,7 +31,7 @@ set(CR3_SOURCES
     src/cr3pocketbook.cpp
 )
 if(POCKETBOOK_PRO)
-    list(APPEND CR3_SOURCES src/web.cpp src/ota_update.cpp src/pb_toc.cpp)
+    list(APPEND CR3_SOURCES src/web.cpp src/web_transfer.cpp src/ota_update.cpp src/pb_toc.cpp)
     add_definitions(-DPOCKETBOOK_PRO=1)
     if(POCKETBOOK_PRO_PRO2)
         add_definitions(-DPOCKETBOOK_PRO_PRO2=1)

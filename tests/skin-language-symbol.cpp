@@ -160,6 +160,25 @@ static int checkSettingsHeader(const char *skinFile, const char *previewDirector
     menu.reconfigure(CRGUI_CONFIGURE_FLAG_SCREEN_ORIENTATION);
     lvRect title;
     CHECK(menu.getTitleRect(title) && title.height() == 75);
+    // Native Wi-Fi/progress dialogs can overwrite the menu client framebuffer.
+    // A full redraw must repaint every clean row, not just the top/bottom bars.
+    SettingsMenu *restored=new SettingsMenu(&wm);
+    restored->reconfigure(CRGUI_CONFIGURE_FLAG_SCREEN_ORIENTATION);
+    wm.activateWindow(restored);restored->setCurPage(1);
+    restored->setCurItem(restored->getTopItem()+1);
+    wm.update(true,true);
+    int page=restored->getCurPage(), selection=restored->getSelectedItemIndex();
+    LVRef<LVDrawBuf> buffer=screen.getCanvas();std::vector<lUInt32> expected;
+    for(int y=0;y<buffer->GetHeight();++y)for(int x=0;x<buffer->GetWidth();++x)expected.push_back(buffer->GetPixel(x,y));
+    lvRect client;CHECK(restored->getClientRect(client));
+    for(int y=client.top+5;y<client.bottom-5;y+=18)
+        buffer->FillRect(client.left+10,y,client.right-10,y+3,0x000000);
+    wm.update(true,true);
+    size_t at=0;
+    for(int y=0;y<buffer->GetHeight();++y)for(int x=0;x<buffer->GetWidth();++x)CHECK(buffer->GetPixel(x,y)==expected[at++]);
+    CHECK(restored->getCurPage()==page && restored->getSelectedItemIndex()==selection);
+    puts("PASS: full menu repaint restores clean client rows after native OTA/network UI, preserving page and selection");
+
     return 0;
 }
 

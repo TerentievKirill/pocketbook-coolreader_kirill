@@ -9,6 +9,14 @@
 #define EnumFonts PB_EnumFonts
 #endif
 
+#ifdef POCKETBOOK_FW6
+#define PROP_OTA_AUTO_CHECK "cr3.ota.auto.check"
+bool pbAutoUpdateEnabled();
+bool pbCanRunBackgroundUpdate();
+bool pbCanShowUpdatePrompt();
+void pbRestoreUpdateScreen();
+#endif
+
 #define PB_COMMANDS_START 6200
 
 enum CRPbCommands {
@@ -80,7 +88,7 @@ enum CRPbCommands {
 
 #ifdef POCKETBOOK_FW6
 #ifndef CR3_RELEASE_VERSION
-#define CR3_RELEASE_VERSION "1.0.1"
+#define CR3_RELEASE_VERSION "1.0.2"
 #endif
 #define CR_PB_VERSION CR3_RELEASE_VERSION
 #else

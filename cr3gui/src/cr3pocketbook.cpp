@@ -2116,6 +2116,19 @@ protected:
         return true;
     }
 
+#ifdef POCKETBOOK_FW6
+public:
+    bool syncFrontlightStatus() {
+        int enabled=GetFrontlightEnabled();
+        int warmth=(gotFrontLightColor && inkview_GetFrontlightColor) ? inkview_GetFrontlightColor() : -1;
+        return _docview->setFrontlightState(enabled,GetFrontlightState(),warmth);
+    }
+    void flush() {
+        syncFrontlightStatus();
+        V3DocViewWin::flush();
+    }
+private:
+#endif
     void draw()
     {
         if (m_goToPage != -1) {
@@ -5250,6 +5263,45 @@ void setFrontLightColorValue(int value) {
 
 #endif
 
+#ifdef POCKETBOOK_FW6
+void pbRestoreUpdateScreen() {
+    // Never paint over another native dialog or another task's screen.
+    if (exiting || isStandByMode || !IsTaskActive() || GetEventHandler()!=main_handler ||
+        !CRPocketBookWindowManager::instance) return;
+    CRPocketBookWindowManager::instance->update(true,true);
+}
+static bool frontlightStatusActive = false;
+static void frontlightStatusTimer() {
+    if (!frontlightStatusActive || !CRPocketBookDocView::instance) return;
+    CRPropRef props=CRPocketBookDocView::instance->getProps();
+    bool enabled=props->getIntDef(PROP_STATUS_LINE,0)!=2 &&
+        (props->getBoolDef(PROP_SHOW_FRONTLIGHT,false) || props->getBoolDef(PROP_SHOW_FRONTLIGHT_BRIGHTNESS,false) || props->getBoolDef(PROP_SHOW_FRONTLIGHT_TEMPERATURE,false));
+    if (enabled && pbCanShowUpdatePrompt() && CRPocketBookDocView::instance->syncFrontlightStatus()) {
+        bool old=CRPocketBookScreen::instance->setForceSoftUpdate(true);
+        main_win->setDirty();
+        CRPocketBookWindowManager::instance->update(false);
+        CRPocketBookScreen::instance->setForceSoftUpdate(old);
+    }
+    SetWeakTimer("Frontlight_status",frontlightStatusTimer,enabled ? 1000 : 5000);
+}
+static void setFrontlightStatusActive(bool active) {
+    frontlightStatusActive=active;
+    ClearTimer(frontlightStatusTimer);
+    if(active)SetWeakTimer("Frontlight_status",frontlightStatusTimer,1000);
+}
+bool pbAutoUpdateEnabled() {
+    return CRPocketBookDocView::instance && CRPocketBookDocView::instance->getProps()->getIntDef(PROP_OTA_AUTO_CHECK, 1) != 0;
+}
+bool pbCanRunBackgroundUpdate() {
+    return !exiting && !isStandByMode && IsTaskActive();
+}
+bool pbCanShowUpdatePrompt() {
+    return pbCanRunBackgroundUpdate() && GetEventHandler() == main_handler &&
+        CRPocketBookWindowManager::instance && main_win &&
+        CRPocketBookWindowManager::instance->getTopVisibleWindow() == main_win;
+}
+#endif
+
 bool pbNetworkConnected() {
     return strlen(web::get(PB_NETWORK_TEST_URL).c_str()) > 100;
 }
@@ -5294,6 +5346,10 @@ bool pbNetwork(const char *action) {
 void stopStandByTimer();
 void restartStandByTimer();
 void enterStandByMode() {
+#ifdef POCKETBOOK_FW6
+    OTA_backgroundActive(false);
+    setFrontlightStatusActive(false);
+#endif
 
     if( isStandByMode )
         return;
@@ -5352,6 +5408,10 @@ void exitStandByMode() {
     CRPocketBookScreen::instance->setFullUpdateInterval(updateInterval);
 
     isStandByMode = false;
+#ifdef POCKETBOOK_FW6
+    OTA_backgroundActive(true);
+    setFrontlightStatusActive(true);
+#endif
     restartStandByTimer();
 }
 void restartStandByTimer() {
@@ -5409,6 +5469,10 @@ int main_handler(int type, int par1, int par2)
     }
     switch (type) {
     case EVT_SHOW:
+#ifdef POCKETBOOK_FW6
+        OTA_backgroundActive(true);
+        setFrontlightStatusActive(true);
+#endif
 
         CRPocketBookWindowManager::instance->update(true);
         pbGlobals->BookReady();
@@ -5643,12 +5707,26 @@ int main_handler(int type, int par1, int par2)
         restartStandByTimer();
         break;
 #ifdef POCKETBOOK_PRO
+#ifdef POCKETBOOK_FW6
+    case EVT_FOREGROUND:
+        if (!isStandByMode) { OTA_backgroundActive(true); setFrontlightStatusActive(true); }
+        break;
+    case EVT_HIDE:
+#endif
     case EVT_BACKGROUND:
+#ifdef POCKETBOOK_FW6
+        OTA_backgroundActive(false);
+        setFrontlightStatusActive(false);
+#endif
     	SetWeakTimer("SaveStateTimer", SetSaveStateTimer, 500);
         stopStandByTimer();
         break;
 #endif
     case EVT_EXIT:
+#ifdef POCKETBOOK_FW6
+        OTA_backgroundActive(false);
+        setFrontlightStatusActive(false);
+#endif
         exiting = true;
         stopStandByTimer();
 #ifdef POCKETBOOK_PRO

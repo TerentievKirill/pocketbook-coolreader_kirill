@@ -1,5 +1,7 @@
 #include "crengine.h"
 #include "../cr3gui/src/web.h"
+#include "../cr3gui/src/web_transfer.h"
+#include <unistd.h>
 #include "testutil.h"
 #include <cstdlib>
 #include <fstream>
@@ -38,7 +40,43 @@ int main(int argc, char **argv) {
     FILE *temporary = tmpfile(); CHECK(temporary);
     CHECK(Callbacks::writerBinary(value, 2, 3, temporary) == 6);
     CHECK(!fclose(temporary));
+    // Timer-driven transfers: progress, cancellation, HTTP/TLS and local errors.
+    WebTransfer transfer;
+    CHECK(transfer.start(base + "/ok", "", 4096));
+    while (!transfer.poll()) usleep(1000);
+    CHECK(transfer.succeeded() && transfer.body() == "TLS verified\n");
+    CHECK(transfer.start(base + "/slow", path, 256*1024));
+    bool intermediate = false;
+    while (!transfer.poll()) {
+        if (transfer.received() > 0 && transfer.total() > transfer.received()) intermediate = true;
+        usleep(1000);
+    }
+    CHECK(transfer.succeeded() && intermediate && transfer.received() == 128*1024);
+    CHECK(transfer.start(base + "/slow", path, 256*1024));
+    while (!transfer.poll() && transfer.received() == 0) usleep(1000);
+    CHECK(transfer.received() > 0); transfer.cancel();
+    CHECK(transfer.poll() && !transfer.succeeded() && access(path.c_str(),F_OK) != 0);
+    CHECK(transfer.start(base + "/missing", "", 4096));
+    while (!transfer.poll()) usleep(1000);
+    CHECK(!transfer.succeeded() && transfer.error().find("404") != std::string::npos);
+    CHECK(transfer.start(base + "/ok", "", 4));
+    while (!transfer.poll()) usleep(1000);
+    CHECK(!transfer.succeeded());
+    CHECK(!transfer.start(base + "/ok", path + "/missing/child", 4096));
+    CHECK(!transfer.error().empty());
+    setenv("SSL_CERT_FILE",argv[3],1);
+    CHECK(transfer.start(base + "/ok", "", 4096));
+    while (!transfer.poll()) usleep(1000);
+    CHECK(!transfer.succeeded() && !transfer.error().empty());
+    setenv("SSL_CERT_FILE",argv[2],1);
+    CHECK(transfer.start(wrongHost + "/ok", "", 4096));
+    while (!transfer.poll()) usleep(1000);
+    CHECK(!transfer.succeeded());
+    CHECK(transfer.start(base + "/redirect-file", "", 4096));
+    while (!transfer.poll()) usleep(1000);
+    CHECK(!transfer.succeeded());
+    CHECK(!transfer.start("http://example.invalid/", "", 4096));
     curl_global_cleanup();
-    puts("PASS: trusted TLS text/binary downloads, rejected untrusted certificates and hostnames, blocked file redirects, callback byte counts");
+    puts("PASS: trusted TLS text/binary downloads, rejected untrusted certificates and hostnames, blocked file redirects, callback byte counts; asynchronous progress/cancel/HTTP/TLS/storage errors");
     return 0;
 }

@@ -454,6 +454,8 @@ class CRGUIWindow
         virtual bool isDirty() = 0;
         /// sets dirty flag
         virtual void setDirty() = 0;
+        /// Discard partial-paint assumptions after native UI or framebuffer loss.
+        virtual void requestFullRedraw() { setDirty(); }
         /// shows or hides window
         virtual void setVisible( bool visible ) = 0;
         /// called on system configuration change: screen size and orientation
@@ -1275,6 +1277,7 @@ class CRMenu : public CRGUIWindowBase, public CRMenuItem {
         virtual void closeAllMenu( int command, int params = 0 );
         /// closes menu and its submenus
         virtual void destroyMenu();
+        virtual void requestFullRedraw() { _pageUpdate = true; setDirty(); }
         virtual void covered() { _pageUpdate = true; }
         virtual void reactivated() { _pageUpdate = true; }
         virtual bool isScrollEnabled(bool downScroll)

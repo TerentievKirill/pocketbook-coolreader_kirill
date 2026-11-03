@@ -1,3 +1,4 @@
+#include "lvfrontlighticon.h"
 /***************************************************************************
  *   CoolReader engine                                                     *
  *   Copyright (C) 2007-2015 Vadim Lopatin <coolreader.org@gmail.com>      *
@@ -1250,7 +1251,7 @@ bool LVDocView::exportWolFile(LVStream * stream, bool flgGray, int levels) {
 	int save_pos = _pos;
 	int save_page = _pos;
 	bool showCover = getShowCover();
-	m_pageHeaderInfo &= ~(PGHDR_CLOCK | PGHDR_BATTERY);
+	m_pageHeaderInfo &= ~(PGHDR_CLOCK | PGHDR_BATTERY | PGHDR_FRONTLIGHT);
 	int dx = 600; // - m_pageMargins.left - m_pageMargins.right;
 	int dy = 800; // - m_pageMargins.top - m_pageMargins.bottom;
 	Resize(dx, dy);
@@ -1754,6 +1755,47 @@ void LVDocView::getPageRectangle(int pageIndex, lvRect & pageRect) const {
 		pageRect = m_pageRects[1];
 }
 
+bool LVDocView::setFrontlightState(int enabled,int brightness,int temperature) {
+    enabled = enabled < 0 ? -1 : (enabled > 0 ? 1 : 0);
+    brightness = brightness < 0 || brightness > 100 ? -1 : brightness;
+    temperature = temperature < 0 || temperature > 100 ? -1 : temperature;
+    if (enabled == 0) brightness = 0;
+    if (m_frontlightEnabled==enabled && m_frontlightBrightness==brightness && m_frontlightTemperature==temperature) return false;
+    m_frontlightEnabled=enabled; m_frontlightBrightness=brightness; m_frontlightTemperature=temperature;
+    if (m_props->getBoolDef(PROP_SHOW_FRONTLIGHT,false) || m_props->getBoolDef(PROP_SHOW_FRONTLIGHT_BRIGHTNESS,false) || m_props->getBoolDef(PROP_SHOW_FRONTLIGHT_TEMPERATURE,false)) clearImageCache();
+    return true;
+}
+lString32 LVDocView::getFrontlightStatusText() const {
+    lString32 text;
+    if (m_frontlightEnabled < 0) return text;
+    if (m_props->getBoolDef(PROP_SHOW_FRONTLIGHT_BRIGHTNESS,false) && m_frontlightBrightness>=0)
+        text << U"B:" << fmt::decimal(m_frontlightBrightness) << U"%";
+    if (m_props->getBoolDef(PROP_SHOW_FRONTLIGHT_TEMPERATURE,false) && m_frontlightTemperature>=0) {
+        if (!text.empty()) text << U" ";
+        text << U"T:" << fmt::decimal(m_frontlightTemperature) << U"%";
+    }
+    return text;
+}
+int LVDocView::drawFrontlightStatus(LVDrawBuf *buf,const lvRect &rc,int texty) {
+    if (m_frontlightEnabled<0 || m_infoFont.isNull()) return 0;
+    bool icon=m_props->getBoolDef(PROP_SHOW_FRONTLIGHT,false);
+    lString32 text=getFrontlightStatusText();
+    int size=m_infoFont->getHeight(), gap=icon ? size/4 : 0;
+    int limit=rc.width()/3;
+    int width=m_infoFont->getTextWidth(text.c_str(),text.length());
+    // Drop text before stealing space from the clock, battery and reading position.
+    if (width+(icon ? size+gap : 0)>limit) { text.clear();width=0; }
+    int used=width+(icon ? size+(width ? gap : 0) : 0);
+    if (!used || used>limit) return 0;
+    int x=rc.right-used;
+    if(icon) {
+        LVDrawFrontlightIcon(buf,x,texty,size,m_frontlightEnabled>0,buf->GetTextColor());
+        x+=size+gap;
+    }
+    if(!text.empty())m_infoFont->DrawTextString(buf,x,texty,text.c_str(),text.length(),U' ',NULL,false);
+    return used;
+}
+
 /// sets battery state
 bool LVDocView::setBatteryState(int newState, int newChargingConn, int newChargeLevel) {
 	if (m_battery_state == newState && newChargingConn == m_battery_charging_conn && m_battery_charge_level == newChargeLevel)
@@ -1942,6 +1984,8 @@ void LVDocView::drawPageHeader(LVDrawBuf * drawbuf, const lvRect & headerRc,
 				info.right = brc.left - info.height() / 2;
 			}
 		}
+		int frontlightWidth = (phi & PGHDR_FRONTLIGHT) ? drawFrontlightStatus(drawbuf, info, texty) : 0;
+		if (frontlightWidth) info.right -= frontlightWidth + info.height()/2;
 		lString32 pageinfo;
 		if (pageCount > 0) {
 			if (phi & PGHDR_PAGE_NUMBER)
@@ -6696,6 +6740,9 @@ void LVDocView::propsUpdateDefaults(CRPropRef props) {
     props->setBoolDef(PROP_SHOW_TIME_12HOURS, false);
     props->setBoolDef(PROP_SHOW_BATTERY, true);
     props->setBoolDef(PROP_SHOW_BATTERY_PERCENT, false);
+    props->setBoolDef(PROP_SHOW_FRONTLIGHT, false);
+    props->setBoolDef(PROP_SHOW_FRONTLIGHT_BRIGHTNESS, false);
+    props->setBoolDef(PROP_SHOW_FRONTLIGHT_TEMPERATURE, false);
     props->setBoolDef(PROP_SHOW_PAGE_COUNT, true);
     props->setBoolDef(PROP_SHOW_PAGE_NUMBER, true);
     props->setBoolDef(PROP_SHOW_POS_PERCENT, false);
@@ -6787,6 +6834,7 @@ void LVDocView::setStatusMode(int pos, bool showClock, bool showTitle,
         | (showChapterMarks ? PGHDR_CHAPTER_MARKS : 0)
         | (showPercent ? PGHDR_PERCENT : 0)
         | ((showChapterPagesRemain || m_props->getBoolDef(PROP_SHOW_CHAPTER_PAGES_REMAIN, false)) ? PGHDR_CHAPTER_PAGE_REM : 0)
+        | ((m_props->getBoolDef(PROP_SHOW_FRONTLIGHT,false) || m_props->getBoolDef(PROP_SHOW_FRONTLIGHT_BRIGHTNESS,false) || m_props->getBoolDef(PROP_SHOW_FRONTLIGHT_TEMPERATURE,false)) ? PGHDR_FRONTLIGHT : 0)
         //| PGHDR_CLOCK
     );
 }
@@ -6946,6 +6994,11 @@ CRPropRef LVDocView::propsApply(CRPropRef props) {
                           );
             //} else if ( name==PROP_BOOKMARK_ICONS ) {
             //    enableBookmarkIcons( value==U"1" );
+        } else if (name == PROP_SHOW_FRONTLIGHT || name == PROP_SHOW_FRONTLIGHT_BRIGHTNESS || name == PROP_SHOW_FRONTLIGHT_TEMPERATURE) {
+            m_props->setString(name.c_str(),value);
+            bool show=m_props->getBoolDef(PROP_SHOW_FRONTLIGHT,false) || m_props->getBoolDef(PROP_SHOW_FRONTLIGHT_BRIGHTNESS,false) || m_props->getBoolDef(PROP_SHOW_FRONTLIGHT_TEMPERATURE,false);
+            setPageHeaderInfo((m_pageHeaderInfo & ~PGHDR_FRONTLIGHT) | (show ? PGHDR_FRONTLIGHT : 0));
+            clearImageCache();
         } else if (name == PROP_FONT_SIZE) {
 #if USE_LIMITED_FONT_SIZES_SET
             int fontSize = props->getIntDef(PROP_FONT_SIZE, m_font_sizes[0]);

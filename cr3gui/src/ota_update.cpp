@@ -8,6 +8,7 @@
 #include <crgui.h>
 #include <cri18n.h>
 #include "web.h"
+#include "web_transfer.h"
 #include "cr3pocketbook.h"
 #include "ota_update.h"
 
@@ -265,6 +266,7 @@ bool OTA_updateFrom(const lString32 url) {
  */
 #ifdef POCKETBOOK_FW6
 #include "ota_fw6.h"
+#include "ota_background.h"
 #endif
 bool OTA_update(const char *branch) {
 #ifdef POCKETBOOK_FW6

@@ -50,6 +50,9 @@
 
 bool OTA_update(const char * branch);
 void OTA_scheduleUpdate(const char *branch);
+#ifdef POCKETBOOK_FW6
+void OTA_backgroundActive(bool active);
+#endif
 
 
 #endif // OTA_UPDATE_H

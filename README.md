@@ -4,10 +4,11 @@ CoolReader for **Touch HD 3 / PB632**, targeting firmware **6.11.2001**.
 
 [Downloads: CoolReader and Easy Connect](https://pocketbook.nimbushub.eu/) · [Installation](https://pocketbook.nimbushub.eu/installation.html) · [GitHub release](https://github.com/dderugin/pocketbook-coolreader/releases/latest)
 
-The current build fixes standby frontlight state and adds large, outlined
-settings navigation buttons. It passes all twelve ARM/QEMU regression groups
-and package checks and has been installed on the Touch HD 3. Interactive
-verification of these latest fixes remains pending. `build-info.json` records
+Release **1.0.2** adds automatic update notifications, confirmed downloads with
+progress and cancellation, and frontlight status indicators. It also restores
+settings screens correctly after OTA/native dialogs. Automated verification covers
+15 ARM/QEMU regression groups and package checks. Physical-device OTA installation
+and interaction checks for this release remain pending; `build-info.json` records
 automated results separately from device validation.
 Other devices and firmware versions have not been verified by this fork.
 
@@ -57,7 +58,7 @@ CR3_REVISION=local bash tools/docker-build-touch-hd3.sh
 
 The first run downloads approximately 1.1 GB of pinned SDK/firmware archives,
 verifies their SHA-256 hashes, prepares the Linux build environment, builds the
-ARM executable, and runs all twelve ARM/QEMU regression groups and package
+ARM executable, and runs all fifteen ARM/QEMU regression groups and package
 checks. No remote build server or connected PocketBook is required.
 
 Artifacts are written to `dist/`:
@@ -91,7 +92,7 @@ export POCKETBOOK_SDK="$PWD/work/sdk/SDK-B288-6.10"
 bash tools/build-touch-hd3.sh
 ```
 
-The script builds the ARM application, keeps debug symbols, runs twelve ARM/QEMU
+The script builds the ARM application, keeps debug symbols, runs fifteen ARM/QEMU
 regression groups and checks packaging evidence before producing
 `dist/coolreader-touch-hd3-fw6.11.2001-dev.zip` and its SHA-256 file.
 Set `CR3_REVISION` to label a candidate and `CR3_BUILD_DIR` to use another build

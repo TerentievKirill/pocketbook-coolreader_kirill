@@ -265,7 +265,8 @@ enum {
     PGHDR_BATTERY=32,
     PGHDR_CHAPTER_MARKS=64,
     PGHDR_PERCENT=128,
-    PGHDR_CHAPTER_PAGE_REM=256
+    PGHDR_CHAPTER_PAGE_REM=256,
+    PGHDR_FRONTLIGHT=512
 };
 
 
@@ -299,6 +300,7 @@ private:
     int m_battery_state;
     int m_battery_charging_conn;
     int m_battery_charge_level;
+    int m_frontlightEnabled = -1, m_frontlightBrightness = -1, m_frontlightTemperature = -1;
     int m_requested_font_size;
     int m_font_size; // = m_requested_font_size, possibly scaled according to DPI
     int m_status_font_size;
@@ -696,6 +698,9 @@ public:
     /// returns section bounds, in 1/100 of percent
     LVArray<int> & getSectionBounds( int max_count = 10000, int depth = 32, bool for_external_update=false );
     /// sets battery state
+    bool setFrontlightState(int enabled,int brightness,int temperature);
+    lString32 getFrontlightStatusText() const;
+    int drawFrontlightStatus(LVDrawBuf *buf,const lvRect &rc,int texty);
     virtual bool setBatteryState( int newState, int newChargingConn, int newChargeLevel );
     /// returns battery state
     int getBatteryState() const { return m_battery_state; }

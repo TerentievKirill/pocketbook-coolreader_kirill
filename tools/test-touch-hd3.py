@@ -61,6 +61,9 @@ for name in ('good', 'wrong-version', 'traversal', 'missing-binary'):
         if name == 'traversal': entries['../escaped'] = 'bad'
         if name == 'missing-binary': del entries['bin/cr3-pb.app']
         for entry, data in entries.items(): archive.writestr('system/share/cr3/' + entry, data)
+with zipfile.ZipFile(out / 'ota-ui-success.zip', 'w', zipfile.ZIP_DEFLATED) as archive:
+    for entry, data in {'release-version.txt': '1.0.2\n', 'bin/cr3-pb.app': 'binary', 'cr3-defaults.ini': 'defaults', 'skins/pb631fw5.cr3skin': 'skin'}.items():
+        archive.writestr('system/share/cr3/' + entry, data)
 # A small EPUB exercises the new parser, CSS and image/page-painting path.
 def png_chunk(kind, data):
     return struct.pack('!I', len(data)) + kind + data + struct.pack('!I', zlib.crc32(kind + data) & 0xffffffff)
@@ -88,7 +91,21 @@ class TLSHandler(http.server.BaseHTTPRequestHandler):
             # Negative certificate tests deliberately abort the TLS connection.
             pass
     def do_GET(self):
-        if self.path == '/redirect-file':
+        if self.path == '/missing':
+            self.send_response(404)
+            self.send_header('Content-Length', '0')
+            self.end_headers()
+        elif self.path == '/slow':
+            import time
+            payload = b'x' * (128 * 1024)
+            self.send_response(200)
+            self.send_header('Content-Length', str(len(payload)))
+            self.end_headers()
+            try:
+                for offset in range(0, len(payload), 4096):
+                    self.wfile.write(payload[offset:offset+4096]); self.wfile.flush(); time.sleep(0.005)
+            except (BrokenPipeError, ConnectionResetError): pass
+        elif self.path == '/redirect-file':
             self.send_response(302)
             self.send_header('Location', 'file:///etc/passwd')
             self.send_header('Content-Length', '0')
@@ -122,16 +139,17 @@ if re.search(r'NEEDED.*\[lib(?:png|z\.|curl)', needed):
 passed = []
 for name, sources, engine, arguments in [
     ('reference-initialization', ['tests/lvref-static-global.cpp', 'tests/lvref-static-sentinel.cpp'], False, []),
+    ('frontlight-status', ['tests/frontlight-status.cpp'], True, [root / 'work/firmware/ebrmain/cramfs/fonts/DejaVuSans.ttf', out]),
     ('standby-frontlight', ['tests/standby-frontlight.cpp'], False, []),
     ('css-null-ancestor', ['tests/css-selector-null-ancestor.cpp'], True, []),
     ('skin-language-symbol', ['tests/skin-language-symbol.cpp'], True, [root / 'work/firmware/ebrmain/cramfs/fonts/DejaVuSans.ttf', root / 'work/firmware/ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', build / 'cr3gui/pb631fw5.cr3skin', out]),
     ('document-render', ['tests/document-render-startup.cpp'], True, [root / 'work/firmware/ebrmain/cramfs/fonts/DejaVuSans.ttf', root / 'work/firmware/ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', root / 'work/firmware/ebrmain/cramfs/fonts/DroidSans.ttf', root / 'data/touch-hd3/cr3-defaults.ini', root / 'cr3gui/data/hyph/', epub, root / 'cr3gui/data/fb2.css']),
     ('reading-state-migration', ['tests/reading-state-migration.cpp'], True, [root / 'work/firmware/ebrmain/cramfs/fonts/DejaVuSans.ttf', out / 'migration.fb2', out / 'migration.zip']),
     ('dependency-compatibility', ['tests/dependency-compatibility.cpp'], True, [out]),
-    ('web-tls', ['tests/web-tls.cpp', 'cr3gui/src/web.cpp'], True, [tls_url, out / 'trusted.crt', out / 'untrusted.crt', out]),
+    ('web-tls', ['tests/web-tls.cpp', 'cr3gui/src/web.cpp', 'cr3gui/src/web_transfer.cpp'], True, [tls_url, out / 'trusted.crt', out / 'untrusted.crt', out]),
     ('dictionary-safety', ['tests/dictionary-safety.cpp'], True, []),
     ('history-persistence', ['tests/history-persistence.cpp'], True, [out]),
-    ('ota-ui', ['tests/ota-ui.cpp'], True, []),
+    ('ota-ui', ['tests/ota-ui.cpp'], True, [out]),
     ('ota-package', ['tests/ota-package.cpp'], True, [out]),
     ('archive-boundaries', ['tests/archive-boundaries.cpp'], True, [out]),
     ('atomic-faults', ['tests/atomic-faults.cpp'], True, [out]),

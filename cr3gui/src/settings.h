@@ -104,6 +104,10 @@ enum MainMenuItems_t {
     mm_useNewTouchTOC,
 #endif
     mm_TouchTOC,
+    mm_AutoUpdateCheck,
+    mm_ShowFrontlight,
+    mm_ShowFrontlightBrightness,
+    mm_ShowFrontlightTemperature,
     mm_Last
 };
 

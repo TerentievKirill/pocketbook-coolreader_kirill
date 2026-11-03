@@ -1655,6 +1655,14 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
     createSettingsMenuItem(statusMenu, mm_ShowBatteryPercent, _("Show battery percent"),
                            "cr3_option_status_battery_percent", valueFont, PROP_SHOW_BATTERY_PERCENT,
                            on_off_option);
+#ifdef POCKETBOOK_FW6
+    createSettingsMenuItem(statusMenu, mm_ShowFrontlight, _("Show frontlight icon"),
+                           "", valueFont, PROP_SHOW_FRONTLIGHT, on_off_option);
+    createSettingsMenuItem(statusMenu, mm_ShowFrontlightBrightness, _("Show frontlight brightness"),
+                           "", valueFont, PROP_SHOW_FRONTLIGHT_BRIGHTNESS, on_off_option);
+    createSettingsMenuItem(statusMenu, mm_ShowFrontlightTemperature, _("Show frontlight temperature (%)"),
+                           "", valueFont, PROP_SHOW_FRONTLIGHT_TEMPERATURE, on_off_option);
+#endif
     createSettingsMenuItem(statusMenu, mm_ShowPosPercent, _("Show position percent"),
                            "cr3_option_status_pos_percent", valueFont, PROP_SHOW_POS_PERCENT, on_off_option);
     createSettingsMenuItem(statusMenu, mm_ShowPageCount, _("Show page count"),
@@ -1873,6 +1881,9 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
     // OTA UPDATE
     #ifdef POCKETBOOK_PRO
     #ifdef POCKETBOOK_FW6
+    props->setStringDef(PROP_OTA_AUTO_CHECK, "1");
+    createSettingsMenuItem(mainMenu, mm_AutoUpdateCheck, _("Check for updates automatically"),
+                           "", valueFont, PROP_OTA_AUTO_CHECK, on_off_option);
     mainMenu->addItem(new CROTAUpdateMenuItem(mainMenu, PB_CMD_OTA_UPDATE, _("OTA Update")));
     #else
     mainMenu->addItem( new CRMenuItem( mainMenu, PB_CMD_OTA_UPDATE,

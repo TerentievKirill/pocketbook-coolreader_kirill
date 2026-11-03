@@ -18,6 +18,14 @@ inline bool parseVersion(const std::string &text, unsigned parts[3]) {
     }
     return text.back() != '.' && input.peek() == EOF;
 }
+inline bool parseRelease(const std::string &text, std::string &version, std::string &checksum) {
+    version.clear(); checksum.clear();
+    if (text.size() > 256) return false;
+    std::istringstream input(text); std::string extra; unsigned parts[3];
+    input >> version >> checksum;
+    return parseVersion(version, parts) && checksum.size() == 64 &&
+        checksum.find_first_not_of("0123456789abcdef") == std::string::npos && !(input >> extra);
+}
 inline bool newer(const std::string &candidate, const std::string &installed) {
     unsigned a[3], b[3];
     if (!parseVersion(candidate, a) || !parseVersion(installed, b)) return false;

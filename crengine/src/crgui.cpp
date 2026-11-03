@@ -319,6 +319,7 @@ void CRGUIWindowManager::update( bool fullScreenUpdate, bool forceFlushScreen )
     }
     while ( !drawList.empty()  ) {
         CRGUIWindow * w = drawList.pop();
+        if (fullScreenUpdate) w->requestFullRedraw();
         if ( w->isDirty() || fullScreenUpdate ) {
             if ( w->isVisible() )
                 w->flush();
