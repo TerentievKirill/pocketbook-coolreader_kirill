@@ -14,7 +14,7 @@
 #define ICON_ERROR 2
 #define ICON_INFORMATION 3
 #define _(s) (s)
-lString32 pbSkinFileName, openedCacheFile, currentCacheDir;
+lString32 pbSkinFileName, openedCacheFile, currentCacheDir, crCurrentLang;
 static std::string device="632", firmware="U632.6.11.2001", response, result;
 static bool online=true;
 static int dialogs=0, requests=0, downloads=0, timers=0, progress=0;
@@ -40,6 +40,12 @@ bool OTA_update(const char *branch) { return OTA_updateFW6(branch); }
 void SetHardTimer(const char *, void (*callback)(), int delay) { ++timers;timerCallback=callback;CHECK(delay>0); }
 #include "../cr3gui/src/ota_dispatch.h"
 #include "../cr3gui/src/ota_menu.h"
+class OTATestScreen : public CRGUIScreenBase {
+public:
+ OTATestScreen() : CRGUIScreenBase(1072,1448,false) { _canvas=LVRef<LVDrawBuf>(createCanvas(1072,1448)); }
+ LVDrawBuf *createCanvas(int w,int h) { return new LVGrayDrawBuf(w,h,8); }
+ void update(const lvRect &,bool) {}
+};
 class OTATestMenu : public CRMenu {
 public:
  using CRMenu::CRMenu;
@@ -47,7 +53,8 @@ public:
 };
 int main() {
  response="1.0.1\n"+std::string(64,'a')+"\n";
- CRGUIWindowManager wm(NULL);
+ OTATestScreen screen;
+ CRGUIWindowManager wm(&screen);
  OTATestMenu menu(&wm,NULL,1,lString32("Settings"),LVImageSourceRef(),LVFontRef(),LVFontRef());
  menu.addItem(new CROTAUpdateMenuItem(&menu,123,"OTA Update"));
  CHECK(menu.onItemSelect(0,0));
