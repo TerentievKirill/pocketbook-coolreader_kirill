@@ -2593,21 +2593,11 @@ public:
             return true;
 
         case PB_CMD_OTA_UPDATE:
-            CRLog::trace("Launch OTA Update from "OTA_BRANCH_STABLE" branch");
-            if( !OTA_update(OTA_BRANCH_STABLE) )
-                CRLog::trace("Returned from OTA_update()");
-            else
-                CRLog::trace("Returned from OTA_update(). Download is running.");
-            PartialUpdate(0, 0, ScreenWidth(), ScreenHeight());
+            OTA_scheduleUpdate(OTA_BRANCH_STABLE);
             return true;
 
         case PB_CMD_OTA_UPDATE_DEV:
-            CRLog::trace("Launch OTA Update from "OTA_BRANCH_DEV" branch");
-            if( !OTA_update(OTA_BRANCH_DEV) )
-                CRLog::trace("Returned from OTA_update()");
-            else
-                CRLog::trace("Returned from OTA_update(). Download is running.");
-            PartialUpdate(0, 0, ScreenWidth(), ScreenHeight());
+            OTA_scheduleUpdate(OTA_BRANCH_DEV);
             return true;
         #endif
 

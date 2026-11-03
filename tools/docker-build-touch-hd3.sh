@@ -23,6 +23,6 @@ docker run --rm --init --platform linux/amd64 \
     --mount "type=volume,source=$volume,target=/src/work" \
     --mount "type=bind,source=$root/work/downloads,target=/downloads,readonly" \
     --mount "type=bind,source=$root/dist,target=/src/dist" \
-    -e "CR3_RELEASE_VERSION=${CR3_RELEASE_VERSION:-1.0.0}" -e "CR3_REVISION=$revision" -e "JOBS=${JOBS:-4}" \
+    -e "CR3_RELEASE_VERSION=${CR3_RELEASE_VERSION:-1.0.1}" -e "CR3_REVISION=$revision" -e "JOBS=${JOBS:-4}" \
     -e "CR3_HOST_UID=$(id -u)" -e "CR3_HOST_GID=$(id -g)" \
     "$image" bash /src/tools/docker/entrypoint.sh

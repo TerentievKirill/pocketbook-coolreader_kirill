@@ -49,6 +49,7 @@
 
 
 bool OTA_update(const char * branch);
+void OTA_scheduleUpdate(const char *branch);
 
 
 #endif // OTA_UPDATE_H

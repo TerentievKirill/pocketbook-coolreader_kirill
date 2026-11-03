@@ -131,6 +131,7 @@ for name, sources, engine, arguments in [
     ('web-tls', ['tests/web-tls.cpp', 'cr3gui/src/web.cpp'], True, [tls_url, out / 'trusted.crt', out / 'untrusted.crt', out]),
     ('dictionary-safety', ['tests/dictionary-safety.cpp'], True, []),
     ('history-persistence', ['tests/history-persistence.cpp'], True, [out]),
+    ('ota-ui', ['tests/ota-ui.cpp'], True, []),
     ('ota-package', ['tests/ota-package.cpp'], True, [out]),
     ('archive-boundaries', ['tests/archive-boundaries.cpp'], True, [out]),
     ('atomic-faults', ['tests/atomic-faults.cpp'], True, [out]),

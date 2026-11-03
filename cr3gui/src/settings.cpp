@@ -22,6 +22,9 @@
 #ifdef POCKETBOOK_PRO
 #include <inkplatform.h>
 #include "ota_update.h"
+#ifdef POCKETBOOK_FW6
+#include "ota_menu.h"
+#endif
 #endif
 
 #include <cri18n.h>
@@ -1869,6 +1872,9 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
 
     // OTA UPDATE
     #ifdef POCKETBOOK_PRO
+    #ifdef POCKETBOOK_FW6
+    mainMenu->addItem(new CROTAUpdateMenuItem(mainMenu, PB_CMD_OTA_UPDATE, _("OTA Update")));
+    #else
     mainMenu->addItem( new CRMenuItem( mainMenu, PB_CMD_OTA_UPDATE,
                 _("OTA Update"),
                 LVImageSourceRef(),
@@ -1881,6 +1887,7 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
                 LVImageSourceRef(),
                 LVFontRef() ) );
     }
+    #endif // legacy OTA channels
     #endif
 
     reconfigure(0);

@@ -6,7 +6,7 @@ From the repository root:
 CR3_REVISION=local bash tools/docker-build-touch-hd3.sh
 ```
 
-This builds the PocketBook ARM executable, runs all thirteen ARM/QEMU regression
+This builds the PocketBook ARM executable, runs all fourteen ARM/QEMU regression
 groups and package checks, and writes the ZIP, SHA-256 file, test report and
 separate debug symbols into `dist/`. It does not install or publish the build.
 
@@ -114,3 +114,6 @@ The installer uses the existing launcher; future launcher changes require USB.
 OTA package extraction has an ARM regression for wrong checksums, path traversal,
 missing binaries and wrong versions. The launcher and version comparison also
 have isolated host regressions. Physical-device OTA testing is still required.
+
+OTA UI checks also cover deferred dispatch, retained settings menus, repeated taps,
+explicit OK dismissal, compatibility details and network/manifest/download failures.

@@ -352,3 +352,5 @@ bool OTA_update(const char *branch) {
         _("Failed updating!"), 2000);
     return false;
 }
+
+#include "ota_dispatch.h"
