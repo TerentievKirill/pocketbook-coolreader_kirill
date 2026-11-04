@@ -1,4 +1,53 @@
-# Local Touch HD 3 build
+# PocketBook builds
+
+Build families are declared in `config/targets/*.json`: `pb632-fw6` retains the
+Touch HD 3 configuration; `pocketbook-armv7-softfp` produces one experimental
+shared package for four exact model/firmware combinations. See
+[device candidates and admission checks](DEVICE-SUPPORT.md) for expansion status.
+
+```sh
+python3 tools/targets.py --list
+CR3_REVISION=local bash tools/docker-build-pocketbook.sh pb632-fw6
+```
+
+This selects the SDK, compiler flags, firmware runtime and package assets from
+the profile. A firmware dependency/ABI check and the sixteen ARM regressions
+must pass before packaging. Reports include target identity and the complete
+profile is embedded in `system/share/cr3/metadata/build-info.json`. Different profiles use separate build
+directories and Docker input caches. The first profiled build recompiles objects;
+the historical PB632 wrapper reuses its existing downloaded/extracted inputs.
+
+The original PB632 commands and output names below remain supported.
+
+Build the shared package with:
+
+```sh
+CR3_RELEASE_VERSION=1.0.3 CR3_REVISION=shared-ota bash tools/docker-build-pocketbook.sh pocketbook-armv7-softfp
+```
+
+This uses the independent `coolreader-pocketbook-armv7-softfp-work` volume and
+the existing host download cache. The first setup also verifies/downloads the
+three pinned candidate firmware archives (about 1.4 GB in addition to the primary
+SDK/firmware inputs). Extraction caches under `work/qualification` are reused.
+Before producing `dist/coolreader-pocketbook-armv7-softfp-<revision>.zip`, it runs
+thirteen software probes per additional firmware, verifies eager-bound startup
+and symbol availability, and binds every report to the primary regression report
+and exact binary hash. Missing, failed, stale or modified runtime evidence blocks
+packaging. The ZIP includes the general defaults, exact runtime registry and
+firmware reports. New builds never inherit earlier physical-device validation.
+
+Runtime profiles are generated from `config/pocketbook-devices.json`. The shared
+CPU baseline is ARMv7-A/NEON/VFPv3/softfp; it does not require the Cortex-A7-specific
+VFPv4 flags of the historical target. Shared OTA uses one `ota/pocketbook-armv7-softfp.txt` compatibility descriptor
+and one versioned `downloads/coolreader-shared/<version>/coolreader-pocketbook-armv7-softfp.zip`
+for every eligible model. Shared updates use their own staging/rollback directories;
+PB632-only staged updates are ignored. Unknown model/firmware pairs are rejected
+by the application. See [installation and limitations](README-pocketbook-armv7.txt).
+
+To inspect the pinned Verse Pro, Era and InkPad 4 firmware against an existing
+PB632 build, run `bash tools/docker-qualify-firmware.sh pb634 pb700 pb743g`.
+See [firmware qualification](DEVICE-SUPPORT.md#reproduce-firmware-qualification-without-a-reader)
+for input provenance, cache options, reports and the limits of these probes.
 
 From the repository root:
 
@@ -6,7 +55,7 @@ From the repository root:
 CR3_REVISION=local bash tools/docker-build-touch-hd3.sh
 ```
 
-This builds the PocketBook ARM executable, runs all fifteen ARM/QEMU regression
+This builds the PocketBook ARM executable, runs all sixteen ARM/QEMU regression
 groups and package checks, and writes the ZIP, SHA-256 file, test report and
 separate debug symbols into `dist/`. It does not install or publish the build.
 
@@ -66,9 +115,15 @@ Artifacts:
 - `dist/coolreader-touch-hd3-<revision>.tests.json`
 - `dist/coolreader-touch-hd3-<revision>.debug`
 
-The ZIP's `build-info.json` identifies its source commit, uncommitted changes,
+The ZIP's `system/share/cr3/metadata/build-info.json` identifies its source commit, uncommitted changes,
 dependencies, executable hash and automated test evidence. A local build does
 not inherit the published release's physical-device confirmation.
+
+Install ZIPs contain only `system/` and `applications/` at their top level.
+Guides and the association template are in `system/share/cr3/doc/`; GPL and
+dependency notices are in `system/share/cr3/licenses/`; build metadata and
+firmware qualification evidence are in `system/share/cr3/metadata/`. Keeping
+support files inside system storage prevents them appearing as books in Library.
 
 To remove only the Docker build cache, stop any build using it, then run:
 
@@ -88,6 +143,11 @@ SDK environment:
 export POCKETBOOK_SDK="$PWD/work/sdk/SDK-B288-6.10"
 bash tools/build-touch-hd3.sh
 ```
+
+`python3 tools/build-pocketbook.py --target pb632-fw6` is the target-aware native
+entry point. Its default build directory is `work/build-pb632-fw6`; Docker uses
+`work/build-docker-pb632-fw6`. `CR3_BUILD_DIR` can select another clean directory.
+An existing directory bound to a different profile or SDK is rejected.
 
 Tests use the existing bundled QEMU when available, otherwise `qemu-arm` on
 PATH. `CR3_QEMU` selects an explicit executable. The firmware runtime and fonts
@@ -146,3 +206,20 @@ Compact frontlight status uses a sun/brightness image (slashed when disabled),
 with rendering checks at 8, 12, 16 and 24 pixels and inverted colours. Full menu
 redraws discard clean-row paint caches after native dialogs/network helpers;
 OTA dismissal restores the visible menu without changing its page or selection.
+
+## Shared OTA release staging
+
+Settings exposes **Check for updates**, **Check for updates automatically** and
+**Version** (the installed version is visible in its row and detail dialog).
+The shared descriptor begins with `CR3-OTA-SHARED-1`, then family, SemVer, SHA-256
+and model/firmware pairs. An incompatible descriptor cannot initiate a download;
+the downloaded archive independently carries `package-family.txt` and
+`firmware-compatibility.txt`, checked before a ready marker is written.
+The shared launcher switches verified assets, recovers interrupted switches and
+rolls back a failing first run while preserving user assets and reading state.
+
+The website repository's `scripts/prepare-shared-coolreader-release.py` prepares
+immutable install/source files, release metadata and the single shared descriptor
+in a staging directory. It does not deploy them. Publish the immutable files
+before replacing the channel descriptor; retain previous versions for rollback.
+Existing manual-only shared candidates need one USB update to gain this launcher.

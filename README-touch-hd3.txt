@@ -49,9 +49,9 @@ Install
    into the root of the PocketBook USB storage. Keep all additional existing
    files and directories. applications/CoolReader.app adds the Apps entry.
 4. Register CoolReader in system/config/extensions.cfg:
-   - If no custom file exists, copy extensions.cfg.example there.
+   - If no custom file exists, copy system/share/cr3/doc/extensions.cfg.example there.
    - If one exists, add cr3-pb.app to the comma-separated application list for
-     desired supported formats, following extensions.cfg.example. Preserve
+     desired supported formats, following system/share/cr3/doc/extensions.cfg.example. Preserve
      existing readers and all other entries. For example:
      epub:@EPUB_file:1:eink-reader_with_blink.app,eink-reader_with_epub2.app,cr3-pb.app:ICON_EPUB
      fb2:@FB2_file:1:eink-reader.app,cr3-pb.app:ICON_FB2
@@ -99,7 +99,7 @@ Run: bash tools/build-touch-hd3.sh
 ARM regressions: python3 tools/test-touch-hd3.py (uses work/firmware runtime).
 Artifacts: dist/coolreader-touch-hd3-fw6.11.2001-dev.zip and its .sha256 file.
 New builds default to revision dev; set CR3_REVISION for an explicit candidate.
-The build now gates packaging on eight ARM regressions; build-info.json binds
+The build now gates packaging on eight ARM regressions; system/share/cr3/metadata/build-info.json binds
 the report to this binary and records physical-device validation as not performed.
 Intermediate files, SDK, host tools, build and verification logs are in work/.
 The script uses local host tools in work/host if present. A standard Linux
@@ -114,7 +114,7 @@ repair only links resolving inside the SDK, using tools/repair-pocketbook-sdk.py
 as described in that script. The existing server SDK is already repaired.
 No sudo or system package installation was used for this build.
 
-Build metadata and binary SHA-256 are in build-info.json. The matching source,
+Build metadata and binary SHA-256 are in system/share/cr3/metadata/build-info.json. The matching source,
 build/package scripts and regression tests are available in this repository
 and the corresponding release source archive. Source license: GPL version 2;
-see LICENSE.
+see system/share/cr3/licenses/COPYING.

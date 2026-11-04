@@ -1,10 +1,24 @@
-set(CR3_RELEASE_VERSION "1.0.2" CACHE STRING "Stable OTA version (SemVer)")
+set(CR3_RELEASE_VERSION "1.0.3" CACHE STRING "Stable OTA version (SemVer)")
 if(NOT CR3_RELEASE_VERSION MATCHES "^(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)$")
     message(FATAL_ERROR "CR3_RELEASE_VERSION must be MAJOR.MINOR.PATCH")
 endif()
 add_definitions(-DCR3_RELEASE_VERSION="${CR3_RELEASE_VERSION}")
 # PocketBook UI. Other historical GUI source files are absent from this tree.
 set(DEVICE_NAME pb360 CACHE STRING "PocketBook keymap and skin source directory")
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+execute_process(COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/generate-device-profiles.py
+    ${CMAKE_SOURCE_DIR}/config/pocketbook-devices.json ${CMAKE_CURRENT_BINARY_DIR}/pb_device_data.h
+    RESULT_VARIABLE device_profile_result)
+if(NOT device_profile_result EQUAL 0)
+    message(FATAL_ERROR "Device profile generation failed")
+endif()
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    ${CMAKE_SOURCE_DIR}/config/pocketbook-devices.json ${CMAKE_SOURCE_DIR}/tools/generate-device-profiles.py)
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
+option(CR3_SHARED_PACKAGE "Experimental shared PocketBook package; USB updates only" OFF)
+if(CR3_SHARED_PACKAGE)
+    add_definitions(-DCR3_SHARED_PACKAGE=1)
+endif()
 
 set(KWWidgets_CMAKE_DIR ${CMAKE_SOURCE_DIR}/tools/)
 include(${KWWidgets_CMAKE_DIR}FindGettext.cmake)
@@ -96,7 +110,8 @@ if(POCKETBOOK_FW6)
 endif()
 # Packaging alone strips a copy; keep the link output and its symbols intact.
 install(TARGETS cr3-pb.app RUNTIME DESTINATION system/bin)
-install(FILES ${CMAKE_SOURCE_DIR}/data/touch-hd3/cr3-defaults.ini DESTINATION system/share/cr3)
+set(CR3_DEFAULTS_FILE "${CMAKE_SOURCE_DIR}/data/touch-hd3/cr3-defaults.ini" CACHE FILEPATH "Packaged reading defaults")
+install(FILES ${CR3_DEFAULTS_FILE} DESTINATION system/share/cr3)
 install(FILES data/epub.css data/fb2.css data/htm.css data/rtf.css
     data/txt.css data/chm.css data/doc.css data/dict.css DESTINATION system/share/cr3)
 install(DIRECTORY data/hyph/ DESTINATION system/share/cr3/hyph

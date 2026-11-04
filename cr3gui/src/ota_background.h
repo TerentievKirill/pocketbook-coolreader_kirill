@@ -63,13 +63,13 @@ static void OTA_backgroundTickFW6() {
     if (!pbCanRunBackgroundUpdate()) { OTA_interruptBackgroundFW6(); return; }
     if (!pbAutoUpdateEnabled()) { OTA_interruptBackgroundFW6(); return; }
     if (fw6ota::state != fw6ota::Idle) { OTA_interruptBackgroundFW6(); return; }
-    if (getPbModelNumber() != lString32("632") || strcmp(GetSoftwareVersion(), "U632.6.11.2001")) return;
+    if (!OTA_deviceEligibleFW6()) return;
     time_t now = OTA_backgroundNowFW6();
     if (fw6background::transfer) {
         if (!fw6background::transfer->poll()) { OTA_armBackgroundFW6(200); return; }
         std::string version, checksum;
         bool valid = fw6background::transfer->succeeded() &&
-            cr3ota::parseRelease(fw6background::transfer->body(), version, checksum);
+            OTA_parseReleaseFW6(fw6background::transfer->body(), version, checksum);
         fw6background::transfer.reset();
         if (!valid) { OTA_armBackgroundFW6(30 * 60000); return; } // silent retry
         fw6background::nextCheck = now + fw6background::day; OTA_saveBackgroundFW6();
@@ -100,7 +100,7 @@ static void OTA_backgroundTickFW6() {
     fw6background::nextCheck = now + 30 * 60; OTA_saveBackgroundFW6();
     fw6background::transfer.reset(new WebTransfer());
     // No pbNetwork("connect"): offline readers stay offline and errors stay silent.
-    if (!fw6background::transfer->start(FW6_OTA_URL "ota/pb632-fw6.txt", "", 4096)) {
+    if (!fw6background::transfer->start(FW6_OTA_URL CR3_OTA_CHANNEL, "", otaManifestLimit)) {
         fw6background::transfer.reset(); OTA_armBackgroundFW6(30 * 60000); return;
     }
     OTA_armBackgroundFW6(200);

@@ -79,7 +79,9 @@ ExternalProject_Add(curl_external
     -DCURL_BROTLI=OFF -DCURL_ZSTD=OFF -DUSE_LIBIDN2=OFF -DUSE_NGHTTP2=OFF
     -DZLIB_INCLUDE_DIR=${CMAKE_SOURCE_DIR}/thirdparty/zlib
     -DZLIB_LIBRARY=$<TARGET_FILE:zlibstatic>
-    "-DCMAKE_C_FLAGS=${CMAKE_C_FLAGS} -I${CMAKE_BINARY_DIR}/thirdparty/zlib"
+    # Firmware OpenSSL 3 builds may omit the deprecated ENGINE API while still
+    # exporting OPENSSL_3.0.0. CoolReader uses normal HTTPS, never legacy engines.
+    "-DCMAKE_C_FLAGS=${CMAKE_C_FLAGS} -I${CMAKE_BINARY_DIR}/thirdparty/zlib -DOPENSSL_NO_ENGINE"
     -DCURL_CA_BUNDLE=/ebrmain/share/ssl/certs/ca-certificates.crt
     -DCURL_CA_PATH=none
     ${curl_args}

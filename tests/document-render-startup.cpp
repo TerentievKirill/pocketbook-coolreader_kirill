@@ -3,6 +3,7 @@
 #include "lvdocview.h"
 #include "testutil.h"
 #include "../cr3gui/src/settings.h"
+#include "../cr3gui/src/pb_device_profile.h"
 #include <stdio.h>
 #include <string>
 lString32 pbSkinFileName;
@@ -84,6 +85,9 @@ static int testRendering(const char *defaultsFile, const char *epubFile, const c
     CRPropRef defaults = LVCreatePropsContainer();
     LVStreamRef config = LVOpenFileStream(defaultsFile, LVOM_READ);
     CHECK(!config.isNull() && defaults->loadFromStream(config.get()));
+#ifdef CR3_SHARED_PACKAGE
+    pbdevice::applyDefaults(defaults, *pbdevice::identify("PB632"));
+#endif
     CRPropRef preferences = LVClonePropsContainer(defaults);
     LVArray<int> sizes(cr_font_sizes, sizeof(cr_font_sizes) / sizeof(int));
     view.setFontSizes(sizes, true);

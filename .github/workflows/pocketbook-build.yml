@@ -1,0 +1,36 @@
+name: PocketBook builds
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [pb632-fw6, pocketbook-armv7-softfp]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore pinned downloads
+        uses: actions/cache@v4
+        with:
+          path: work/downloads
+          key: pocketbook-inputs-${{ matrix.target }}-${{ hashFiles('config/targets/*.json', 'config/firmware-candidates.json', 'tools/docker/inputs*.json') }}
+      - name: Build and verify
+        env:
+          CR3_REVISION: ci-${{ github.run_id }}-${{ github.run_attempt }}
+          JOBS: '2'
+        run: bash tools/docker-build-pocketbook.sh '${{ matrix.target }}'
+      - name: Upload candidate and validation evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: coolreader-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error

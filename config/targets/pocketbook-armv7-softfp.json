@@ -1,0 +1,75 @@
+{
+  "schema": 1,
+  "id": "pocketbook-armv7-softfp",
+  "label": "Shared PocketBook ARMv7 softfp (experimental)",
+  "inputs": "tools/docker/inputs.json",
+  "sdk": {
+    "directory": "SDK-B288-6.10",
+    "prefix": "arm-obreey-linux-gnueabi",
+    "sysroot": "usr/arm-obreey-linux-gnueabi/sysroot",
+    "processor": "armv7",
+    "c_flags": [
+      "-march=armv7-a",
+      "-mtune=cortex-a7",
+      "-mfpu=neon",
+      "-mfloat-abi=softfp",
+      "-fsigned-char",
+      "-DPLATFORM_FC",
+      "-fcommon"
+    ],
+    "cxx_flags": [
+      "-march=armv7-a",
+      "-mtune=cortex-a7",
+      "-mfpu=neon",
+      "-mfloat-abi=softfp",
+      "-fsigned-char",
+      "-DPLATFORM_FC",
+      "-std=gnu++14"
+    ]
+  },
+  "firmware": {
+    "version": "U632.6.11.2001",
+    "header_model": "PocketBook632",
+    "directory": "work/firmware",
+    "loader": "lib/ld-linux.so.3",
+    "elf_machine": 40,
+    "elf_class": 32,
+    "float_abi": "soft"
+  },
+  "build": {
+    "directory": "work/build-pocketbook-armv7-softfp",
+    "cmake": {
+      "GUI": "CRGUI_PB",
+      "DEVICE_NAME": "pb360",
+      "TARGET_TYPE": "ARM",
+      "MAX_IMAGE_SCALE_MUL": "2",
+      "POCKETBOOK_PRO": "ON",
+      "POCKETBOOK_PRO_FW5": "ON",
+      "POCKETBOOK_FW6": "ON",
+      "BACKGROUND_CACHE_FILE_CREATION": "ON",
+      "ENABLE_PB_DB_STATE": "OFF",
+      "CR3_SHARED_PACKAGE": "ON"
+    }
+  },
+  "package": {
+    "application": "CoolReader for PocketBook (experimental shared ARMv7 package)",
+    "device": "PocketBook ARMv7 Linux softfp; see device-profiles.json for exact qualified firmware",
+    "assets": "data/pocketbook-armv7",
+    "guide": "README-pocketbook-armv7.txt",
+    "keymaps": "pb360",
+    "skins": [
+      "default",
+      "pb62x",
+      "pb626fw5",
+      "pb631fw5"
+    ],
+    "artifact_prefix": "coolreader-pocketbook-armv7-softfp",
+    "report_prefix": "coolreader-pocketbook-armv7-softfp"
+  },
+  "device_registry": "config/pocketbook-devices.json",
+  "qualification_candidates": [
+    "pb634",
+    "pb700",
+    "pb743g"
+  ]
+}

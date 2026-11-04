@@ -15,3 +15,4 @@ CMakeUserPresets.json
 .DS_Store
 ._*
 __pycache__/
+*.iml

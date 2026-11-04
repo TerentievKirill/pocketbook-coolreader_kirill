@@ -1,6 +1,7 @@
 #include "ota_fw6_core.h"
 #include <memory>
 #include <ctime>
+#include "ota_policy.h"
 static void OTA_restoreAfterDialogFW6() { SetHardTimer("OTA_restore",pbRestoreUpdateScreen,150); }
 static void OTA_resultDismissed(int) { OTA_restoreAfterDialogFW6(); }
 static void OTA_result(int icon, const char *text) {
@@ -15,6 +16,10 @@ static std::string version, checksum;
 static bool progressOpen = false;
 static int lastPercent = -1;
 static time_t lastPaint = 0;
+}
+static void OTA_showVersionFW6() {
+    Dialog(ICON_INFORMATION, _("Version"), "CoolReader " CR3_RELEASE_VERSION,
+           _("OK"), NULL, OTA_resultDismissed);
 }
 static void OTA_interruptBackgroundFW6();
 static void OTA_pollFW6();
@@ -62,7 +67,7 @@ static void OTA_startDownloadFW6() {
     pbRestoreUpdateScreen();
     OpenProgressbar(ICON_INFORMATION, "OTA Update", "Connecting to the download server...", 0, OTA_cancelFW6);
     fw6ota::progressOpen = true;
-    std::string url = std::string(FW6_OTA_URL) + "downloads/coolreader/" + fw6ota::version + "/coolreader-touch-hd3.zip";
+    std::string url = std::string(FW6_OTA_URL) + CR3_OTA_DOWNLOADS + fw6ota::version + "/" CR3_OTA_PACKAGE;
     if (!fw6ota::transfer->start(url, FLASHDIR "/.cr3-ota.zip", 64 * 1024 * 1024)) {
         OTA_finishFW6(ICON_ERROR, "Could not start the download.\n" + fw6ota::transfer->error()); return;
     }
@@ -92,8 +97,8 @@ static void OTA_pollFW6() {
     if (fw6ota::state == fw6ota::Checking) {
         std::string response = fw6ota::transfer->body();
         fw6ota::transfer.reset(); OTA_closeProgressFW6();
-        if (!cr3ota::parseRelease(response, fw6ota::version, fw6ota::checksum)) {
-            OTA_finishFW6(ICON_ERROR, "The update server returned invalid release information. Please try again later."); return;
+        if (!OTA_parseReleaseFW6(response, fw6ota::version, fw6ota::checksum)) {
+            OTA_finishFW6(ICON_ERROR, "The update server returned invalid release information or no compatible update for this reader. Please try again later."); return;
         }
         if (!cr3ota::newer(fw6ota::version, CR3_RELEASE_VERSION)) {
             OTA_finishFW6(ICON_INFORMATION, "You have the latest version (" CR3_RELEASE_VERSION ")."); return;
@@ -105,7 +110,8 @@ static void OTA_pollFW6() {
     OTA_closeProgressFW6();
     OpenProgressbar(ICON_INFORMATION, "OTA Update", "Verifying and preparing the update...", 100, NULL);
     fw6ota::progressOpen = true;
-    bool ok = otaStagePackage(fw6ota::checksum, fw6ota::version);
+    bool ok = otaStagePackage(fw6ota::checksum, fw6ota::version,
+                             UnicodeToUtf8(getPbModelNumber()).c_str(), GetSoftwareVersion());
     unlink(FLASHDIR "/.cr3-ota.zip");
     if (!ok) {
         otaRemoveTree(FW6_OTA_STAGE);
@@ -121,7 +127,7 @@ static void OTA_pollFW6() {
 static bool OTA_updateFW6(const char *branch) {
     if (fw6ota::state != fw6ota::Idle) return false;
     OTA_interruptBackgroundFW6();
-    if (strcmp(branch, OTA_BRANCH_STABLE) || getPbModelNumber() != lString32("632") || strcmp(GetSoftwareVersion(), "U632.6.11.2001")) {
+    if (strcmp(branch, OTA_BRANCH_STABLE) || !OTA_deviceEligibleFW6()) {
         std::string detail = "No update for this model, firmware or channel.\nModel: ";
         detail += UnicodeToUtf8(getPbModelNumber()).c_str(); detail += "\nFirmware: "; detail += GetSoftwareVersion();
         OTA_result(ICON_WARNING, detail.c_str()); return false;
@@ -136,7 +142,7 @@ static bool OTA_updateFW6(const char *branch) {
     OpenProgressbar(ICON_INFORMATION, "OTA Update", "Checking for updates...", 0, OTA_cancelFW6);
     fw6ota::progressOpen = true;
     fw6ota::transfer.reset(new WebTransfer());
-    if (!fw6ota::transfer->start(FW6_OTA_URL "ota/pb632-fw6.txt", "", 4096)) {
+    if (!fw6ota::transfer->start(FW6_OTA_URL CR3_OTA_CHANNEL, "", otaManifestLimit)) {
         OTA_finishFW6(ICON_ERROR, "Could not check for updates.\n" + fw6ota::transfer->error()); return false;
     }
     SetHardTimer("OTA_poll", OTA_pollFW6, 100); return true;

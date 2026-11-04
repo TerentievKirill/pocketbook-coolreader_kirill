@@ -5,28 +5,36 @@ import argparse, datetime, io, json, os, re, shlex, subprocess, zipfile
 import struct, zlib, shutil
 import http.server, ssl, threading
 from build_metadata import sha256, source_metadata
+from targets import DEFAULT_TARGET, load_target, firmware_path, tool, target_evidence, verify_build_target
+from runtime_compatibility import check_runtime
 root = Path(__file__).resolve().parent.parent
 os.chdir(root)
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('--build', type=Path, default=root / 'work/build-touch-hd3-fw6')
+parser.add_argument('--target', default=DEFAULT_TARGET)
+parser.add_argument('--build', type=Path)
 parser.add_argument('--application', type=Path)
 args = parser.parse_args()
-build = args.build.resolve()
+profile = load_target(args.target)
+build = (args.build or root / profile['build']['directory']).resolve()
+firmware = firmware_path(profile)
 application = args.application or build / 'package/cr3-pb.app'
 report_path = build / 'test-results.json'
 report_path.unlink(missing_ok=True)
+verify_build_target(build, profile)
 source_before = source_metadata(root)
-sdk = Path(os.environ.get('POCKETBOOK_SDK', root / 'work/sdk/SDK-B288-6.10'))
-compiler = sdk / 'usr/bin/arm-obreey-linux-gnueabi-g++'
+compiler = tool(profile, 'g++')
 bundled_qemu = root / 'work/host/usr/bin/qemu-arm'
 qemu = Path(os.environ.get('CR3_QEMU') or (str(bundled_qemu) if bundled_qemu.is_file() else shutil.which('qemu-arm') or 'qemu-arm'))
-runtime = root / 'work/firmware/runtime'
+runtime = firmware / 'runtime'
 out = build / 'arm-regressions'
 out.mkdir(exist_ok=True)
 makeflags = (build / 'crengine/CMakeFiles/crengine.dir/flags.make').read_text()
 def flags(name):
     return shlex.split(re.search(r'^' + name + r' = (.*)$', makeflags, re.M).group(1))
 options = flags('CXX_DEFINES') + flags('CXX_INCLUDES') + flags('CXX_FLAGS')
+options += ['-I' + str(build / 'cr3gui')]
+if profile['build']['cmake'].get('CR3_SHARED_PACKAGE') == 'ON':
+    options += ['-DCR3_SHARED_PACKAGE=1']
 dependencies = json.loads((build / 'dependency-link.json').read_text())
 libraries = [build / p for p in ['crengine/libcrengine.a', 'tinydict/libtinydict.a', 'thirdparty/chmlib/libchmlib.a', 'thirdparty/antiword/libantiword.a']]
 libraries += [Path(p) for p in dependencies['archives']]
@@ -54,15 +62,25 @@ with zipfile.ZipFile(legacy, 'w') as z:
 bad = (out / 'utf8-stored.zip').read_bytes().replace('Т'.encode(), b'\xc0\x80')
 (out / 'invalid-utf8.zip').write_bytes(bad)
 # OTA fixtures cover verified extraction, corruption, traversal and release identity.
-for name in ('good', 'wrong-version', 'traversal', 'missing-binary'):
+shared_ota = profile['build']['cmake'].get('CR3_SHARED_PACKAGE') == 'ON'
+compatibility = '632 U632.6.11.2001\n634 U634.6.10.3425\n700 U700.6.10.3209\n743G U743g.6.11.1683\n'
+def add_shared_identity(entries):
+    if shared_ota:
+        entries['package-family.txt'] = 'pocketbook-armv7-softfp\n'
+        entries['firmware-compatibility.txt'] = compatibility
+    return entries
+for name in ('good', 'wrong-version', 'traversal', 'missing-binary', 'wrong-family', 'wrong-firmware'):
     with zipfile.ZipFile(out / ('ota-' + name + '.zip'), 'w', zipfile.ZIP_DEFLATED) as archive:
         entries = {'release-version.txt': '1.0.0\n', 'bin/cr3-pb.app': 'binary', 'cr3-defaults.ini': 'defaults', 'skins/pb631fw5.cr3skin': 'skin'}
+        add_shared_identity(entries)
+        if name == 'wrong-family': entries['package-family.txt'] = 'pocketbookhf\n'
+        if name == 'wrong-firmware': entries['firmware-compatibility.txt'] = '632 U632.6.9.1\n'
         if name == 'wrong-version': entries['release-version.txt'] = '0.9.0\n'
         if name == 'traversal': entries['../escaped'] = 'bad'
         if name == 'missing-binary': del entries['bin/cr3-pb.app']
         for entry, data in entries.items(): archive.writestr('system/share/cr3/' + entry, data)
 with zipfile.ZipFile(out / 'ota-ui-success.zip', 'w', zipfile.ZIP_DEFLATED) as archive:
-    for entry, data in {'release-version.txt': '1.0.2\n', 'bin/cr3-pb.app': 'binary', 'cr3-defaults.ini': 'defaults', 'skins/pb631fw5.cr3skin': 'skin'}.items():
+    for entry, data in add_shared_identity({'release-version.txt': '1.0.2\n', 'bin/cr3-pb.app': 'binary', 'cr3-defaults.ini': 'defaults', 'skins/pb631fw5.cr3skin': 'skin'}).items():
         archive.writestr('system/share/cr3/' + entry, data)
 # A small EPUB exercises the new parser, CSS and image/page-painting path.
 def png_chunk(kind, data):
@@ -129,7 +147,12 @@ context.load_cert_chain(out / 'trusted.crt', out / 'trusted.key')
 server.socket = context.wrap_socket(server.socket, server_side=True)
 threading.Thread(target=server.serve_forever, daemon=True).start()
 tls_url = 'https://127.0.0.1:' + str(server.server_port)
-readelf = sdk / 'usr/bin/arm-obreey-linux-gnueabi-readelf'
+readelf = tool(profile, 'readelf')
+arm_attributes = subprocess.check_output([str(readelf), '-A', str(application)], text=True)
+if profile['build']['cmake'].get('CR3_SHARED_PACKAGE') == 'ON':
+    if not re.search(r'Tag_FP_arch: VFPv3(?:\s|$)', arm_attributes) or 'Fused-MAC' in arm_attributes:
+        raise SystemExit('Shared binary exceeds the intended NEON/VFPv3 baseline')
+runtime_check = check_runtime(application, runtime, readelf, profile['firmware'])
 symbols = subprocess.check_output([str(readelf), '--dyn-syms', '--wide', str(application)], text=True)
 if re.search(r'\b(?:FT_|jpeg_|png_|curl_|deflate|inflate|zlibVersion)\w*\b', symbols):
     raise SystemExit('Application must not import/export firmware copies of private library APIs')
@@ -138,13 +161,14 @@ if re.search(r'NEEDED.*\[lib(?:png|z\.|curl)', needed):
     raise SystemExit('Application must link private image/compression/network libraries')
 passed = []
 for name, sources, engine, arguments in [
+    ('shared-device-profiles', ['tests/shared-device-profiles.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', root / 'data/pocketbook-armv7/cr3-defaults.ini']),
     ('reference-initialization', ['tests/lvref-static-global.cpp', 'tests/lvref-static-sentinel.cpp'], False, []),
-    ('frontlight-status', ['tests/frontlight-status.cpp'], True, [root / 'work/firmware/ebrmain/cramfs/fonts/DejaVuSans.ttf', out]),
+    ('frontlight-status', ['tests/frontlight-status.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', out]),
     ('standby-frontlight', ['tests/standby-frontlight.cpp'], False, []),
     ('css-null-ancestor', ['tests/css-selector-null-ancestor.cpp'], True, []),
-    ('skin-language-symbol', ['tests/skin-language-symbol.cpp'], True, [root / 'work/firmware/ebrmain/cramfs/fonts/DejaVuSans.ttf', root / 'work/firmware/ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', build / 'cr3gui/pb631fw5.cr3skin', out]),
-    ('document-render', ['tests/document-render-startup.cpp'], True, [root / 'work/firmware/ebrmain/cramfs/fonts/DejaVuSans.ttf', root / 'work/firmware/ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', root / 'work/firmware/ebrmain/cramfs/fonts/DroidSans.ttf', root / 'data/touch-hd3/cr3-defaults.ini', root / 'cr3gui/data/hyph/', epub, root / 'cr3gui/data/fb2.css']),
-    ('reading-state-migration', ['tests/reading-state-migration.cpp'], True, [root / 'work/firmware/ebrmain/cramfs/fonts/DejaVuSans.ttf', out / 'migration.fb2', out / 'migration.zip']),
+    ('skin-language-symbol', ['tests/skin-language-symbol.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', firmware / 'ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', build / 'cr3gui/pb631fw5.cr3skin', out]),
+    ('document-render', ['tests/document-render-startup.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', firmware / 'ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', firmware / 'ebrmain/cramfs/fonts/DroidSans.ttf', root / profile['package']['assets'] / 'cr3-defaults.ini', root / 'cr3gui/data/hyph/', epub, root / 'cr3gui/data/fb2.css']),
+    ('reading-state-migration', ['tests/reading-state-migration.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', out / 'migration.fb2', out / 'migration.zip']),
     ('dependency-compatibility', ['tests/dependency-compatibility.cpp'], True, [out]),
     ('web-tls', ['tests/web-tls.cpp', 'cr3gui/src/web.cpp', 'cr3gui/src/web_transfer.cpp'], True, [tls_url, out / 'trusted.crt', out / 'untrusted.crt', out]),
     ('dictionary-safety', ['tests/dictionary-safety.cpp'], True, []),
@@ -178,6 +202,8 @@ report = {
     'schema': 1, 'status': 'passed', 'passed': passed,
     'finished_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
     'binary_sha256': sha256(application), 'source': source_before,
+    'target': target_evidence(profile), 'runtime_compatibility': runtime_check,
+    'arm_attributes': arm_attributes,
     'configuration_sha256': sha256(build / 'crengine/CMakeFiles/crengine.dir/flags.make'),
     'environment': 'ARM/QEMU with extracted PocketBook firmware runtime; no physical device test',
 }

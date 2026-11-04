@@ -1,25 +1,37 @@
-# CoolReader for PocketBook Touch HD 3
+# CoolReader for PocketBook
 
-CoolReader for **Touch HD 3 / PB632**, targeting firmware **6.11.2001**.
+[Downloads](https://pocketbook.nimbushub.eu/) · [Installation](https://pocketbook.nimbushub.eu/installation.html) · [Release 1.0.3](https://github.com/dderugin/pocketbook-coolreader/releases/tag/v1.0.3)
 
-[Downloads: CoolReader and Easy Connect](https://pocketbook.nimbushub.eu/) · [Installation](https://pocketbook.nimbushub.eu/installation.html) · [GitHub release](https://github.com/dderugin/pocketbook-coolreader/releases/latest)
+Release **1.0.3** provides one shared ARMv7 Linux executable and install ZIP for
+these exact model/firmware combinations:
 
-Release **1.0.2** adds automatic update notifications, confirmed downloads with
-progress and cancellation, and frontlight status indicators. It also restores
-settings screens correctly after OTA/native dialogs. Automated verification covers
-15 ARM/QEMU regression groups and package checks. Physical-device OTA installation
-and interaction checks for this release remain pending; `build-info.json` records
-automated results separately from device validation.
-Other devices and firmware versions have not been verified by this fork.
+| Device | Firmware |
+| --- | --- |
+| Touch HD 3 / PB632 | U632.6.11.2001 |
+| Verse Pro / PB634 | U634.6.10.3425 |
+| Era / PB700 | U700.6.10.3209 |
+| InkPad 4 / PB743G | U743g.6.11.1683 |
 
-New installations use the reading preferences captured from the Touch HD 3:
-Droid Sans MTI Arabic at size 49, 100% line spacing, margins of 2 px on the
-left/top/bottom and 0 px on the right, and Russian/English hyphenation.
-All 154 preferences are stored in `data/touch-hd3/cr3-defaults.ini` and packaged
-as `system/share/cr3/cr3-defaults.ini`. The font comes with the target firmware.
-Saved user or book settings take precedence; upgrades preserve
-`system/config/cr3/cr3.ini`. Settings saves, pinch zoom and normal exit now
-retain preferences correctly.
+This shared release is experimental. Sixteen ARM regression groups and thirteen
+software probes on each additional firmware pass; interactive hardware testing
+and end-to-end device OTA acceptance remain pending. Other model/firmware pairs
+are rejected. See the [device matrix](DEVICE-SUPPORT.md) and
+[shared installation guide](README-pocketbook-armv7.txt) for qualification limits.
+
+Every model uses the same download and Wi-Fi update channel. **Settings → Check
+for updates** checks manually; automatic checks are optional. **Settings → Version**
+shows the installed release. Moving from the earlier PB632-only release requires
+one USB installation of the shared package and launcher; later shared releases
+can update over Wi-Fi.
+
+Install ZIPs contain only `system/` and `applications/` at the top level. Guides,
+licenses and build reports live under `system/share/cr3/`, keeping them out of
+Library. Existing settings, history, bookmarks and custom assets are preserved.
+
+Fresh shared installations use general reading defaults and runtime device DPI.
+Saved user and book settings take precedence. The historical `pb632-fw6` build
+configuration remains available with its earlier Touch HD 3 reading preferences;
+its existing downloads and update channel remain separate.
 
 ## Install
 
@@ -56,9 +68,13 @@ From the repository root, build and test:
 CR3_REVISION=local bash tools/docker-build-touch-hd3.sh
 ```
 
+The equivalent target-aware command is
+`CR3_REVISION=local bash tools/docker-build-pocketbook.sh pb632-fw6`.
+List enabled targets with `python3 tools/targets.py --list`.
+
 The first run downloads approximately 1.1 GB of pinned SDK/firmware archives,
 verifies their SHA-256 hashes, prepares the Linux build environment, builds the
-ARM executable, and runs all fifteen ARM/QEMU regression groups and package
+ARM executable, and runs all sixteen ARM/QEMU regression groups and package
 checks. No remote build server or connected PocketBook is required.
 
 Artifacts are written to `dist/`:
@@ -92,7 +108,7 @@ export POCKETBOOK_SDK="$PWD/work/sdk/SDK-B288-6.10"
 bash tools/build-touch-hd3.sh
 ```
 
-The script builds the ARM application, keeps debug symbols, runs fifteen ARM/QEMU
+The script builds the ARM application, keeps debug symbols, runs sixteen ARM/QEMU
 regression groups and checks packaging evidence before producing
 `dist/coolreader-touch-hd3-fw6.11.2001-dev.zip` and its SHA-256 file.
 Set `CR3_REVISION` to label a candidate and `CR3_BUILD_DIR` to use another build

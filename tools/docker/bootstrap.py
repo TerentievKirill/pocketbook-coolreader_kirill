@@ -1,12 +1,23 @@
 #!/usr/bin/env python3
 """Prepare private build inputs inside a Linux Docker volume. No reader is modified."""
 from pathlib import Path
-import gzip,json,shutil,struct,subprocess,zipfile
+import gzip,json,os,shutil,struct,subprocess,sys,zipfile
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from targets import DEFAULT_TARGET, load_target, target_evidence
 from download_inputs import sha256
 
-root=Path('/src');work=root/'work';inputs=json.loads(Path(__file__).with_name('inputs.json').read_text())
+root=Path('/src');work=root/'work'
+profile=load_target(os.environ.get('CR3_TARGET',DEFAULT_TARGET))
+inputs=json.loads((root/profile['inputs']).read_text())
 marker=work/'docker-inputs.json'
-expected={'schema':1,'inputs':inputs}
+expected={'schema':2,'target':target_evidence(profile),'inputs':inputs}
+# Legacy PB632 caches contain these same pinned inputs and may be reused.
+if marker.exists():
+    previous=json.loads(marker.read_text())
+    legacy=previous=={'schema':1,'inputs':inputs} and profile['id']=='pb632-fw6'
+    if previous!=expected and not legacy:
+        raise SystemExit('Docker input cache belongs to another target/profile; choose a new CR3_DOCKER_VOLUME')
+    if legacy:marker.write_text(json.dumps(expected,indent=2)+'\n')
 if marker.exists() and json.loads(marker.read_text())==expected:
     print('SDK and firmware runtime cache ready',flush=True)
     raise SystemExit(0)
@@ -20,7 +31,7 @@ def run(args,log=None):
     else:subprocess.run([str(x) for x in args],check=True)
 
 sdkbase=work/'sdk';sdkbase.mkdir(exist_ok=True);archive=Path('/downloads')/inputs['sdk']['filename']
-sdk=sdkbase/'SDK-B288-6.10'
+sdk=sdkbase/profile['sdk']['directory']
 if not sdk.is_dir():
     print('Extracting SDK',flush=True)
     # 7z refuses some valid relative symlinks. Repair only links contained in
@@ -44,15 +55,15 @@ if entries:
         if (p.parent/target).resolve().is_relative_to(sdkbase.resolve()):
             p.unlink(missing_ok=True);p.symlink_to(target)
     assert offset==len(data)
-run([sdk/'usr/bin/arm-obreey-linux-gnueabi-g++','--version'])
+run([sdk/('usr/bin/'+profile['sdk']['prefix']+'-g++'),'--version'])
 
-firmware=work/'firmware';firmware.mkdir(exist_ok=True)
+firmware=root/profile['firmware']['directory'];firmware.mkdir(exist_ok=True)
 raw=firmware/'SWUPDATE.BIN'
 with zipfile.ZipFile(Path('/downloads')/inputs['firmware']['filename']) as archive:
     if not raw.exists():
         with archive.open('SWUPDATE.BIN') as src,raw.open('wb') as dst:shutil.copyfileobj(src,dst)
 with raw.open('rb') as stream:
-    header=stream.read(1024);assert header[:16]==b'PocketBookUpdate' and b'PocketBook632' in header[:64]
+    header=stream.read(1024);assert header[:16]==b'PocketBookUpdate' and profile['firmware']['header_model'].encode() in header[:64]
     for kind,unused,offset,size in struct.iter_unpack('<4I',header[256:]):
         if kind not in (0x72,0x65):continue
         name='rootfs' if kind==0x72 else 'ebrmain';image=firmware/(name+'.img')
@@ -90,7 +101,7 @@ for line in listing.splitlines():
         if candidate.is_file() and not alias.exists():
             alias.unlink(missing_ok=True);alias.symlink_to(candidate.name)
 for filename in ['DejaVuSans.ttf','DejaVuSans-Bold.ttf','DroidSans.ttf']:assert (ebrmain/'cramfs/fonts'/filename).is_file(),filename
-assert (runtime/'lib/ld-linux.so.3').is_file()
-run(['qemu-arm','-L',runtime,runtime/'lib/ld-linux.so.3','--version'])
+assert (runtime/profile['firmware']['loader']).is_file()
+run(['qemu-arm','-L',runtime,runtime/profile['firmware']['loader'],'--version'])
 marker.write_text(json.dumps(expected,indent=2)+'\n')
 print('SDK and extracted firmware runtime ready',flush=True)

@@ -1884,7 +1884,8 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
     props->setStringDef(PROP_OTA_AUTO_CHECK, "1");
     createSettingsMenuItem(mainMenu, mm_AutoUpdateCheck, _("Check for updates automatically"),
                            "", valueFont, PROP_OTA_AUTO_CHECK, on_off_option);
-    mainMenu->addItem(new CROTAUpdateMenuItem(mainMenu, PB_CMD_OTA_UPDATE, _("OTA Update")));
+    mainMenu->addItem(new CROTAUpdateMenuItem(mainMenu, PB_CMD_OTA_UPDATE, _("Check for updates")));
+    mainMenu->addItem(new CRVersionMenuItem(mainMenu, mm_Version, _("Version")));
     #else
     mainMenu->addItem( new CRMenuItem( mainMenu, PB_CMD_OTA_UPDATE,
                 _("OTA Update"),

@@ -1,4 +1,4 @@
-// FW6 OTA uses only our PB632 package, never upstream firmware-5 builds.
+// SHA-256-verified FW6 updates are staged before the launcher switches directories.
 #include <openssl/sha.h>
 #include <sys/stat.h>
 #include <dirent.h>
@@ -7,7 +7,12 @@
 #include <fstream>
 #include <sstream>
 #include "ota_version.h"
+#ifdef CR3_SHARED_PACKAGE
+#define CR3_OTA_FAMILY "pocketbook-armv7-softfp"
+#define FW6_OTA_STAGE FLASHDIR "/system/share/cr3-ota-shared-new"
+#else
 #define FW6_OTA_STAGE FLASHDIR "/system/share/cr3-ota-new"
+#endif
 #define FW6_OTA_URL "https://pocketbook.nimbushub.eu/"
 
 static bool otaRemoveTree(const std::string &path) {
@@ -28,7 +33,8 @@ static bool otaRemoveTree(const std::string &path) {
 
 static std::string otaStageError;
 static bool otaStageFailure(const char *text) { otaStageError = text; return false; }
-static bool otaStagePackage(const std::string &checksum, const std::string &revision) {
+static bool otaStagePackage(const std::string &checksum, const std::string &revision,
+                            const std::string &model = "", const std::string &firmware = "") {
     otaStageError = "The update archive is invalid or contains unsafe paths.";
     const char *zip = FLASHDIR "/.cr3-ota.zip";
     FILE *file = fopen(zip, "rb");
@@ -77,6 +83,17 @@ static bool otaStagePackage(const std::string &checksum, const std::string &revi
     std::string packageVersion; std::getline(versionFile, packageVersion);
     if (packageVersion != revision || !names.count("bin/cr3-pb.app") || !names.count("cr3-defaults.ini") || !names.count("skins/pb631fw5.cr3skin"))
         return otaStageFailure("The downloaded package is for a different version or is incomplete.");
+#ifdef CR3_SHARED_PACKAGE
+    std::ifstream familyFile(FW6_OTA_STAGE "/package-family.txt");
+    std::string family; std::getline(familyFile, family);
+    std::ifstream compatibilityFile(FW6_OTA_STAGE "/firmware-compatibility.txt");
+    std::string compatibility((std::istreambuf_iterator<char>(compatibilityFile)), std::istreambuf_iterator<char>());
+    cr3ota::SharedRelease release;
+    if (family != CR3_OTA_FAMILY || !cr3ota::parseSharedRelease(
+            "CR3-OTA-SHARED-1\n" + family + "\n" + revision + "\n" + checksum + "\n" + compatibility, release) ||
+            !cr3ota::compatible(release, CR3_OTA_FAMILY, model, firmware))
+        return otaStageFailure("The downloaded package is not compatible with this reader and firmware.");
+#endif
     return true;
 }
 

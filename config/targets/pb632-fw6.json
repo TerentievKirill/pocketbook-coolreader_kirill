@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "id": "pb632-fw6",
+  "label": "PocketBook Touch HD 3 / PB632",
+  "inputs": "tools/docker/inputs.json",
+  "sdk": {
+    "directory": "SDK-B288-6.10",
+    "prefix": "arm-obreey-linux-gnueabi",
+    "sysroot": "usr/arm-obreey-linux-gnueabi/sysroot",
+    "processor": "armv7",
+    "c_flags": ["-mcpu=cortex-a7", "-mfpu=neon-vfpv4", "-mfloat-abi=softfp", "-fsigned-char", "-DPLATFORM_FC", "-fcommon"],
+    "cxx_flags": ["-mcpu=cortex-a7", "-mfpu=neon-vfpv4", "-mfloat-abi=softfp", "-fsigned-char", "-DPLATFORM_FC", "-std=gnu++14"]
+  },
+  "firmware": {
+    "version": "U632.6.11.2001",
+    "header_model": "PocketBook632",
+    "directory": "work/firmware",
+    "loader": "lib/ld-linux.so.3",
+    "elf_machine": 40,
+    "elf_class": 32,
+    "float_abi": "soft"
+  },
+  "build": {
+    "directory": "work/build-pb632-fw6",
+    "cmake": {
+      "GUI": "CRGUI_PB",
+      "DEVICE_NAME": "pb360",
+      "TARGET_TYPE": "ARM",
+      "MAX_IMAGE_SCALE_MUL": "2",
+      "POCKETBOOK_PRO": "ON",
+      "POCKETBOOK_PRO_FW5": "ON",
+      "POCKETBOOK_FW6": "ON",
+      "BACKGROUND_CACHE_FILE_CREATION": "ON",
+      "ENABLE_PB_DB_STATE": "OFF"
+    }
+  },
+  "package": {
+    "application": "CoolReader for PocketBook Touch HD 3",
+    "device": "PocketBook Touch HD 3 / PB632 / B288 / ARM Cortex-A7 softfp",
+    "assets": "data/touch-hd3",
+    "guide": "README-touch-hd3.txt",
+    "keymaps": "pb360",
+    "skins": ["default", "pb62x", "pb626fw5", "pb631fw5"],
+    "artifact_prefix": "coolreader-touch-hd3-fw6.11.2001",
+    "report_prefix": "coolreader-touch-hd3"
+  }
+}

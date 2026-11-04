@@ -108,6 +108,7 @@ enum MainMenuItems_t {
     mm_ShowFrontlight,
     mm_ShowFrontlightBrightness,
     mm_ShowFrontlightTemperature,
+    mm_Version,
     mm_Last
 };
 

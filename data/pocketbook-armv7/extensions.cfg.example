@@ -1,0 +1,4 @@
+# Preserve your existing system/config/extensions.cfg and its stock readers.
+# Append ,cr3-pb.app to the application list for each desired supported format.
+# Consult the included guide; file associations vary between firmware releases.
+# Do not replace an existing configuration with this comment-only example.

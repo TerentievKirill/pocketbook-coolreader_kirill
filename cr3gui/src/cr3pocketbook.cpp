@@ -17,6 +17,7 @@
 #include "cr3version.h"
 #include <inkview.h>
 #include "pbdictionary.h"
+#include "pb_device_profile.h"
 #ifdef POCKETBOOK_FW6
 #include "pbstandbyfrontlight.h"
 #include <signal.h>
@@ -4886,6 +4887,14 @@ int InitDoc(const char *exename, char *fileName)
             U""USERDATA"/share/cr3/cr3-defaults.ini", LVOM_READ);
         if (!defaultsStream.isNull())
             defaults->loadFromStream(defaultsStream.get());
+#ifdef CR3_SHARED_PACKAGE
+        const pbdevice::Profile *deviceProfile = pbdevice::identify(GetDeviceModel());
+        if (deviceProfile) {
+            pbdevice::applyDefaults(defaults, *deviceProfile);
+            CRLog::info("Shared package device: %s (%s), %d DPI, firmware %s",
+                        deviceProfile->name, deviceProfile->model, deviceProfile->dpi, GetSoftwareVersion());
+        }
+#endif
         CRPropRef props = LVClonePropsContainer(defaults);
         int bpp = 0;
 
@@ -4987,6 +4996,12 @@ int InitDoc(const char *exename, char *fileName)
                 lString32 defaultSkin;
 
                 #if defined(POCKETBOOK_PRO) && !defined(POCKETBOOK_PRO_PRO2)
+#ifdef CR3_SHARED_PACKAGE
+                    const pbdevice::Profile *skinProfile = pbdevice::identify(GetDeviceModel());
+                    if (skinProfile) defaultSkin = Utf8ToUnicode(skinProfile->skin);
+                    else
+#endif
+                    {
                     int maxPx = max(ScreenWidth(),ScreenHeight());
                     if( maxPx > 1024 )
                         defaultSkin = U"pb631fw5";
@@ -4994,6 +5009,7 @@ int InitDoc(const char *exename, char *fileName)
                         defaultSkin = U"pb626fw5";
                     else
                         defaultSkin = U"pb62x";
+                    }
                 #else
                     defaultSkin = U"default";
                 #endif
@@ -5169,10 +5185,7 @@ CRGUITouchEventType getTouchEventType(int inkview_evt)
 
 lString32 getPbModelNumber() {
     CRLog::trace("getPbModelNumber()");
-    lString32 model = lString32(GetDeviceModel());
-    model.replace(lString32(" "), lString32(""));
-    model.replace(lString32("PocketBook"), lString32(""));
-    model.replace(lString32("PB"), lString32(""));
+    lString32 model = Utf8ToUnicode(pbdevice::modelNumber(GetDeviceModel()).c_str());
     CRLog::trace("getPbModelNumber(): %s", UnicodeToUtf8(model).c_str());
     return model;
 }
@@ -5433,6 +5446,16 @@ void stopStandByTimer() {
 static bool need_save_cover = false;
 int main_handler(int type, int par1, int par2)
 {
+#ifdef CR3_SHARED_PACKAGE
+    static bool rejected = false;
+    if (rejected) return 0;
+    if (type == EVT_INIT && !pbdevice::qualified(GetDeviceModel(), GetSoftwareVersion())) {
+        rejected = true;
+        Message(ICON_WARNING, "CoolReader", "This experimental package has not been checked for this model and firmware. See the included guide.", 3000);
+        CloseApp();
+        return 0;
+    }
+#endif
 
     if( isStandByMode ) switch (type) {
 

@@ -21,6 +21,15 @@ python3 tools/test-touch-hd3.py
 This also checks absent CSS ancestors/null nodes, skin language selection
 (including the Chinese font fallback), and startup/Cyrillic FB2 layout.
 
+The runner accepts --target (default pb632-fw6) and selects SDK, runtime and
+defaults from config/targets. With no --build, it uses work/build-pb632-fw6.
+Before the ARM groups, it verifies ELF ABI, loader, transitive firmware libraries
+and required symbol versions. Reports bind the selected target profile as well
+as source, flags and executable; packaging rejects old unprofiled reports.
+tools/test-targets.py exercises wrong ABI/loader, missing libraries, older symbol
+versions and target/profile mismatch. See DEVICE-SUPPORT.md for the limits of
+automated firmware checks and the physical-device admission checklist.
+
 Reliability review regressions
 ------------------------------
 The build script now runs twelve ARM/QEMU regressions before packaging. The new
@@ -59,6 +68,26 @@ memory-stream and atomic-file path, creates a new profile directory and reads
 back the font, size, margin and Unicode values. This reproduces the previously
 silent settings-save failure before the serializer fix.
 Packaging compares the installed defaults file with its repository source.
+
+Shared package qualification
+----------------------------
+The current primary suite has sixteen groups. shared-device-profiles validates
+model normalization, exact firmware admission, general DPI defaults, saved user
+and book overrides, and actual portrait/landscape rendering at all four registered
+screen sizes. config/pocketbook-devices.json generates the production header;
+there is no separate executable per model. The shared target checks that the
+linked application's ARM attributes stay at NEON/VFPv3. Its OTA UI regression exercises the shared check/download/confirmation/cancel
+and background flow, verifies identical URLs across four models, rejects wrong
+family/firmware descriptors, and checks the Version row/dialog. Package tests
+reject wrong-family/wrong-firmware archives after checksum verification. The
+shared launcher regression covers installation, isolation from PB632 stages,
+rollback, interrupted switches and preservation of user assets/reading paths.
+
+The shared build additionally runs thirteen already-compiled software probes
+against each additional firmware runtime. package-pocketbook.py requires all
+three reports to match the binary, primary report, pinned firmware manifest,
+inspection tools and current runtime files before creating the shared ZIP.
+Physical device behavior is never inferred from these automated reports.
 
 The skin-language-symbol group also renders the settings menu with the PB631
 skin at Touch HD 3 portrait and landscape sizes. It checks that the header

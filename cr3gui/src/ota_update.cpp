@@ -267,6 +267,7 @@ bool OTA_updateFrom(const lString32 url) {
 #ifdef POCKETBOOK_FW6
 #include "ota_fw6.h"
 #include "ota_background.h"
+void OTA_showVersion() { OTA_showVersionFW6(); }
 #endif
 bool OTA_update(const char *branch) {
 #ifdef POCKETBOOK_FW6
