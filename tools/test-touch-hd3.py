@@ -65,12 +65,14 @@ bad = (out / 'utf8-stored.zip').read_bytes().replace('Т'.encode(), b'\xc0\x80')
 # OTA fixtures cover verified extraction, corruption, traversal and release identity.
 shared_ota = profile['build']['cmake'].get('CR3_SHARED_PACKAGE') == 'ON'
 compatibility = '632 U632.6.11.2001\n634 U634.6.10.3425\n700 U700.6.10.3209\n743G U743g.6.11.1683\n'
-def add_shared_identity(entries):
+def add_shared_identity(entries, api=False):
     if shared_ota:
         entries['package-family.txt'] = 'pocketbook-armv7-softfp\n'
         entries['firmware-compatibility.txt'] = compatibility
+        if api:
+            entries['firmware-api-compatibility.txt'] = '632 610\n634 610\n700 610\n743G 610\n'
     return entries
-for name in ('good', 'wrong-version', 'traversal', 'missing-binary', 'wrong-family', 'wrong-firmware'):
+for name in ('good', 'wrong-version', 'traversal', 'missing-binary', 'wrong-family', 'wrong-firmware', 'good-api', 'wrong-api'):
     with zipfile.ZipFile(out / ('ota-' + name + '.zip'), 'w', zipfile.ZIP_DEFLATED) as archive:
         entries = {'release-version.txt': '1.0.0\n', 'bin/cr3-pb.app': 'binary', 'bin/cr3-pb-executable.app': 'ELF payload', 'cr3-defaults.ini': 'defaults', 'skins/pb631fw5.cr3skin': 'skin'}
         add_shared_identity(entries)
@@ -79,9 +81,11 @@ for name in ('good', 'wrong-version', 'traversal', 'missing-binary', 'wrong-fami
         if name == 'wrong-version': entries['release-version.txt'] = '0.9.0\n'
         if name == 'traversal': entries['../escaped'] = 'bad'
         if name == 'missing-binary': del entries['bin/cr3-pb.app']
+        if name in ('good-api', 'wrong-api'):
+            entries['firmware-api-compatibility.txt'] = '632 ' + ('610' if name == 'good-api' else '612') + '\n'
         for entry, data in entries.items(): archive.writestr('system/share/cr3/' + entry, data)
 with zipfile.ZipFile(out / 'ota-ui-success.zip', 'w', zipfile.ZIP_DEFLATED) as archive:
-    for entry, data in add_shared_identity({'release-version.txt': '1.0.2\n', 'bin/cr3-pb.app': 'binary', 'cr3-defaults.ini': 'defaults', 'skins/pb631fw5.cr3skin': 'skin'}).items():
+    for entry, data in add_shared_identity({'release-version.txt': '1.0.2\n', 'bin/cr3-pb.app': 'binary', 'cr3-defaults.ini': 'defaults', 'skins/pb631fw5.cr3skin': 'skin'}, api=True).items():
         archive.writestr('system/share/cr3/' + entry, data)
 # A small EPUB exercises the new parser, CSS and image/page-painting path.
 def png_chunk(kind, data):

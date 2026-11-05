@@ -20,9 +20,11 @@ def generate(registry):
         for key in ('dpi', 'width', 'height'):
             if type(device[key]) is not int or device[key] <= 0:
                 raise ValueError('Invalid device dimension: ' + key)
-        rows.append('    {%s, %s, %d, %d, %d, %s, %s},' % (
+        if type(device.get('minimum_api')) is not int or device['minimum_api'] not in (610, 611):
+            raise ValueError('Invalid minimum firmware API')
+        rows.append('    {%s, %s, %d, %d, %d, %s, %s, %d},' % (
             json.dumps(model), json.dumps(device['name']), device['dpi'], device['width'], device['height'],
-            json.dumps(device['skin']), json.dumps(device['firmware'])))
+            json.dumps(device['skin']), json.dumps(device['firmware']), device['minimum_api']))
     return '// Generated from config/pocketbook-devices.json; do not edit.\n' + \
         'static const Profile profiles[] = {\n' + '\n'.join(rows) + '\n};\n'
 

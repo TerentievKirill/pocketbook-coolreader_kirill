@@ -6,7 +6,7 @@
 #ifndef CR3_OTA_FAMILY
 #define CR3_OTA_FAMILY "pocketbook-armv7-softfp"
 #endif
-#define CR3_OTA_CHANNEL "ota/pocketbook-armv7-softfp.txt"
+#define CR3_OTA_CHANNEL "ota/pocketbook-armv7-softfp-api.txt"
 #define CR3_OTA_PACKAGE "coolreader-pocketbook-armv7-softfp.zip"
 #define CR3_OTA_DOWNLOADS "downloads/coolreader-shared/"
 static const size_t otaManifestLimit = 16384;
@@ -19,7 +19,7 @@ static const size_t otaManifestLimit = 4096;
 
 static bool OTA_deviceEligibleFW6() {
 #ifdef CR3_SHARED_PACKAGE
-    return pbdevice::qualified(UnicodeToUtf8(getPbModelNumber()).c_str(), GetSoftwareVersion());
+    return pbdevice::supported(UnicodeToUtf8(getPbModelNumber()).c_str(), GetSoftwareVersion());
 #else
     return getPbModelNumber() == lString32("632") && !strcmp(GetSoftwareVersion(), "U632.6.11.2001");
 #endif

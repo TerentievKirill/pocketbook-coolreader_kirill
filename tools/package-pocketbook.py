@@ -118,12 +118,15 @@ if target.get('device_registry'):
     manifest['validation_firmware'] = manifest.pop('target_firmware')
     manifest['qualified_firmware'] = [device['firmware'] for device in registry['devices']]
     manifest['compatibility'] = registry
-    manifest['ota'] = {'family': registry['family'], 'channel': 'ota/' + registry['family'] + '.txt',
+    manifest['ota'] = {'family': registry['family'], 'channel': 'ota/' + registry['family'] + '-api.txt',
+                       'legacy_channel': 'ota/' + registry['family'] + '.txt',
                        'package': 'coolreader-pocketbook-armv7-softfp.zip',
-                       'downloads': 'downloads/coolreader-shared/', 'schema': 'CR3-OTA-SHARED-1'}
+                       'downloads': 'downloads/coolreader-shared/', 'schema': 'CR3-OTA-SHARED-2'}
     (share / 'package-family.txt').write_text(registry['family'] + '\n')
     (share / 'firmware-compatibility.txt').write_text(''.join(
         device['model'] + ' ' + device['firmware'] + '\n' for device in registry['devices']))
+    (share / 'firmware-api-compatibility.txt').write_text(''.join(
+        device['model'] + ' ' + str(device['minimum_api']) + '\n' for device in registry['devices']))
     manifest['firmware_qualification'] = firmware_reports
     shutil.copy2(root / target['device_registry'], metadata / 'device-profiles.json')
     evidence = metadata / 'firmware-qualification'

@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cctype>
 #include <string>
+#include "pb_firmware.h"
 
 namespace pbdevice {
 struct Profile {
@@ -10,6 +11,7 @@ struct Profile {
     int dpi, width, height;
     const char *skin;
     const char *firmware;
+    unsigned minimum_api;
 };
 #include "pb_device_data.h"
 
@@ -32,9 +34,9 @@ inline const Profile *identify(const char *description) {
     return NULL;
 }
 
-inline bool qualified(const char *description, const char *firmware) {
+inline bool supported(const char *description, const char *firmware) {
     const Profile *profile = identify(description);
-    return profile && firmware && std::string(firmware) == profile->firmware;
+    return profile && pbfirmware::apiLevel(firmware) >= profile->minimum_api;
 }
 
 // Only fill missing defaults. Saved user/book properties are loaded afterwards.

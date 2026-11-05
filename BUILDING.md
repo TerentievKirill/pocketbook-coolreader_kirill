@@ -2,7 +2,7 @@
 
 Build families are declared in `config/targets/*.json`: `pb632-fw6` retains the
 Touch HD 3 configuration; `pocketbook-armv7-softfp` produces one experimental
-shared package for four exact model/firmware combinations. See
+shared package for four known models with separately pinned validation firmware. See
 [device candidates and admission checks](DEVICE-SUPPORT.md) for expansion status.
 
 ```sh
@@ -211,15 +211,18 @@ OTA dismissal restores the visible menu without changing its page or selection.
 
 Settings exposes **Check for updates**, **Check for updates automatically** and
 **Version** (the installed version is visible in its row and detail dialog).
-The shared descriptor begins with `CR3-OTA-SHARED-1`, then family, SemVer, SHA-256
-and model/firmware pairs. An incompatible descriptor cannot initiate a download;
+The revised shared descriptor at `ota/pocketbook-armv7-softfp-api.txt` begins
+with `CR3-OTA-SHARED-2`, then family, SemVer, SHA-256 and model/minimum-API pairs.
+The original `CR3-OTA-SHARED-1` channel retains tested model/firmware pairs for
+earlier clients; both channels reference the same ZIP. An incompatible descriptor cannot initiate a download;
 the downloaded archive independently carries `package-family.txt` and
-`firmware-compatibility.txt`, checked before a ready marker is written.
+`firmware-api-compatibility.txt`, checked before a ready marker is written.
+The old exact-version file is also retained for earlier update extractors.
 The shared launcher switches verified assets, recovers interrupted switches and
 rolls back a failing first run while preserving user assets and reading state.
 
 The website repository's `scripts/prepare-shared-coolreader-release.py` prepares
-immutable install/source files, release metadata and the single shared descriptor
+immutable install/source files, release metadata and the shared descriptors
 in a staging directory. It does not deploy them. Publish the immutable files
 before replacing the channel descriptor; retain previous versions for rollback.
 Existing manual-only shared candidates need one USB update to gain this launcher.
@@ -240,3 +243,21 @@ exercise a frozen 1.0.3 launcher, old extraction permissions, OTA installation,
 rollback, spaces in book paths and child exit codes. These checks do not emulate
 the physical reader's kernel policy or establish that the unlogged InkPad 4
 report is resolved. Firmware versions were rechecked on 2026-11-05.
+
+## Revised 1.0.4 firmware policy
+
+`pb_firmware.h` parses the numeric major/minor/build suffix, including firmware
+with alphanumeric model prefixes. It chooses the highest known API level not
+newer than the installed version, following KOReader's policy. The current known
+levels are 610 and 611; every registered model currently requires at least 610.
+The build still uses its common SDK 6.10 interfaces. Exact firmware in the device
+registry remains provenance for reproducible regression and ABI checks, not a
+runtime allowlist. New patch/build numbers are admitted automatically; this does
+not prove compatibility with unexamined firmware libraries or physical controls.
+
+V2 OTA descriptors and embedded API rules are checked independently. V1 metadata
+and firmware pairs remain for old clients. Future packages can raise their minimum
+API without being offered to a client that only knows an older interface level.
+The user explicitly requested republishing version 1.0.4; the original package,
+source/tag and checksums are archived before replacement. Existing 1.0.4 installs
+need USB reinstallation, since the installed version compares equal.

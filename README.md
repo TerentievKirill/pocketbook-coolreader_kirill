@@ -3,9 +3,9 @@
 [Downloads](https://pocketbook.nimbushub.eu/) · [Installation](https://pocketbook.nimbushub.eu/installation.html) · [Release 1.0.4](https://github.com/dderugin/pocketbook-coolreader/releases/tag/v1.0.4)
 
 Release **1.0.4** provides one shared ARMv7 Linux executable and install ZIP for
-these exact model/firmware combinations:
+the four models below. Firmware snapshots used for verification:
 
-| Device | Firmware |
+| Device | Firmware tested |
 | --- | --- |
 | Touch HD 3 / PB632 | U632.6.11.2001 |
 | Verse Pro / PB634 | U634.6.10.3425 |
@@ -14,9 +14,20 @@ these exact model/firmware combinations:
 
 Sixteen ARM regression groups and thirteen
 software probes on each additional firmware pass; interactive hardware testing
-and end-to-end device OTA acceptance remain pending. Other model/firmware pairs
-are rejected. See the [device matrix](DEVICE-SUPPORT.md) and
+and end-to-end device OTA acceptance remain pending. Firmware builds are no
+longer restricted to this list; unknown models and API levels below 6.10 are rejected. See the [device matrix](DEVICE-SUPPORT.md) and
 [shared installation guide](README-pocketbook-armv7.txt) for qualification limits.
+
+The revised 1.0.4 adopts KOReader-style firmware parsing and API-level admission:
+model prefixes such as `U743g` are handled separately from the numeric suffix.
+The highest known API at or below the firmware version is selected (6.10 or
+6.11). Patch/build numbers do not block startup or updates. The executable uses
+common SDK 6.10 interfaces; this is not a port of KOReader's complete FFI catalog.
+Compatible firmware libraries are still required; accepted API versions alone
+do not establish hardware or library ABI compatibility.
+
+This is a reissue of 1.0.4. Existing 1.0.4 users need a USB reinstall because the
+version number is unchanged. The original is retained for rollback.
 
 Release 1.0.4 adds the firmware-library startup setting used by KOReader for
 newer PocketBook loaders. The startup entry point lives inside the updateable

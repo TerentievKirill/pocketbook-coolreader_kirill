@@ -89,7 +89,7 @@ static void tick() { CHECK(timerCallback);auto callback=timerCallback;timerCallb
 static void weakTick() { CHECK(weakCallback);auto callback=weakCallback;weakCallback=NULL;callback(); }
 static std::string releaseText(const std::string &version,const std::string &checksum) {
 #ifdef CR3_SHARED_PACKAGE
- return "CR3-OTA-SHARED-1\npocketbook-armv7-softfp\n"+version+"\n"+checksum+"\n632 U632.6.11.2001\n634 U634.6.10.3425\n700 U700.6.10.3209\n743G U743g.6.11.1683\n";
+ return "CR3-OTA-SHARED-2\npocketbook-armv7-softfp\n"+version+"\n"+checksum+"\n632 610\n634 610\n700 610\n743G 610\n";
 #else
  return version+"\n"+checksum+"\n";
 #endif
@@ -191,11 +191,11 @@ int main(int argc,char **argv) {
  // All registered readers use the identical channel and download URL.
  CHECK(otaRemoveTree(FW6_OTA_STAGE));
  const char *models[]={"632","634","700","743G"};
- const char *firmwares[]={"U632.6.11.2001","U634.6.10.3425","U700.6.10.3209","U743g.6.11.1683"};
+ const char *firmwares[]={"U632.6.11.9999","U634.6.10.9999","U700.6.11.9999","U743G.6.12.1"};
  for(int i=0;i<4;++i) {
   device=models[i];firmware=firmwares[i];response=releaseText("1.0.2",hex);
   checkUpdate();CHECK(fw6ota::state==fw6ota::Confirming);
-  CHECK(lastCheckUrl==FW6_OTA_URL "ota/pocketbook-armv7-softfp.txt");
+  CHECK(lastCheckUrl==FW6_OTA_URL "ota/pocketbook-armv7-softfp-api.txt");
   dismissCallback(1);tick();
   CHECK(lastDownloadUrl==FW6_OTA_URL "downloads/coolreader-shared/1.0.2/coolreader-pocketbook-armv7-softfp.zip");
   cancelCallback(1);CHECK(fw6ota::state==fw6ota::Idle);
@@ -206,7 +206,7 @@ int main(int argc,char **argv) {
  checkUpdate();CHECK(fw6ota::state==fw6ota::Idle && downloads==beforeInvalidDownloads);
  response="1.0.2\n"+std::string(hex)+"\n";checkUpdate();
  CHECK(fw6ota::state==fw6ota::Idle && downloads==beforeInvalidDownloads);
- response=releaseText("1.0.2",hex);response.replace(response.find(firmwares[0]),strlen(firmwares[0]),"U632.6.9.1");
+ response=releaseText("1.0.2",hex);response.replace(response.find("632 610"),strlen("632 610"),"632 612");
  checkUpdate();CHECK(fw6ota::state==fw6ota::Idle && downloads==beforeInvalidDownloads);
 #endif
  CHECK(otaRemoveTree(FLASHDIR));

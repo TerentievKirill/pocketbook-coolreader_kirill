@@ -5,13 +5,17 @@ One application executable is used on all four models below. Runtime device
 profiles select display defaults. This package is a laboratory-tested candidate;
 its current binary has NOT been tested on a physical reader.
 
-Exact firmware combinations accepted by this candidate:
+Models and firmware snapshots used for verification:
   Touch HD 3 / PB632   U632.6.11.2001
   Verse Pro / PB634    U634.6.10.3425
   Era / PB700         U700.6.10.3209
   InkPad 4 / PB743G   U743g.6.11.1683
 
-Other models/firmware are rejected by the application. This package requires
+These firmware snapshots are evidence, not an exact-version whitelist.
+Known models select the highest supported API level at or below the installed
+firmware version (6.10 or 6.11). Firmware API levels below 6.10, malformed
+version strings and unknown models are rejected. Different patch/build numbers
+are allowed; compatible system libraries remain necessary. This package requires
 modern ARM Linux soft-float userland; it is not an Android, ARM64 or hard-float
 build. Older PocketBook firmware may not supply its required system libraries.
 The compiled CPU baseline is ARMv7-A, NEON/VFPv3, softfp calling convention.
@@ -50,6 +54,10 @@ records the registry.
 
 Updates and testing
 -------------------
+This revised 1.0.4 uses firmware API rules for both startup and OTA. The original
+1.0.4 is archived for rollback. Existing 1.0.4 installations require a USB
+reinstall to receive this reissue because the release number has not changed.
+
 Settings > Check for updates checks one shared release channel for every
 supported model. Settings > Version shows the installed release version.
 Automatic checks remain optional, quiet while offline and inactive during sleep.

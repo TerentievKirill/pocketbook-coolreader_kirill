@@ -16,13 +16,17 @@ int main(int argc, char **argv) {
     CHECK(pbdevice::modelNumber(" PB743g ") == "743G");
     CHECK(pbdevice::modelNumber(NULL).empty());
     CHECK(pbdevice::identify("PocketBook 634") != NULL);
-    CHECK(!pbdevice::qualified("PB634", "U634.6.9.850"));
-    CHECK(!pbdevice::qualified("PB1030", "U1030.6.11.1437"));
-    CHECK(!pbdevice::qualified("PB632", NULL));
+    CHECK(!pbdevice::supported("PB634", "U634.6.9.850"));
+    CHECK(!pbdevice::supported("PB1030", "U1030.6.11.1437"));
+    CHECK(!pbdevice::supported("PB632", NULL));
+    CHECK(pbdevice::supported("PB743g", "U743G.6.11.9999"));
+    CHECK(pbdevice::supported("PB743G", "U743g.6.12.1"));
+    CHECK(pbdevice::supported("PB632", "U632.6.10.1"));
+    CHECK(!pbdevice::supported("PB743G", "malformed"));
     CHECK(InitFontManager(lString8::empty_str));
     CHECK(fontMan->RegisterFont(lString8(argv[1])));
     for (const pbdevice::Profile &profile : pbdevice::profiles) {
-        CHECK(pbdevice::qualified(profile.model, profile.firmware));
+        CHECK(pbdevice::supported(profile.model, profile.firmware));
         CRPropRef defaults = LVCreatePropsContainer();
         LVStreamRef stream = LVOpenFileStream(argv[2], LVOM_READ);
         CHECK(!stream.isNull() && defaults->loadFromStream(stream.get()));

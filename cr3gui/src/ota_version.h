@@ -4,6 +4,8 @@
 #include <sstream>
 #include <set>
 #include <utility>
+#include <map>
+#include "pb_firmware.h"
 namespace cr3ota {
 // Stable channel uses SemVer MAJOR.MINOR.PATCH, without leading zeroes.
 inline bool parseVersion(const std::string &text, unsigned parts[3]) {
@@ -31,6 +33,7 @@ inline bool parseRelease(const std::string &text, std::string &version, std::str
 struct SharedRelease {
     std::string family, version, checksum;
     std::set<std::pair<std::string, std::string> > devices;
+    std::map<std::string, unsigned> minimumApis;
 };
 inline bool parseSharedRelease(const std::string &text, SharedRelease &release) {
     release = SharedRelease();
@@ -39,21 +42,34 @@ inline bool parseSharedRelease(const std::string &text, SharedRelease &release) 
     std::string magic, model, firmware;
     unsigned parts[3];
     if (!(input >> magic >> release.family >> release.version >> release.checksum) ||
-        magic != "CR3-OTA-SHARED-1" || release.family.size() > 64 ||
+        (magic != "CR3-OTA-SHARED-1" && magic != "CR3-OTA-SHARED-2") || release.family.size() > 64 ||
         !parseVersion(release.version, parts) || release.checksum.size() != 64 ||
         release.checksum.find_first_not_of("0123456789abcdef") != std::string::npos) return false;
     while (input >> model) {
         if (!(input >> firmware) || model.empty() || model.size() > 16 ||
-            model.find_first_not_of("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ") != std::string::npos ||
+            model.find_first_not_of("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ") != std::string::npos) return false;
+        if (magic == "CR3-OTA-SHARED-2") {
+            unsigned minimum;
+            if (!pbfirmware::number(firmware, minimum) || minimum < 610 || minimum > 9999 ||
+                !release.minimumApis.insert(std::make_pair(model, minimum)).second || release.minimumApis.size() > 128)
+                return false;
+            continue;
+        }
+        if (
             firmware.size() > 64 || firmware.empty() || firmware[0] != 'U' ||
             firmware.find_first_not_of("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_.") != std::string::npos ||
             !release.devices.insert(std::make_pair(model, firmware)).second || release.devices.size() > 128) return false;
     }
-    return !release.devices.empty();
+    return !release.devices.empty() || !release.minimumApis.empty();
 }
 inline bool compatible(const SharedRelease &release, const std::string &family,
                        const std::string &model, const std::string &firmware) {
-    return release.family == family && release.devices.count(std::make_pair(model, firmware)) != 0;
+    if (release.family != family) return false;
+    if (!release.minimumApis.empty()) {
+        const auto rule = release.minimumApis.find(model);
+        return rule != release.minimumApis.end() && pbfirmware::apiLevel(firmware.c_str()) >= rule->second;
+    }
+    return release.devices.count(std::make_pair(model, firmware)) != 0;
 }
 inline bool newer(const std::string &candidate, const std::string &installed) {
     unsigned a[3], b[3];

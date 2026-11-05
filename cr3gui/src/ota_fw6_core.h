@@ -86,11 +86,13 @@ static bool otaStagePackage(const std::string &checksum, const std::string &revi
 #ifdef CR3_SHARED_PACKAGE
     std::ifstream familyFile(FW6_OTA_STAGE "/package-family.txt");
     std::string family; std::getline(familyFile, family);
-    std::ifstream compatibilityFile(FW6_OTA_STAGE "/firmware-compatibility.txt");
+    const bool apiPolicy = names.count("firmware-api-compatibility.txt") != 0;
+    std::ifstream compatibilityFile(apiPolicy ? FW6_OTA_STAGE "/firmware-api-compatibility.txt"
+                                             : FW6_OTA_STAGE "/firmware-compatibility.txt");
     std::string compatibility((std::istreambuf_iterator<char>(compatibilityFile)), std::istreambuf_iterator<char>());
     cr3ota::SharedRelease release;
     if (family != CR3_OTA_FAMILY || !cr3ota::parseSharedRelease(
-            "CR3-OTA-SHARED-1\n" + family + "\n" + revision + "\n" + checksum + "\n" + compatibility, release) ||
+            std::string(apiPolicy ? "CR3-OTA-SHARED-2\n" : "CR3-OTA-SHARED-1\n") + family + "\n" + revision + "\n" + checksum + "\n" + compatibility, release) ||
             !cr3ota::compatible(release, CR3_OTA_FAMILY, model, firmware))
         return otaStageFailure("The downloaded package is not compatible with this reader and firmware.");
 #endif

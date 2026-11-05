@@ -2,7 +2,7 @@
 
 There are two build families: the existing `pb632-fw6` configuration and the
 experimental `pocketbook-armv7-softfp` shared package. The shared package uses
-one executable on four exact model/firmware combinations. Runtime profiles live
+one executable on four known models, with exact firmware snapshots for validation. Runtime profiles live
 in `config/pocketbook-devices.json`; they are not separate per-model binaries.
 Earlier PB632 builds have physical-reader evidence; every new package records
 its own device validation as not performed. A successful cross-build or firmware
@@ -114,7 +114,7 @@ mismatched target evidence. Build metadata includes the complete target profile.
    first page, EPUB/FB2, menus, touch/pinch, buttons, all rotations, dictionary,
    light/warmth, sleep/wake, overnight power use and saved position/settings.
 6. Add compatibility-aware OTA selection and package identity checks before
-   enabling updates for that target. The shared channel admits only the exact registry model/firmware pairs;
+   enabling updates for that target. The revised shared channel admits registered models with compatible API levels;
    the historical PB632 channel remains separate. A build profile alone does not
    extend the shared compatibility list.
 7. Publish experimental USB packages with exact model/firmware requirements,
@@ -198,3 +198,10 @@ An InkPad 4 failure was reported without firmware, behavior or log details.
 The loader issue is a compatibility lead, not a confirmed diagnosis of that
 report. Interactive hardware testing and complete device OTA acceptance remain
 pending for this release.
+
+The revised 1.0.4 separates runtime admission from this evidence matrix. Known
+models require at least API 6.10 and select the highest known compatible level
+(6.10/6.11); exact patch/build equality is no longer required for startup or OTA.
+The original pinned firmware checks remain mandatory before packaging. A newer
+firmware build may still change its libraries, hardware behavior or ABI and needs
+independent validation before being added to the evidence matrix.

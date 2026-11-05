@@ -157,3 +157,9 @@ Checks the production bootstrap through the frozen 1.0.3 outer launcher,
 legacy extraction permissions, preserved glibc tunables and book arguments,
 child failures and OTA rollback. Firmware qualification and the primary ARM
 runner probe this entry point and record executable-stack ELF policies.
+
+Reissued 1.0.4 firmware policy coverage:
+- Alphanumeric firmware prefixes, numeric suffixes, patch/build changes and API selection.
+- Startup admission on all registered models, unknown models and old/malformed firmware.
+- V2 OTA API rules, future required APIs, V1 backwards compatibility, and independent archive policy checks.
+- All four model UI update flows accept changed firmware build numbers.

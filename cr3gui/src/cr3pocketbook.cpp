@@ -5449,12 +5449,12 @@ int main_handler(int type, int par1, int par2)
 #ifdef CR3_SHARED_PACKAGE
     static bool rejected = false;
     if (rejected) return 0;
-    if (type == EVT_INIT && !pbdevice::qualified(GetDeviceModel(), GetSoftwareVersion())) {
+    if (type == EVT_INIT && !pbdevice::supported(GetDeviceModel(), GetSoftwareVersion())) {
         rejected = true;
         fprintf(stderr, "[cr3] Unsupported model/firmware: model=%s firmware=%s\n",
                 GetDeviceModel() ? GetDeviceModel() : "(unknown)",
                 GetSoftwareVersion() ? GetSoftwareVersion() : "(unknown)");
-        Message(ICON_WARNING, "CoolReader", "This model and firmware combination has not been checked. See the included guide.", 3000);
+        Message(ICON_WARNING, "CoolReader", "Unknown model or unsupported firmware API. See the included guide.", 3000);
         CloseApp();
         return 0;
     }
@@ -6211,8 +6211,11 @@ int main(int argc, char **argv)
     forceFullUpdates = false;
     useDeveloperFeatures = access( PB_DEV_MARKER, F_OK ) != -1;
     last_drawTemporaryZoom = std::clock();
-    int foo;
-    sscanf(GetSoftwareVersion(), "%*[^0-9]%u.%u.%u.%*u", &foo, &fw_major, &fw_minor);
+    pbfirmware::Version firmwareVersion;
+    if (pbfirmware::parse(GetSoftwareVersion(), firmwareVersion)) {
+        fw_major = firmwareVersion.major;
+        fw_minor = firmwareVersion.minor;
+    }
 
     #if defined(POCKETBOOK_PRO) && !defined(POCKETBOOK_PRO_PRO2)
     getInkviewFeatures();
@@ -6228,6 +6231,7 @@ int main(int argc, char **argv)
     fprintf(stderr, "[cr3] device=%s firmware=%s\n",
             GetDeviceModel() ? GetDeviceModel() : "(unknown)",
             GetSoftwareVersion() ? GetSoftwareVersion() : "(unknown)");
+    fprintf(stderr, "[cr3] selected firmware API=%u\n", pbfirmware::apiLevel(GetSoftwareVersion()));
 #endif
     if (argc < 2 || strlen(argv[1]) == 0 ) {
         Message(ICON_WARNING,  const_cast<char*>("CoolReader"), const_cast<char*>("No book to open!"), 2000);
