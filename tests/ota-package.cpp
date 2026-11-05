@@ -27,6 +27,10 @@ int main(int argc, char **argv) {
 #endif
  ));
   CHECK(access(FLASHDIR "/system/share/escaped",F_OK)!=0);
+  if (strcmp(name,"good")==0) {
+   CHECK(access(FW6_OTA_STAGE "/bin/cr3-pb.app",X_OK)==0);
+   CHECK(access(FW6_OTA_STAGE "/bin/cr3-pb-executable.app",X_OK)==0);
+  }
  }
  CHECK(otaRemoveTree(FLASHDIR));
  puts("PASS: OTA SHA-256 rejection, valid extraction, traversal, missing binary and wrong version");

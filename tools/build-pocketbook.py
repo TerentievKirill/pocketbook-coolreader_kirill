@@ -59,6 +59,7 @@ def main():
     run([sys.executable, ROOT / 'tools/test-targets.py'])
     run([sys.executable, ROOT / 'tools/test-ota-launcher.py'])
     run([sys.executable, ROOT / 'tools/test-shared-launcher.py'])
+    run([sys.executable, ROOT / 'tools/test-runtime-entry.py'])
     run([sys.executable, ROOT / 'tools/test-shared-package.py'])
     run([sys.executable, ROOT / 'tools/test-firmware-qualification.py'])
     run(['c++', '-std=c++11', ROOT / 'tests/ota-version.cpp', '-o', build / 'ota-version-host'])
@@ -69,7 +70,7 @@ def main():
                  '-DCMAKE_BUILD_TYPE=Release', '-DCMAKE_SKIP_RPATH=ON',
                  '-DCMAKE_C_FLAGS_RELEASE=-O2 -g -DNDEBUG',
                  '-DCMAKE_CXX_FLAGS_RELEASE=-O2 -g -DNDEBUG -fno-strict-aliasing -fno-delete-null-pointer-checks',
-                 '-DCR3_RELEASE_VERSION=' + os.environ.get('CR3_RELEASE_VERSION', '1.0.3'),
+                 '-DCR3_RELEASE_VERSION=' + os.environ.get('CR3_RELEASE_VERSION', '1.0.4'),
                  '-DCR3_DEFAULTS_FILE=' + str(ROOT / target['package']['assets'] / 'cr3-defaults.ini')]
     configure += ['-D' + key + '=' + value for key, value in target['build']['cmake'].items()]
     run(configure)

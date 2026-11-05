@@ -16,6 +16,7 @@ import struct
 import subprocess
 import zipfile
 from runtime_compatibility import check_runtime, elf_identity
+from runtime_startup import probe_startup
 from targets import ROOT, load_target
 
 
@@ -224,7 +225,7 @@ def main():
     report = {'schema': 1, 'device': device, 'baseline_binary_sha256': sha256(application),
               'inspection_tools_sha256': {
                   name: sha256(Path(__file__).with_name(name))
-                  for name in ('qualify-pocketbook-firmware.py', 'runtime_compatibility.py')},
+                  for name in ('qualify-pocketbook-firmware.py', 'runtime_compatibility.py', 'runtime_startup.py')},
               'embedded_version': embedded_version((output / 'fwinfo.xml').read_bytes()),
               'baseline_validation': baseline_report, 'firmware_abi': firmware,
               'device_validation': 'not-performed',
@@ -257,9 +258,10 @@ def main():
     # directly under this QEMU build can SIGILL even when normal linking works.
     report['loader_resolution'] = run([args.qemu, '-L', runtime, '-E', 'LD_LIBRARY_PATH=' + str(runtime / 'lib'),
                                        '-E', 'LD_TRACE_LOADED_OBJECTS=1', application], env=env)
-    startup = run([args.qemu, '-L', runtime, '-E', 'LD_LIBRARY_PATH=' + str(runtime / 'lib'),
-                   '-E', 'LD_BIND_NOW=1', '-E', 'LD_DEBUG=libs', application,
-                   ROOT / profile['package']['assets'] / 'Welcome.fb2'], timeout=8, env=env)
+    startup = probe_startup(application, runtime, args.qemu, output,
+                            ROOT / profile['package']['assets'] / 'Welcome.fb2',
+                            ROOT / profile['package']['assets'] / 'runtime-entry.app'
+                            if profile.get('device_registry') else None)
     (output / 'startup.log').write_text(startup['stdout'] + startup['stderr'])
     startup['control_transferred'] = 'transferring control:' in startup['stderr']
     startup['stdout'] = startup['stdout'][-2000:]

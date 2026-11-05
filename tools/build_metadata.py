@@ -52,6 +52,10 @@ def verified_report(report, binary, root, build, target=None):
         raise ValueError('Required ARM regressions have not all passed')
     if report.get('binary_sha256') != sha256(binary):
         raise ValueError('Regression report does not match this binary')
+    if target.get('device_registry') and (
+            not report.get('startup_probe', {}).get('control_transferred')
+            or report['startup_probe'].get('entrypoint_sha256') != sha256(root / target['package']['assets'] / 'runtime-entry.app')):
+        raise ValueError('Primary startup did not use the packaged entry point')
     if report.get('source') != source_metadata(root):
         raise ValueError('Source changed since regression tests ran')
     if report.get('configuration_sha256') != sha256(build / 'crengine/CMakeFiles/crengine.dir/flags.make'):
@@ -71,6 +75,9 @@ def verified_firmware_reports(binary, root, build, target, primary):
                 or report.get('loader_resolution', {}).get('exit_code') != 0
                 or report.get('inkview_imports', {}).get('status') != 'passed'):
             raise ValueError('Missing, failed or mismatched firmware evidence: ' + name)
+        if (target.get('device_registry') and report.get('startup_probe', {}).get('entrypoint_sha256')
+                != sha256(root / target['package']['assets'] / 'runtime-entry.app')):
+            raise ValueError('Firmware startup did not use the packaged entry point: ' + name)
         for tool_name, digest in report['inspection_tools_sha256'].items():
             if sha256(root / 'tools' / tool_name) != digest:
                 raise ValueError('Firmware inspection tools changed: ' + name)

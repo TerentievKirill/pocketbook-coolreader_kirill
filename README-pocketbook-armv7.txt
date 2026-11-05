@@ -1,4 +1,4 @@
-CoolReader for PocketBook - experimental shared ARMv7 Linux package
+CoolReader for PocketBook - shared ARMv7 Linux package
 =================================================================
 
 One application executable is used on all four models below. Runtime device
@@ -63,6 +63,14 @@ Install this OTA-enabled launcher once over USB if you used the earlier manual
 shared candidate. Later application/asset updates can arrive through the shared
 channel. The release package and channel descriptor must be published together;
 a local development build does not publish them automatically.
+
+Version 1.0.4 includes a process-local firmware-library startup compatibility
+setting, following KOReader's PocketBook fix. The entry point is inside the
+shared update payload, so 1.0.3 shared launchers can use it after an OTA update.
+If CoolReader cannot start to download the update, install 1.0.4 over USB.
+The package contains one ELF executable (bin/cr3-pb-executable.app), launched by
+a small shell entry point (bin/cr3-pb.app). Both stay under system/share/cr3.
+Physical verification of the reported InkPad 4 failure remains pending.
 
 Before treating a model as supported, test EPUB and FB2, page buttons, menus,
 dictionary, swipes, pinch zoom, all rotations, brightness/warmth, sleep/wake,

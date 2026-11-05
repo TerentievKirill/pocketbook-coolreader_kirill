@@ -19,6 +19,13 @@ stage = args.stage
 validate_reader_layout(p.relative_to(stage).as_posix() for p in stage.rglob('*') if p.is_file())
 target = load_target(args.target)
 package = target['package']
+if target.get('device_registry'):
+    entry = stage / 'system/share/cr3/bin/cr3-pb.app'
+    executable = stage / 'system/share/cr3/bin/cr3-pb-executable.app'
+    if entry.read_bytes() != (root / package['assets'] / 'runtime-entry.app').read_bytes():
+        raise SystemExit('Missing or changed shared runtime entry point')
+    if not executable.read_bytes().startswith(b'\x7fELF') or not entry.stat().st_mode & 0o111:
+        raise SystemExit('Missing ELF executable or non-executable runtime entry point')
 expected = json.loads((root / 'tests/package-assets.json').read_text())
 for name, checksum in expected.items():
     if name in ('system/share/cr3/devices.ini', 'system/share/cr3/Welcome.fb2'):

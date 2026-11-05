@@ -1,8 +1,8 @@
 # CoolReader for PocketBook
 
-[Downloads](https://pocketbook.nimbushub.eu/) · [Installation](https://pocketbook.nimbushub.eu/installation.html) · [Release 1.0.3](https://github.com/dderugin/pocketbook-coolreader/releases/tag/v1.0.3)
+[Downloads](https://pocketbook.nimbushub.eu/) · [Installation](https://pocketbook.nimbushub.eu/installation.html) · [Release 1.0.4](https://github.com/dderugin/pocketbook-coolreader/releases/tag/v1.0.4)
 
-Release **1.0.3** provides one shared ARMv7 Linux executable and install ZIP for
+Release **1.0.4** provides one shared ARMv7 Linux executable and install ZIP for
 these exact model/firmware combinations:
 
 | Device | Firmware |
@@ -12,11 +12,19 @@ these exact model/firmware combinations:
 | Era / PB700 | U700.6.10.3209 |
 | InkPad 4 / PB743G | U743g.6.11.1683 |
 
-This shared release is experimental. Sixteen ARM regression groups and thirteen
+Sixteen ARM regression groups and thirteen
 software probes on each additional firmware pass; interactive hardware testing
 and end-to-end device OTA acceptance remain pending. Other model/firmware pairs
 are rejected. See the [device matrix](DEVICE-SUPPORT.md) and
 [shared installation guide](README-pocketbook-armv7.txt) for qualification limits.
+
+Release 1.0.4 adds the firmware-library startup setting used by KOReader for
+newer PocketBook loaders. The startup entry point lives inside the updateable
+application files, so existing 1.0.3 launchers can receive it through OTA. The
+package still contains one ARM executable shared by all models. Firmware checks
+now record executable-stack requirements and exercise the actual startup entry
+point on all four runtimes. The reported InkPad 4 failure has no device logs yet;
+this release does not establish that its cause is resolved on hardware.
 
 Every model uses the same download and Wi-Fi update channel. **Settings → Check
 for updates** checks manually; automatic checks are optional. **Settings → Version**
@@ -40,7 +48,7 @@ into the reader’s USB storage, preserving existing settings. Safely eject it,
 then open **Applications → CoolReader**. For Library’s **Open with** menu,
 follow the [file-association instructions](https://pocketbook.nimbushub.eu/installation.html#file-associations).
 
-See [the detailed guide](README-touch-hd3.txt) for backups and troubleshooting.
+See [the shared guide](README-pocketbook-armv7.txt) for backups and troubleshooting.
 
 ## Build and test
 

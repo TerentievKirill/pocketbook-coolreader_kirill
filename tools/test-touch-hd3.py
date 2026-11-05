@@ -7,6 +7,7 @@ import http.server, ssl, threading
 from build_metadata import sha256, source_metadata
 from targets import DEFAULT_TARGET, load_target, firmware_path, tool, target_evidence, verify_build_target
 from runtime_compatibility import check_runtime
+from runtime_startup import probe_startup
 root = Path(__file__).resolve().parent.parent
 os.chdir(root)
 parser = argparse.ArgumentParser(description=__doc__)
@@ -71,7 +72,7 @@ def add_shared_identity(entries):
     return entries
 for name in ('good', 'wrong-version', 'traversal', 'missing-binary', 'wrong-family', 'wrong-firmware'):
     with zipfile.ZipFile(out / ('ota-' + name + '.zip'), 'w', zipfile.ZIP_DEFLATED) as archive:
-        entries = {'release-version.txt': '1.0.0\n', 'bin/cr3-pb.app': 'binary', 'cr3-defaults.ini': 'defaults', 'skins/pb631fw5.cr3skin': 'skin'}
+        entries = {'release-version.txt': '1.0.0\n', 'bin/cr3-pb.app': 'binary', 'bin/cr3-pb-executable.app': 'ELF payload', 'cr3-defaults.ini': 'defaults', 'skins/pb631fw5.cr3skin': 'skin'}
         add_shared_identity(entries)
         if name == 'wrong-family': entries['package-family.txt'] = 'pocketbookhf\n'
         if name == 'wrong-firmware': entries['firmware-compatibility.txt'] = '632 U632.6.9.1\n'
@@ -153,6 +154,15 @@ if profile['build']['cmake'].get('CR3_SHARED_PACKAGE') == 'ON':
     if not re.search(r'Tag_FP_arch: VFPv3(?:\s|$)', arm_attributes) or 'Fused-MAC' in arm_attributes:
         raise SystemExit('Shared binary exceeds the intended NEON/VFPv3 baseline')
 runtime_check = check_runtime(application, runtime, readelf, profile['firmware'])
+startup = None
+if profile.get('device_registry'):
+    startup = probe_startup(application, runtime, qemu, out, root / profile['package']['assets'] / 'Welcome.fb2',
+                            root / profile['package']['assets'] / 'runtime-entry.app')
+    (out / 'startup.log').write_text(startup['stdout'] + startup['stderr'])
+    if not startup['control_transferred']:
+        raise SystemExit('Production runtime entry point did not reach the application; see startup.log')
+    startup['stdout'] = startup['stdout'][-2000:]
+    startup['stderr'] = startup['stderr'][-3000:]
 symbols = subprocess.check_output([str(readelf), '--dyn-syms', '--wide', str(application)], text=True)
 if re.search(r'\b(?:FT_|jpeg_|png_|curl_|deflate|inflate|zlibVersion)\w*\b', symbols):
     raise SystemExit('Application must not import/export firmware copies of private library APIs')
@@ -203,6 +213,7 @@ report = {
     'finished_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
     'binary_sha256': sha256(application), 'source': source_before,
     'target': target_evidence(profile), 'runtime_compatibility': runtime_check,
+    'startup_probe': startup,
     'arm_attributes': arm_attributes,
     'configuration_sha256': sha256(build / 'crengine/CMakeFiles/crengine.dir/flags.make'),
     'environment': 'ARM/QEMU with extracted PocketBook firmware runtime; no physical device test',

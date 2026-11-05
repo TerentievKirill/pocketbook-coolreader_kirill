@@ -150,3 +150,10 @@ equal size, full-height paging hit regions, the non-interactive page counter,
 pressed feedback and first/middle/last/single-page enabled states. The footer
 reserves its own space below the menu rows in portrait and landscape. Other
 menus retain their skin's original header and scroll layout.
+
+Shared runtime entry-point coverage (1.0.4):
+  python3 tools/test-runtime-entry.py
+Checks the production bootstrap through the frozen 1.0.3 outer launcher,
+legacy extraction permissions, preserved glibc tunables and book arguments,
+child failures and OTA rollback. Firmware qualification and the primary ARM
+runner probe this entry point and record executable-stack ELF policies.

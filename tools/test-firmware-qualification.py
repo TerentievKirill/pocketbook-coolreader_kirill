@@ -6,6 +6,7 @@ import struct
 from tempfile import TemporaryDirectory
 from unittest import TestCase, main
 import zipfile
+from runtime_compatibility import elf_stack_policy
 
 spec = importlib.util.spec_from_file_location('qualification', Path(__file__).with_name('qualify-pocketbook-firmware.py'))
 qualification = importlib.util.module_from_spec(spec)
@@ -13,6 +14,28 @@ spec.loader.exec_module(qualification)
 
 
 class FirmwareIdentity(TestCase):
+    def test_stack_flags_for_both_elf_classes(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / 'library.so'
+            for wide in (False, True):
+                for order, byte_order in (('<', 1), ('>', 2)):
+                    for flags, expected in ((6, 'non-executable'), (7, 'executable')):
+                        header = bytearray(64)
+                        header[:6] = b'\x7fELF' + bytes((2 if wide else 1, byte_order))
+                        struct.pack_into(order + ('Q' if wide else 'I'), header, 32 if wide else 28, 64)
+                        struct.pack_into(order + 'HH', header, 54 if wide else 42, 56 if wide else 32, 1)
+                        program = bytearray(56 if wide else 32)
+                        struct.pack_into(order + 'I', program, 0, 0x6474e551)
+                        struct.pack_into(order + 'I', program, 4 if wide else 24, flags)
+                        path.write_bytes(header + program)
+                        self.assertEqual(elf_stack_policy(path), expected)
+                        path.write_bytes(header)
+                        with self.assertRaisesRegex(ValueError, 'Truncated ELF program header'):
+                            elf_stack_policy(path)
+            struct.pack_into(order + 'HH', header, 54, 56, 0)
+            path.write_bytes(header)
+            self.assertEqual(elf_stack_policy(path), 'unspecified')
+
     def test_vendor_qml_description_does_not_break_version_read(self):
         data = b'<firmware><version>U634.6.10.3425</version><description>if (a < b && c) {}</description></firmware>'
         self.assertEqual(qualification.embedded_version(data), 'U634.6.10.3425')

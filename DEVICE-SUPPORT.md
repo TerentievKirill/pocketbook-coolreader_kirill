@@ -182,3 +182,19 @@ its launcher uses separate staging/rollback directories and ignores PB632-only s
 remains separate. Use `CR3_BASELINE_TARGET=pocketbook-armv7-softfp` and
 `CR3_BASELINE_VOLUME=coolreader-pocketbook-armv7-softfp-work` to repeat the
 standalone qualification wrapper against a shared build.
+
+## Shared release 1.0.4 startup review
+
+The latest official Verse Pro, Era and InkPad 4 downloads were rechecked on
+2026-11-05 and match the pinned firmware above. All three ship `libinkview.so`
+and `libhwconfig.so` with executable-stack flags. Their extracted glibc versions
+are 2.39 (Verse Pro and Era) and 2.41 (InkPad 4). The shared entry point applies
+the process-local loader setting used by KOReader; it is delivered inside the
+OTA payload for compatibility with the 1.0.3 outer launcher. Every build records
+stack policy for all four dependency closures and probes its production entry
+point before running the application.
+
+An InkPad 4 failure was reported without firmware, behavior or log details.
+The loader issue is a compatibility lead, not a confirmed diagnosis of that
+report. Interactive hardware testing and complete device OTA acceptance remain
+pending for this release.

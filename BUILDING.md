@@ -22,7 +22,7 @@ The original PB632 commands and output names below remain supported.
 Build the shared package with:
 
 ```sh
-CR3_RELEASE_VERSION=1.0.3 CR3_REVISION=shared-ota bash tools/docker-build-pocketbook.sh pocketbook-armv7-softfp
+CR3_RELEASE_VERSION=1.0.4 CR3_REVISION=shared-ota bash tools/docker-build-pocketbook.sh pocketbook-armv7-softfp
 ```
 
 This uses the independent `coolreader-pocketbook-armv7-softfp-work` volume and
@@ -223,3 +223,20 @@ immutable install/source files, release metadata and the single shared descripto
 in a staging directory. It does not deploy them. Publish the immutable files
 before replacing the channel descriptor; retain previous versions for rollback.
 Existing manual-only shared candidates need one USB update to gain this launcher.
+
+## Firmware startup compatibility (1.0.4)
+
+The shared runtime entry point is packaged at `system/share/cr3/bin/cr3-pb.app`;
+its single ARM executable is `bin/cr3-pb-executable.app` in the same directory.
+`runtime_executable` in build metadata identifies the ELF file whose hash binds
+all test reports. The entry point sets `glibc.rtld.execstack=2` for its child,
+following [KOReader's PocketBook workaround](https://github.com/koreader/koreader/pull/15730).
+It preserves other inherited glibc tunables. No system firmware files are patched.
+
+Startup probes on the primary and three additional firmware runtimes execute
+this production entry point before the ARM executable. ELF inspection records
+PT_GNU_STACK policy throughout the dependency closure. Host regression tests
+exercise a frozen 1.0.3 launcher, old extraction permissions, OTA installation,
+rollback, spaces in book paths and child exit codes. These checks do not emulate
+the physical reader's kernel policy or establish that the unlogged InkPad 4
+report is resolved. Firmware versions were rechecked on 2026-11-05.

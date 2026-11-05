@@ -88,7 +88,7 @@ enum CRPbCommands {
 
 #ifdef POCKETBOOK_FW6
 #ifndef CR3_RELEASE_VERSION
-#define CR3_RELEASE_VERSION "1.0.3"
+#define CR3_RELEASE_VERSION "1.0.4"
 #endif
 #define CR_PB_VERSION CR3_RELEASE_VERSION
 #else

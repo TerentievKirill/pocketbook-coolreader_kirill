@@ -47,7 +47,11 @@ shutil.copy2(profile_assets / 'devices.ini', share)
 shutil.copy2(profile_assets / 'cr3-defaults.ini', share)
 for name in ('bin', 'skins', 'i18n', 'keymaps'):
     (share / name).mkdir(exist_ok=True)
-shutil.copy2(binary, share / 'bin/cr3-pb.app')
+executable_name = 'cr3-pb-executable.app' if target.get('device_registry') else 'cr3-pb.app'
+shutil.copy2(binary, share / 'bin' / executable_name)
+if target.get('device_registry'):
+    shutil.copy2(profile_assets / 'runtime-entry.app', share / 'bin/cr3-pb.app')
+    (share / 'bin/cr3-pb.app').chmod(0o755)
 for skin in package['skins']:
     shutil.copy2(build / f'cr3gui/{skin}.cr3skin', share / f'skins/{skin}.cr3skin')
 for mo in sorted((build / 'i18n').glob('*/LC_MESSAGES/cr3.mo')):
@@ -103,6 +107,7 @@ manifest = {
     'compiler': subprocess.check_output([str(compiler), '--version'], text=True).splitlines()[0],
     'build_flags': (build / 'crengine/CMakeFiles/crengine.dir/flags.make').read_text(),
     'binary_sha256': sha256(binary),
+    'runtime_executable': 'system/share/cr3/bin/' + executable_name,
     'automated_validation': report,
     'device_validation': {'status': 'not-performed', 'binary_sha256': sha256(binary)},
 }

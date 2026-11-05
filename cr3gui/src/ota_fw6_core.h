@@ -77,7 +77,7 @@ static bool otaStagePackage(const std::string &checksum, const std::string &revi
             remaining -= n;
         }
         if (fclose(out)) return otaStageFailure("Could not save staging files. Check free storage.");
-        if (name == "bin/cr3-pb.app" && chmod(target.c_str(), 0755)) return false;
+        if ((name == "bin/cr3-pb.app" || name == "bin/cr3-pb-executable.app") && chmod(target.c_str(), 0755)) return false;
     }
     std::ifstream versionFile(FW6_OTA_STAGE "/release-version.txt");
     std::string packageVersion; std::getline(versionFile, packageVersion);

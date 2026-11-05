@@ -35,6 +35,32 @@ def elf_identity(path):
             'float_abi': ('hard' if flags & 0x400 else 'soft') if machine == 40 else None}
 
 
+def elf_stack_policy(path):
+    """Inspect PT_GNU_STACK without relying on the host's ELF tools."""
+    with Path(path).open('rb') as stream:
+        header = stream.read(64)
+        if len(header) < 52 or header[:4] != b'\x7fELF' or header[4] not in (1, 2) or header[5] not in (1, 2):
+            raise ValueError('Not a supported ELF file: ' + str(path))
+        order = '<' if header[5] == 1 else '>'
+        wide = header[4] == 2
+        if wide and len(header) < 64:
+            raise ValueError('Truncated ELF header: ' + str(path))
+        offset = struct.unpack_from(order + ('Q' if wide else 'I'), header, 32 if wide else 28)[0]
+        size, count = struct.unpack_from(order + 'HH', header, 54 if wide else 42)
+        minimum = 56 if wide else 32
+        if count and size < minimum:
+            raise ValueError('Invalid ELF program header size: ' + str(path))
+        for index in range(count):
+            stream.seek(offset + size * index)
+            program = stream.read(minimum)
+            if len(program) != minimum:
+                raise ValueError('Truncated ELF program header: ' + str(path))
+            if struct.unpack_from(order + 'I', program)[0] == 0x6474e551:
+                flags = struct.unpack_from(order + 'I', program, 4 if wide else 24)[0]
+                return 'executable' if flags & 1 else 'non-executable'
+    return 'unspecified'
+
+
 def check_runtime(application, runtime, readelf, firmware):
     runtime = Path(runtime).resolve()
     env = dict(os.environ, LC_ALL='C')
@@ -129,4 +155,6 @@ def check_runtime(application, runtime, readelf, firmware):
     libraries = sorted(str(path.relative_to(runtime)) for path in inspected if runtime in path.parents)
     return {'status': 'passed', 'abi': expected, 'loader': interpreter[1],
             'libraries': libraries, 'files_sha256': runtime_fingerprint(runtime, libraries),
+            'stack_policy': {'application': elf_stack_policy(application), 'libraries': {
+                name: elf_stack_policy(runtime / name) for name in libraries}},
             'scope': 'ELF ABI, loader, dependency closure, symbol versions and required dynamic symbols; hardware behavior is untested'}

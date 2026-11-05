@@ -8,7 +8,7 @@
       "version": "6.10.3425",
       "software_version": "U634.6.10.3425",
       "source_api": "https://pocketbook.ch/front-api/api/en-ch/product?product_id=2026",
-      "retrieved_on": "2026-11-04",
+      "retrieved_on": "2026-11-05",
       "archive": {
         "filename": "sw_20260324_U634_6.10.3425_user.zip",
         "url": "https://download.pocketbook-int.com/fw/Yitoa/634/user/20260324/sw_20260324_U634_6.10.3425_user.zip",
@@ -23,7 +23,7 @@
       "version": "6.10.3209",
       "software_version": "U700.6.10.3209",
       "source_api": "https://pocketbook.ch/front-api/api/en-ch/product?product_id=1720",
-      "retrieved_on": "2026-11-04",
+      "retrieved_on": "2026-11-05",
       "archive": {
         "filename": "sw_20260223_U700_6.10.3209_user.zip",
         "url": "https://download.pocketbook-int.com/fw/Jezetek/700/user/20260223/sw_20260223_U700_6.10.3209_user.zip",
@@ -38,7 +38,7 @@
       "version": "6.11.1683",
       "software_version": "U743g.6.11.1683",
       "source_api": "https://pocketbook.ch/front-api/api/en-ch/product?product_id=1915",
-      "retrieved_on": "2026-11-04",
+      "retrieved_on": "2026-11-05",
       "archive": {
         "filename": "sw_20260731_U743g_6.11.1683_user.zip",
         "url": "https://download.pocketbook-int.com/fw/Yitoa/743g/user/20260731/sw_20260731_U743g_6.11.1683_user.zip",

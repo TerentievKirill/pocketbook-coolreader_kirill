@@ -5451,7 +5451,10 @@ int main_handler(int type, int par1, int par2)
     if (rejected) return 0;
     if (type == EVT_INIT && !pbdevice::qualified(GetDeviceModel(), GetSoftwareVersion())) {
         rejected = true;
-        Message(ICON_WARNING, "CoolReader", "This experimental package has not been checked for this model and firmware. See the included guide.", 3000);
+        fprintf(stderr, "[cr3] Unsupported model/firmware: model=%s firmware=%s\n",
+                GetDeviceModel() ? GetDeviceModel() : "(unknown)",
+                GetSoftwareVersion() ? GetSoftwareVersion() : "(unknown)");
+        Message(ICON_WARNING, "CoolReader", "This model and firmware combination has not been checked. See the included guide.", 3000);
         CloseApp();
         return 0;
     }
@@ -6222,6 +6225,9 @@ int main(int argc, char **argv)
 #ifdef POCKETBOOK_FW6
     installStartupFaultHandler();
     fprintf(stderr, "[cr3-fw6-r5] screen ready\n");
+    fprintf(stderr, "[cr3] device=%s firmware=%s\n",
+            GetDeviceModel() ? GetDeviceModel() : "(unknown)",
+            GetSoftwareVersion() ? GetSoftwareVersion() : "(unknown)");
 #endif
     if (argc < 2 || strlen(argv[1]) == 0 ) {
         Message(ICON_WARNING,  const_cast<char*>("CoolReader"), const_cast<char*>("No book to open!"), 2000);
