@@ -645,6 +645,52 @@ void LVDocView::clearImageCache() {
 		m_callback->OnImageCacheClear();
 }
 
+/// Invalidate changing indicators without discarding reusable book pixels.
+void LVDocView::invalidatePageHeaders() {
+#if CR_ENABLE_PAGE_IMAGE_CACHE==1
+    if (canRefreshPageHeaders()) {
+        m_imageCache.invalidateHeaders();
+        return;
+    }
+#endif
+    clearImageCache();
+}
+
+#if CR_ENABLE_PAGE_IMAGE_CACHE==1
+bool LVDocView::canRefreshPageHeaders() const {
+    // Keep the established full repaint for textures, spreads and scrolling.
+    // In-place cached updates are limited to the single-threaded FW6 frontend.
+#if defined(POCKETBOOK_FW6) && CR_USE_THREADS==0
+#if CR_INTERNAL_PAGE_ORIENTATION==1
+    if (m_rotateAngle != CR_ROTATE_ANGLE_0) return false;
+#endif
+    return isPageMode() && getVisiblePageCount() == 1 && m_backgroundImage.isNull()
+        && m_pageHeaderOverride.empty() && !(m_backgroundColor & 0xff000000);
+#else
+    return false;
+#endif
+}
+
+void LVDocView::refreshCachedPageHeader(LVDrawBuf *buf, int page) {
+    if (page < 0 || page >= m_pages.length() ||
+        !(m_pages[page]->flags & RN_PAGE_TYPE_NORMAL) ||
+        !((m_pageHeaderPos != PAGE_HEADER_POS_NONE && m_pageHeaderInfo) ||
+          !m_pageHeaderOverride.empty())) return;
+    lvRect info, oldClip;
+    getPageHeaderRectangle(page, info);
+    if (info.isEmpty()) return;
+    // Paged glyph painting may extend the footer's descenders past its clip
+    // into the outer bottom margin. Erase those old pixels as well.
+    lvRect erase = info;
+    if (m_pageHeaderPos == PAGE_HEADER_POS_BOTTOM) erase.bottom = buf->GetHeight();
+    buf->GetClipRect(&oldClip);
+    buf->SetClipRect(&erase);
+    buf->FillRect(erase.left, erase.top, erase.right, erase.bottom, m_backgroundColor);
+    drawPageHeader(buf, info, page, m_pageHeaderInfo, m_pages.length());
+    buf->SetClipRect(&oldClip);
+}
+#endif
+
 /// invalidate formatted data, request render
 void LVDocView::requestRender() {
 	LVLock lock(getMutex());
@@ -743,29 +789,24 @@ LVDocImageRef LVDocView::getPageImage( int delta )
 		p++;
 		if ( p<0 || p>=m_pages.length() )
 		return ref;
-		ref = m_imageCache.get( -1, p );
-		if ( !ref.isNull() ) {
-			//CRLog::trace("getPageImage: + page [%d] found in cache", offset);
-			return ref;
-		}
 	} else {
 		offset = _pos;
 		if ( delta<0 )
 		offset = getPrevPageOffset();
 		else if ( delta>0 )
 		offset = getNextPageOffset();
-		//CRLog::trace("getPageImage: checking cache for page [%d] (delta=%d)", offset, delta);
-		ref = m_imageCache.get( offset, -1 );
-		if ( !ref.isNull() ) {
-			//CRLog::trace("getPageImage: + page [%d] found in cache", offset);
-			return ref;
-		}
 	}
+    // Readiness checks must not consume a pending header refresh. Only refresh
+    // on display, so a prefetched image uses the actual reading position.
+    bool headerDirty = false;
+    bool *dirty = delta == 0 ? &headerDirty : NULL;
+    ref = m_imageCache.get(offset, p, dirty);
 	while ( ref.isNull() ) {
 		//CRLog::trace("getPageImage: - page [%d] not found, force rendering", offset);
 		cachePageImage( delta );
-		ref = m_imageCache.get( offset, p );
+		ref = m_imageCache.get( offset, p, dirty );
 	}
+    if (headerDirty) refreshCachedPageHeader(ref->getDrawBuf(), p);
 	//CRLog::trace("getPageImage: page [%d] is ready", offset);
 	return ref;
 }
@@ -808,6 +849,18 @@ void LVDocView::Draw(LVDrawBuf & drawbuf, bool autoResize) {
 }
 
 #if CR_ENABLE_PAGE_IMAGE_CACHE==1
+bool LVDocView::prepareAdjacentPage(int direction)
+{
+    if ((direction != 1 && direction != -1) || !m_is_rendered || !_posIsSet ||
+        !isPageMode() || getVisiblePageCount() != 1 || !IsDrawed())
+        return false;
+    int target = _page + direction;
+    if (target < 0 || target >= m_pages.length() || isPageImageReady(direction))
+        return false;
+    cachePageImage(direction);
+    return true;
+}
+
 /// cache page image (render in background if necessary)
 void LVDocView::cachePageImage( int delta )
 {
@@ -850,7 +903,7 @@ void LVDocView::cachePageImage( int delta )
 	}
 	LVRef<LVDrawBuf> drawbuf( buf );
 	LVRef<LVThread> thread( new LVDrawThread( this, offset, p, drawbuf ) );
-	m_imageCache.set( offset, p, drawbuf, thread );
+    m_imageCache.set( offset, p, drawbuf, thread, delta != 0 && canRefreshPageHeaders() );
 	//CRLog::trace("cachePageImage: caching page [%d] is finished", offset);
 }
 #endif
@@ -1762,7 +1815,7 @@ bool LVDocView::setFrontlightState(int enabled,int brightness,int temperature) {
     if (enabled == 0) brightness = 0;
     if (m_frontlightEnabled==enabled && m_frontlightBrightness==brightness && m_frontlightTemperature==temperature) return false;
     m_frontlightEnabled=enabled; m_frontlightBrightness=brightness; m_frontlightTemperature=temperature;
-    if (m_props->getBoolDef(PROP_SHOW_FRONTLIGHT,false) || m_props->getBoolDef(PROP_SHOW_FRONTLIGHT_BRIGHTNESS,false) || m_props->getBoolDef(PROP_SHOW_FRONTLIGHT_TEMPERATURE,false)) clearImageCache();
+    if (m_props->getBoolDef(PROP_SHOW_FRONTLIGHT,false) || m_props->getBoolDef(PROP_SHOW_FRONTLIGHT_BRIGHTNESS,false) || m_props->getBoolDef(PROP_SHOW_FRONTLIGHT_TEMPERATURE,false)) invalidatePageHeaders();
     return true;
 }
 lString32 LVDocView::getFrontlightStatusText() const {
@@ -1804,7 +1857,7 @@ bool LVDocView::setBatteryState(int newState, int newChargingConn, int newCharge
 	m_battery_state = newState;
 	m_battery_charging_conn = newChargingConn;
 	m_battery_charge_level = newChargeLevel;
-	clearImageCache();
+	invalidatePageHeaders();
 	return true;
 }
 
@@ -2404,7 +2457,7 @@ bool LVDocView::isTimeChanged() {
 	if ( m_pageHeaderPos != PAGE_HEADER_POS_NONE && m_pageHeaderInfo & PGHDR_CLOCK ) {
 		bool res = (m_last_clock != getTimeString());
 		if (res)
-			clearImageCache();
+			invalidatePageHeaders();
 		return res;
 	}
 	return false;

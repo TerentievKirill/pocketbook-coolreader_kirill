@@ -54,9 +54,10 @@ records the registry.
 
 Updates and testing
 -------------------
-This revised 1.0.4 uses firmware API rules for both startup and OTA. The original
-1.0.4 is archived for rollback. Existing 1.0.4 installations require a USB
-reinstall to receive this reissue because the release number has not changed.
+Version 1.0.5 adds bulk page copying, idle next-page preparation and cached
+status-header updates. It retains firmware API rules for startup and OTA.
+Existing shared 1.0.3 and 1.0.4 installations can update over Wi-Fi.
+Seventeen ARM regression groups pass; interactive device testing is pending.
 
 Settings > Check for updates checks one shared release channel for every
 supported model. Settings > Version shows the installed release version.

@@ -124,6 +124,7 @@ class LVDocViewImageCache
                 int _page;
                 bool _ready;
                 bool _valid;
+                bool _headerDirty;
         };
         Item _items[2];
         int _last;
@@ -131,7 +132,8 @@ class LVDocViewImageCache
         /// return mutex
         LVMutex & getMutex() { return _mutex; }
         /// set page to cache
-        void set( int offset, int page, LVRef<LVDrawBuf> drawbuf, LVRef<LVThread> thread )
+        void set( int offset, int page, LVRef<LVDrawBuf> drawbuf, LVRef<LVThread> thread,
+                  bool headerDirty = false )
         {
             LVLock lock( _mutex );
             _last = (_last + 1) & 1;
@@ -141,6 +143,7 @@ class LVDocViewImageCache
             _items[_last]._offset = offset;
             _items[_last]._page = page;
             _items[_last]._valid = true;
+            _items[_last]._headerDirty = headerDirty;
         }
         /// return page image, wait until ready
         LVRef<LVDrawBuf> getWithoutLock( int offset, int page )
@@ -161,13 +164,26 @@ class LVDocViewImageCache
             return LVRef<LVDrawBuf>();
         }
         /// return page image, wait until ready
-        LVDocImageRef get( int offset, int page )
+        LVDocImageRef get( int offset, int page, bool *headerDirty = NULL )
         {
+            if (headerDirty) *headerDirty = false;
             _mutex.lock();
             LVRef<LVDrawBuf> buf = getWithoutLock( offset, page );
-            if ( !buf.isNull() )
-                return LVDocImageRef( new LVDocImageHolder(getWithoutLock( offset, page ), _mutex) );
+            if ( !buf.isNull() ) {
+                if (headerDirty) {
+                    *headerDirty = _items[_last]._headerDirty;
+                    _items[_last]._headerDirty = false;
+                }
+                return LVDocImageRef( new LVDocImageHolder(buf, _mutex) );
+            }
+            _mutex.unlock();
             return LVDocImageRef( NULL );
+        }
+        void invalidateHeaders()
+        {
+            LVLock lock(_mutex);
+            for (int i = 0; i < 2; ++i)
+                if (_items[i]._valid) _items[i]._headerDirty = true;
         }
         bool has( int offset, int page )
         {
@@ -389,7 +405,10 @@ private:
     LVMutex _mutex;
 #if CR_ENABLE_PAGE_IMAGE_CACHE==1
     LVDocViewImageCache m_imageCache;
+    bool canRefreshPageHeaders() const;
+    void refreshCachedPageHeader(LVDrawBuf *buf, int page);
 #endif
+    void invalidatePageHeaders();
 
 
     lString8 m_defaultFontFace;
@@ -649,6 +668,9 @@ public:
     bool IsDrawed();
     /// cache page image (render in background if necessary) (0=current, -1=prev, 1=next)
     void cachePageImage( int delta );
+    /// Prepare one adjacent page only when the current layout/image is ready.
+    /// Intended for an idle callback, never starts document layout.
+    bool prepareAdjacentPage(int direction);
 #endif
     /// return view mutex
     LVMutex & getMutex() { return _mutex; }

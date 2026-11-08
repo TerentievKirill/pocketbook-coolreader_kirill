@@ -17,6 +17,7 @@
 #include "cr3version.h"
 #include <inkview.h>
 #include "pbdictionary.h"
+#include "pbgrayupdate.h"
 #include "pb_device_profile.h"
 #ifdef POCKETBOOK_FW6
 #include "pbstandbyfrontlight.h"
@@ -741,6 +742,10 @@ int listTocHandler(int action, int x, int y, int idx, int state)
 #endif
 
 int main_handler(int type, int par1, int par2);
+#ifdef POCKETBOOK_FW6
+static void prefetchPageTimer();
+static void schedulePagePrefetch();
+#endif
 
 static int link_altParm = 0;
 void handle_LinksContextMenu(int index)
@@ -820,11 +825,7 @@ void CRPocketBookScreen::flush( bool full )
                     if (m_bpp == 2) {
                         for (int i = 0; !_update_gray && i < sz; i++) {
                             if (line1[i] != line2[i]) {
-                                for (int j = 0; !_update_gray && j < 3; j++) {
-                                    lUInt8 color1 = (line1[i] >> (j << 1)) & 0x3;
-                                    lUInt8 color2 = (line1[i] >> (j << 1)) & 0x3;
-                                    _update_gray = color1 != color2 && (color1 == 1 || color1 == 2);
-                                }
+                                _update_gray = pbGray2Changed(line2[i], line1[i]);
                                 if (_update_gray)
                                     CRLog::trace("gray(%d) at [%d, %d]", line1[i], i, y);
                             }
@@ -869,6 +870,9 @@ void CRPocketBookScreen::flush( bool full )
     }
     update( _updateRect, full );
     _updateRect.clear();
+#ifdef POCKETBOOK_FW6
+    schedulePagePrefetch();
+#endif
 }
 
 void CRPocketBookScreen::update( const lvRect & rc2, bool full )
@@ -5313,6 +5317,19 @@ bool pbCanShowUpdatePrompt() {
         CRPocketBookWindowManager::instance && main_win &&
         CRPocketBookWindowManager::instance->getTopVisibleWindow() == main_win;
 }
+
+// Weak, one-shot timer: never keeps the device awake and never renders while
+// hidden, asleep, in a native dialog or in a menu. No engine threads involved.
+static void prefetchPageTimer() {
+    if (!pbCanShowUpdatePrompt() || isTouchMenuVisible) return;
+    main_win->getDocView()->prepareAdjacentPage(1);
+}
+static void schedulePagePrefetch() {
+    ClearTimer(prefetchPageTimer);
+    // Allows repeatable on-device A/B timing with the same executable.
+    if (!getenv("CR3_DISABLE_PAGE_PREFETCH") && pbCanShowUpdatePrompt())
+        SetWeakTimer("PagePrefetch", prefetchPageTimer, 350);
+}
 #endif
 
 bool pbNetworkConnected() {
@@ -5360,6 +5377,7 @@ void stopStandByTimer();
 void restartStandByTimer();
 void enterStandByMode() {
 #ifdef POCKETBOOK_FW6
+    ClearTimer(prefetchPageTimer);
     OTA_backgroundActive(false);
     setFrontlightStatusActive(false);
 #endif
@@ -5446,6 +5464,10 @@ void stopStandByTimer() {
 static bool need_save_cover = false;
 int main_handler(int type, int par1, int par2)
 {
+#ifdef POCKETBOOK_FW6
+    // Any input postpones speculative work until after the next screen paint.
+    ClearTimer(prefetchPageTimer);
+#endif
 #ifdef CR3_SHARED_PACKAGE
     static bool rejected = false;
     if (rejected) return 0;
@@ -5853,6 +5875,10 @@ int main_handler(int type, int par1, int par2)
     }
     if (process_events)
         CRPocketBookWindowManager::instance->processPostedEvents();
+#ifdef POCKETBOOK_FW6
+    if (type != EVT_HIDE && type != EVT_BACKGROUND && type != EVT_EXIT)
+        schedulePagePrefetch();
+#endif
     return ret;
 }
 

@@ -11,6 +11,7 @@ REQUIRED_TESTS = {
     'shared-device-profiles',
     'frontlight-status', 'ota-ui', 'ota-package', 'reference-initialization', 'css-null-ancestor', 'skin-language-symbol',
     'dependency-compatibility', 'web-tls', 'standby-frontlight',
+    'gray-buffer-copy',
     'document-render', 'reading-state-migration', 'dictionary-safety', 'history-persistence', 'archive-boundaries', 'atomic-faults',
 }
 

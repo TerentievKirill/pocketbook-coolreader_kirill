@@ -953,11 +953,17 @@ void LVGrayDrawBuf::DrawTo( LVDrawBuf * buf, int x, int y, int options, lUInt32 
     lvRect clip;
     buf->GetClipRect(&clip);
 
-	if ( !(!clip.isEmpty() || buf->GetBitsPerPixel()!=GetBitsPerPixel() || GetWidth()!=buf->GetWidth() || GetHeight()!=buf->GetHeight()) ) {
-		// simple copy
-        memcpy( buf->GetScanLine(0), GetScanLine(0), GetHeight() * GetRowSize() );
-		return;
-	}
+    if (clip.isEmpty())
+        return;
+    // Full, unshifted copies need no per-pixel clipping or color conversion.
+    // Match stride as well as format/dimensions before copying raw storage.
+    if (x == 0 && y == 0 && clip == lvRect(0, 0, GetWidth(), GetHeight()) &&
+        buf->GetBitsPerPixel() == GetBitsPerPixel() &&
+        buf->GetWidth() == GetWidth() && buf->GetHeight() == GetHeight() &&
+        buf->GetRowSize() == GetRowSize()) {
+        memmove(buf->GetScanLine(0), GetScanLine(0), (size_t)GetHeight() * GetRowSize());
+        return;
+    }
     int bpp = GetBitsPerPixel();
 	if (buf->GetBitsPerPixel() == 32) {
 		// support for 32bpp to Gray drawing

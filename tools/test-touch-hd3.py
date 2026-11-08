@@ -180,6 +180,7 @@ for name, sources, engine, arguments in [
     ('frontlight-status', ['tests/frontlight-status.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', out]),
     ('standby-frontlight', ['tests/standby-frontlight.cpp'], False, []),
     ('css-null-ancestor', ['tests/css-selector-null-ancestor.cpp'], True, []),
+    ('gray-buffer-copy', ['tests/gray-buffer-copy.cpp'], True, []),
     ('skin-language-symbol', ['tests/skin-language-symbol.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', firmware / 'ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', build / 'cr3gui/pb631fw5.cr3skin', out]),
     ('document-render', ['tests/document-render-startup.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', firmware / 'ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', firmware / 'ebrmain/cramfs/fonts/DroidSans.ttf', root / profile['package']['assets'] / 'cr3-defaults.ini', root / 'cr3gui/data/hyph/', epub, root / 'cr3gui/data/fb2.css']),
     ('reading-state-migration', ['tests/reading-state-migration.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', out / 'migration.fb2', out / 'migration.zip']),

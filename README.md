@@ -1,8 +1,12 @@
 # CoolReader for PocketBook
 
-[Downloads](https://pocketbook.nimbushub.eu/) · [Installation](https://pocketbook.nimbushub.eu/installation.html) · [Release 1.0.4](https://github.com/dderugin/pocketbook-coolreader/releases/tag/v1.0.4)
+[Downloads](https://pocketbook.nimbushub.eu/) · [Installation](https://pocketbook.nimbushub.eu/installation.html) · [Release 1.0.5](https://github.com/dderugin/pocketbook-coolreader/releases/tag/v1.0.5)
 
-Release **1.0.4** provides one shared ARMv7 Linux executable and install ZIP for
+Release **1.0.5** improves page copying, prepares the next page during idle time,
+and preserves cached book text when battery, frontlight or clock indicators change.
+Full-buffer copies use bulk transfers with clipping, format and stride checks.
+
+It provides one shared ARMv7 Linux executable and install ZIP for
 the four models below. Firmware snapshots used for verification:
 
 | Device | Firmware tested |
@@ -12,7 +16,7 @@ the four models below. Firmware snapshots used for verification:
 | Era / PB700 | U700.6.10.3209 |
 | InkPad 4 / PB743G | U743g.6.11.1683 |
 
-Sixteen ARM regression groups and thirteen
+Seventeen ARM regression groups and thirteen
 software probes on each additional firmware pass; interactive hardware testing
 and end-to-end device OTA acceptance remain pending. Firmware builds are no
 longer restricted to this list; unknown models and API levels below 6.10 are rejected. See the [device matrix](DEVICE-SUPPORT.md) and
@@ -26,8 +30,8 @@ common SDK 6.10 interfaces; this is not a port of KOReader's complete FFI catalo
 Compatible firmware libraries are still required; accepted API versions alone
 do not establish hardware or library ABI compatibility.
 
-This is a reissue of 1.0.4. Existing 1.0.4 users need a USB reinstall because the
-version number is unchanged. The original is retained for rollback.
+Existing shared 1.0.3 and 1.0.4 installations can update over Wi-Fi. The preceding
+releases remain available for rollback.
 
 Release 1.0.4 adds the firmware-library startup setting used by KOReader for
 newer PocketBook loaders. The startup entry point lives inside the updateable

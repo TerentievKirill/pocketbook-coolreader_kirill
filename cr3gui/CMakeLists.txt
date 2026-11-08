@@ -1,4 +1,4 @@
-set(CR3_RELEASE_VERSION "1.0.4" CACHE STRING "Stable OTA version (SemVer)")
+set(CR3_RELEASE_VERSION "1.0.5" CACHE STRING "Stable OTA version (SemVer)")
 if(NOT CR3_RELEASE_VERSION MATCHES "^(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)$")
     message(FATAL_ERROR "CR3_RELEASE_VERSION must be MAJOR.MINOR.PATCH")
 endif()

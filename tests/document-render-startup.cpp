@@ -4,6 +4,7 @@
 #include "testutil.h"
 #include "../cr3gui/src/settings.h"
 #include "../cr3gui/src/pb_device_profile.h"
+#include "../cr3gui/src/pbgrayupdate.h"
 #include <stdio.h>
 #include <string>
 lString32 pbSkinFileName;
@@ -75,6 +76,40 @@ static int testRendering(const char *defaultsFile, const char *epubFile, const c
     view.Render();
     if (view.getPageCount() < 1) return 5;
     printf("PASS: Cyrillic FB2 rendered, %d pages\n", view.getPageCount());
+    // Warming must preserve position and produce exactly the on-demand bitmap.
+    view.goToPage(0);
+    CHECK(!view.prepareAdjacentPage(1)); // Current page has not been painted.
+    view.getPageImage(0);
+    CHECK(view.getPageCount() > 1);
+    CHECK(view.prepareAdjacentPage(1));
+    CHECK(view.getCurPage() == 0);
+    CHECK(!view.prepareAdjacentPage(1)); // Already warm, no repeated work.
+    view.goToPage(1);
+    LVDocImageRef warm = view.getPageImage(0);
+    LVDrawBuf *warmBuf = warm->getDrawBuf();
+    std::string pixels;
+    for (int y = 0; y < warmBuf->GetHeight(); ++y)
+        pixels.append((const char *)warmBuf->GetScanLine(y), warmBuf->GetRowSize());
+    warm.Clear();
+    view.clearImageCache();
+    LVDocImageRef cold = view.getPageImage(0);
+    LVDrawBuf *coldBuf = cold->getDrawBuf();
+    for (int y = 0; y < coldBuf->GetHeight(); ++y)
+        CHECK(!memcmp(pixels.data() + y * coldBuf->GetRowSize(),
+                      coldBuf->GetScanLine(y), coldBuf->GetRowSize()));
+    cold.Clear();
+    view.goToPage(view.getPageCount() - 1);
+    view.getPageImage(0);
+    CHECK(!view.prepareAdjacentPage(1));
+    CHECK(!view.prepareAdjacentPage(0));
+    view.requestRender();
+    CHECK(!view.prepareAdjacentPage(1)); // Never start layout from idle work.
+    view.getPageImage(0); // Finish layout/restore its saved reading position first.
+    view.goToPage(0);
+    view.getPageImage(0);
+    CHECK(view.getCurPage() == 0);
+    CHECK(!view.prepareAdjacentPage(-1));
+    puts("PASS: idle prefetch preserves position/pixels and skips invalid or cold layouts");
     CHECK(!view.getPageHeaderPages(0, view.getPageCount(), true).empty());
     CHECK(!view.getCurrentChapterName().empty());
     CHECK(view.getSectionBoundsPages().length() >= 1);
@@ -189,6 +224,15 @@ static int testRendering(const char *defaultsFile, const char *epubFile, const c
 }
 int main(int argc, char **argv) {
     setbuf(stdout, NULL);
+    // Every packed pixel lane, gray appearing/disappearing, black/white only.
+    for (int a = 0; a < 256; ++a) for (int b = 0; b < 256; ++b) {
+        bool expected = false;
+        for (int p = 0; p < 4; ++p) {
+            int x = (a >> (2*p)) & 3, y = (b >> (2*p)) & 3;
+            expected |= x != y && ((x % 3) != 0 || (y % 3) != 0);
+        }
+        CHECK(pbGray2Changed(a, b) == expected);
+    }
     if (argc < 8) return 1;
     InitFontManager(lString8::empty_str);
     if (!fontMan->RegisterFont(lString8(argv[1])) || !fontMan->RegisterFont(lString8(argv[2]))) return 2;

@@ -207,6 +207,50 @@ with rendering checks at 8, 12, 16 and 24 pixels and inverted colours. Full menu
 redraws discard clean-row paint caches after native dialogs/network helpers;
 OTA dismissal restores the visible menu without changing its page or selection.
 
+## Reading performance candidate
+
+FW6 builds prepare the next page after 350 ms of inactivity following a screen
+paint or handled event. The weak timer runs once, on the UI thread, and skips
+background tasks, standby, native dialogs and menus. It uses the existing
+two-image cache, without increasing its capacity or enabling engine threads.
+Only an already painted single-page layout is eligible; scroll/two-page modes
+and the final page are skipped. Layout, selection and settings changes retain
+the engine's existing cache invalidation. Speculative work can still delay an
+input that arrives while that one page is being painted; reader testing is
+needed to choose the idle delay and assess battery impact.
+
+For a same-binary comparison, launch with `CR3_DISABLE_PAGE_PREFETCH=1` in the
+environment to disable preparation (any defined value disables it). Compare
+with the variable unset, using the same book, typography and refresh settings.
+Measure cold launch and cached reopening separately from page turns; record
+both typical and slowest turns, including rapid repeats and direction changes.
+Visible e-ink completion needs physical-device measurement. ARM/QEMU regression
+results establish bitmap equivalence and cache/position behavior, not a speed
+advantage over KOReader.
+
+The packed 2-bit refresh detector also checks all four pixels per byte and
+both old/new gray values. Previously it compared the new buffer to itself and
+missed the fourth pixel, incorrectly selecting black/white menu updates.
+
+Matching full-buffer grayscale copies now use bulk memory transfer when the
+destination clip covers the entire image, offsets are zero, and pixel format,
+dimensions and stride match. Partial clips, offsets and color conversions keep
+the established drawing path; empty clips leave the destination untouched.
+
+For single-page solid-background FW6 views, battery, frontlight and clock changes
+mark cached headers for repaint instead of discarding book text. Both current
+and prefetched page images survive; the header is refreshed when displayed.
+Prefetched headers are also refreshed on arrival so progress reflects the actual
+reading position. Loading overlays, textured backgrounds, two-page views, scrolling and threaded
+frontends retain full image invalidation. Layout and typography changes still
+invalidate the complete image cache. No additional page buffers are allocated.
+
+The `gray-buffer-copy` ARM regression covers all grayscale formats, full/self
+copies, empty/partial clips, offsets, padded strides and grayscale-to-color
+conversion. Frontlight regressions compare cached status updates with fresh page
+renders, verify unchanged book pixels and retained current/next images, and cover
+top/bottom/hidden status, inverted colors and scrolling fallback.
+
 ## Shared OTA release staging
 
 Settings exposes **Check for updates**, **Check for updates automatically** and

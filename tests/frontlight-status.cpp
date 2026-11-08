@@ -5,6 +5,7 @@
 #include <vector>
 #include <string>
 #include <cstdlib>
+#include <cstring>
 lString32 pbSkinFileName,openedCacheFile,currentCacheDir;
 static void preview(LVDrawBuf &buf,const char *directory,const char *name) {
  std::string path=std::string(directory)+"/"+name;FILE *file=fopen(path.c_str(),"wb");
@@ -17,6 +18,89 @@ static std::vector<lUInt32> pixels(LVDrawBuf &buf) {
  std::vector<lUInt32> result;
  for(int y=0;y<buf.GetHeight();++y)for(int x=0;x<buf.GetWidth();++x)result.push_back(buf.GetPixel(x,y));
  return result;
+}
+class StatusTestView : public LVDocView {
+public:
+ lString32 clockText = U"12:00";
+ StatusTestView(int bits) : LVDocView(bits) {}
+ lString32 getTimeString() const override { return clockText; }
+};
+static std::string rawPixels(LVDrawBuf &buf) {
+ std::string result;
+ for(int y=0;y<buf.GetHeight();++y)
+  result.append((const char *)buf.GetScanLine(y),buf.GetRowSize());
+ return result;
+}
+static int testHeaderCache() {
+ for(int mode=0;mode<3;++mode) for(int format=0;format<3;++format) {
+  int bits=format==0 ? 8 : format==1 ? 4 : 2;
+  bool inverted=format==1;
+  StatusTestView view(bits);view.setDefaultFontFace(lString8("DejaVu Sans"));
+  view.Resize(600,800);view.overrideVisiblePageCount(1);view.setShowCover(false);
+  CRPropRef props=LVCreatePropsContainer();
+  props->setString(PROP_STATUS_FONT_FACE,"DejaVu Sans");props->setInt(PROP_STATUS_FONT_SIZE,20);
+  props->setBool(PROP_SHOW_FRONTLIGHT,true);props->setBool(PROP_SHOW_FRONTLIGHT_BRIGHTNESS,true);
+  view.propsApply(props);
+  view.setBackgroundColor(inverted ? 0 : 0xffffff);view.setTextColor(inverted ? 0xffffff : 0);
+  view.setStatusMode(mode,true,true,true,true,true,true,true);
+  std::string xml="<FictionBook><body><section><title><p>Status cache</p></title>";
+  for(int n=0;n<100;++n)xml+="<p>Book text must stay cached when status indicators change.</p>";
+  xml+="</section></body></FictionBook>";
+  CHECK(view.LoadDocument(LVCreateStringStream(lString8(xml.c_str())),U"status-cache.fb2"));
+  view.Render();view.getPageImage(0);view.goToPage(0);
+  view.setFrontlightState(1,37,65);
+  view.setBatteryState(CR_BATTERY_STATE_DISCHARGING,CR_BATTERY_CHARGER_NO,80);
+  auto current=view.getPageImage(0)->getDrawBufRef();
+  std::string before=rawPixels(*current);
+  CHECK(view.prepareAdjacentPage(1));
+  auto next=view.getPageImage(1)->getDrawBufRef();
+  view.setFrontlightState(0,37,65);
+  view.setBatteryState(CR_BATTERY_STATE_CHARGING,CR_BATTERY_CHARGER_USB,81);
+  view.clockText=U"12:01";
+  CHECK(view.isTimeChanged()==(mode!=2));
+  CHECK(view.IsDrawed()); // Readiness probes must preserve pending header work.
+  CHECK(!view.prepareAdjacentPage(1)); // The next image also survived.
+  CHECK(view.getPageImage(0)->getDrawBuf()==current.get());
+  std::string after=rawPixels(*current);
+  CHECK((before!=after)==(mode!=2));
+  // Every byte outside the header is untouched, including left/right margins.
+  lvRect header;view.getPageHeaderRectangle(0,header);
+  if(mode==1)header.bottom=current->GetHeight(); // Footer descenders use the outer margin.
+  for(int y=0;y<800;++y) for(int x=0;x<600;++x)
+   if(mode==2 || x<header.left || x>=header.right || y<header.top || y>=header.bottom) {
+    int i=y*current->GetRowSize()+(bits==2 ? x/4 : x);
+    int mask=bits==2 ? 3<<(6-2*(x%4)) : 255;
+    if((before[i]&mask)!=(after[i]&mask))
+     fprintf(stderr,"status change outside header: mode=%d bits=%d x=%d y=%d header=%d,%d,%d,%d\n",mode,bits,x,y,header.left,header.top,header.right,header.bottom);
+    CHECK((before[i]&mask)==(after[i]&mask));
+   }
+  LVGrayDrawBuf fresh(600,800,bits);view.Draw(fresh);
+  CHECK(rawPixels(fresh)==after);
+  view.goToPage(1);
+  CHECK(view.getPageImage(0)->getDrawBuf()==next.get());
+  view.Draw(fresh);CHECK(rawPixels(fresh)==rawPixels(*next));
+  // Scrolling retains the conservative cache invalidation behavior.
+  view.setViewMode(DVM_SCROLL,1);view.getPageImage(0);
+  CHECK(view.setBatteryState(CR_BATTERY_STATE_DISCHARGING,CR_BATTERY_CHARGER_NO,79));
+  CHECK(!view.IsDrawed());
+  view.setViewMode(DVM_PAGES,1);
+  LVColorDrawBuf *tile=new LVColorDrawBuf(2,2,32);tile->Clear(0xcccccc);
+  view.setBackgroundImage(LVCreateDrawBufImageSource(tile,true));
+  view.getPageImage(0);
+  CHECK(view.setBatteryState(CR_BATTERY_STATE_CHARGING,CR_BATTERY_CHARGER_USB,80));
+  CHECK(!view.IsDrawed()); // Textured backgrounds retain full repaint.
+  view.setBackgroundImage(LVImageSourceRef());view.setViewMode(DVM_PAGES,2);view.overrideVisiblePageCount(2);
+  CHECK(view.getVisiblePageCount()==2);
+  view.getPageImage(0);
+  CHECK(view.setBatteryState(CR_BATTERY_STATE_DISCHARGING,CR_BATTERY_CHARGER_NO,79));
+  CHECK(!view.IsDrawed()); // Two-page spreads retain full repaint.
+  view.setViewMode(DVM_PAGES,1);view.overrideVisiblePageCount(1);
+  view.setPageHeaderOverride(U"Loading: please wait");view.getPageImage(0);
+  CHECK(view.setFrontlightState(1,40,60));
+  CHECK(!view.IsDrawed()); // Temporary loading overlays also retain full repaint.
+ }
+ puts("PASS: status updates preserve cached text/current/next images; fresh header pixels match, including clock, hidden and inverted modes");
+ return 0;
 }
 int main(int argc,char **argv) {
  // At compact sizes, lit and slashed-off sun images remain distinct and bounded.
@@ -31,6 +115,7 @@ int main(int argc,char **argv) {
   CHECK(visible);
  }
  CHECK(argc==3);InitFontManager(lString8::empty_str);CHECK(fontMan->RegisterFont(lString8(argv[1])));
+ CHECK(testHeaderCache()==0);
  {
  LVDocView view(8);view.setDefaultFontFace(lString8("DejaVu Sans"));view.Resize(1072,1448);
  CRPropRef props=LVCreatePropsContainer();view.propsUpdateDefaults(props);
