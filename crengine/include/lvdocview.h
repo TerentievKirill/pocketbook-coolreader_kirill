@@ -126,7 +126,14 @@ class LVDocViewImageCache
                 bool _valid;
                 bool _headerDirty;
         };
-        Item _items[2];
+#ifdef POCKETBOOK_FW6
+        static const int CACHE_SIZE = 3;
+#else
+        static const int CACHE_SIZE = 2;
+#endif
+        Item _items[CACHE_SIZE];
+        lUInt64 _used[CACHE_SIZE];
+        lUInt64 _clock;
         int _last;
     public:
         /// return mutex
@@ -136,7 +143,24 @@ class LVDocViewImageCache
                   bool headerDirty = false )
         {
             LVLock lock( _mutex );
-            _last = (_last + 1) & 1;
+            int slot = 0;
+            for (int i = 0; i < CACHE_SIZE; ++i) {
+                if (!_items[i]._valid) { slot = i; break; }
+#ifdef POCKETBOOK_FW6
+                if (page >= 0 && _items[i]._page >= 0 && _items[slot]._page >= 0) {
+                    lInt64 a = (lInt64)_items[i]._page - page;
+                    lInt64 b = (lInt64)_items[slot]._page - page;
+                    if (a < 0) a = -a;
+                    if (b < 0) b = -b;
+                    if (a > b || (a == b && _used[i] < _used[slot])) slot = i;
+                } else
+#endif
+                if (_used[i] < _used[slot]) slot = i;
+            }
+            _last = slot;
+            if (_items[slot]._valid && !_items[slot]._ready)
+                _items[slot]._thread->join();
+            _used[slot] = ++_clock;
             _items[_last]._ready = false;
             _items[_last]._thread = thread;
             _items[_last]._drawbuf = drawbuf;
@@ -148,7 +172,7 @@ class LVDocViewImageCache
         /// return page image, wait until ready
         LVRef<LVDrawBuf> getWithoutLock( int offset, int page )
         {
-            for ( int i=0; i<2; i++ ) {
+            for ( int i=0; i<CACHE_SIZE; i++ ) {
                 if ( _items[i]._valid &&
                      ( (_items[i]._offset == offset && offset!=-1)
                       || (_items[i]._page==page && page!=-1)) ) {
@@ -158,6 +182,7 @@ class LVDocViewImageCache
                         _items[i]._ready = true;
                     }
                     _last = i;
+                    _used[i] = ++_clock;
                     return _items[i]._drawbuf;
                 }
             }
@@ -182,13 +207,13 @@ class LVDocViewImageCache
         void invalidateHeaders()
         {
             LVLock lock(_mutex);
-            for (int i = 0; i < 2; ++i)
+            for (int i = 0; i < CACHE_SIZE; ++i)
                 if (_items[i]._valid) _items[i]._headerDirty = true;
         }
         bool has( int offset, int page )
         {
-            _mutex.lock();
-            for ( int i=0; i<2; i++ ) {
+            LVLock lock(_mutex);
+            for ( int i=0; i<CACHE_SIZE; i++ ) {
                 if ( _items[i]._valid && ( (_items[i]._offset == offset && offset!=-1)
                       || (_items[i]._page==page && page!=-1)) ) {
                     return true;
@@ -199,7 +224,7 @@ class LVDocViewImageCache
         void clear()
         {
             LVLock lock( _mutex );
-            for ( int i=0; i<2; i++ ) {
+            for ( int i=0; i<CACHE_SIZE; i++ ) {
                 if ( _items[i]._valid && !_items[i]._ready ) {
                     _items[i]._thread->join();
                 }
@@ -211,10 +236,12 @@ class LVDocViewImageCache
             }
         }
         LVDocViewImageCache()
-        : _last(0)
+        : _clock(0), _last(0)
         {
-            for ( int i=0; i<2; i++ )
+            for ( int i=0; i<CACHE_SIZE; i++ ) {
                 _items[i]._valid = false;
+                _used[i] = 0;
+            }
         }
         ~LVDocViewImageCache()
         {

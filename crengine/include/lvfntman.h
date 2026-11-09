@@ -87,6 +87,9 @@ public:
     }
     /// registers font by name
     virtual bool RegisterFont( lString8 name ) = 0;
+    virtual void BeginFontMetadataCache(lString32 /*filename*/) {}
+    virtual bool SaveFontMetadataCache() { return true; }
+    virtual int GetFontMetadataCacheHits() const { return 0; }
     /// registers font by name and face
     virtual bool RegisterExternalFont(int /*documentId*/, lString32 /*name*/, lString8 /*face*/, bool /*bold*/, bool /*italic*/) { return false; }
     /// registers document font

@@ -1908,3 +1908,115 @@ msgstr ""
 #: ../src/cr3pocketbook.cpp:5848
 msgid "Restored default system theme. CR3 will now restart."
 msgstr ""
+
+#: ../src/settings.cpp
+msgid "Slightly heavier"
+msgstr ""
+
+#: ../src/settings.cpp
+msgid "Medium"
+msgstr ""
+
+#: ../src/settings.cpp
+msgid "Semi-bold"
+msgstr ""
+
+#: ../src/settings.cpp
+msgid "Extra bold"
+msgstr ""
+
+#: ../src/settings.cpp
+msgid "Heavy"
+msgstr ""
+
+#: ../src/settings.cpp
+msgid "Extra heavy"
+msgstr ""
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Font & text"
+msgstr ""
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Page layout"
+msgstr ""
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Screen & sleep"
+msgstr ""
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Advanced"
+msgstr ""
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "About & updates"
+msgstr ""
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Font face, size, weight and spacing"
+msgstr ""
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Margins, hyphenation and footnotes"
+msgstr ""
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Refresh, orientation and status line"
+msgstr ""
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Rendering, document styles and cache"
+msgstr ""
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Version and software updates"
+msgstr ""
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Reader defaults"
+msgstr ""
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Format defaults"
+msgstr ""
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "This book"
+msgstr ""
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Font sample"
+msgstr ""
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Done"
+msgstr ""
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Back"
+msgstr ""
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Cancel"
+msgstr ""
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Done applies changes"
+msgstr ""
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Changes apply on Done"
+msgstr ""
+
+#: ../src/settings.cpp
+msgid "Buttons, taps and gestures"
+msgstr ""
+
+#: ../src/settings.cpp
+msgid "Line spacing"
+msgstr ""
+
+#: ../src/settings.cpp
+msgid "Font sample (scaled to fit)"
+msgstr ""

@@ -1400,6 +1400,17 @@ bool LVFreeTypeFontManager::RegisterFont(lString8 name) {
                 );
     }
 #endif
+    lString8 stamp = _metadataCache.enabled() ? LVFontMetadataCache::fingerprint(fname) : lString8();
+    std::vector<LVFontDef> definitions;
+    if (_metadataCache.lookup(name, stamp, definitions)) {
+        for (const LVFontDef &def : definitions) {
+            if (_cache.findDuplicate(&def)) return false;
+            _cache.update(&def, LVFontRef(NULL));
+        }
+        _metadataCache.remember(name, stamp, definitions);
+        return true;
+    }
+    bool complete = false;
     bool res = false;
 
     int index = 0;
@@ -1475,6 +1486,7 @@ bool LVFreeTypeFontManager::RegisterFont(lString8 name) {
             return false;
         }
         _cache.update(&def, LVFontRef(NULL));
+        definitions.push_back(def);
         if (scal && !def.getItalic()) {
             // If this font is not italic, create another definition
             // with italic=2 (=fake italic) as we can italicize it.
@@ -1484,16 +1496,31 @@ bool LVFreeTypeFontManager::RegisterFont(lString8 name) {
             // maybe it makes the 2x2 combinations easier to manage?)
             LVFontDef newDef( def );
             newDef.setItalic(2); // can italicize
-            if ( !_cache.findDuplicate( &newDef ) )
+            if ( !_cache.findDuplicate( &newDef ) ) {
                 _cache.update( &newDef, LVFontRef(NULL) );
+                definitions.push_back(newDef);
+            }
         }
         res = true;
 
-        if ( index >= num_faces - 1 )
+        if ( index >= num_faces - 1 ) {
+            complete = true;
             break;
+        }
     }
 
+    if (complete && !stamp.empty() && stamp == LVFontMetadataCache::fingerprint(fname))
+        _metadataCache.remember(name, stamp, definitions);
     return res;
+}
+
+void LVFreeTypeFontManager::BeginFontMetadataCache(lString32 filename) {
+    int major, minor, patch;
+    FT_Library_Version(_library, &major, &minor, &patch);
+    lString8 schema = lString8("font-headers-v1:") + fmt::decimal(major) + ":"
+        + fmt::decimal(minor) + ":" + fmt::decimal(patch);
+    if (getenv("CR3_DISABLE_FONT_METADATA_CACHE")) filename.clear();
+    _metadataCache.begin(filename, schema);
 }
 
 bool LVFreeTypeFontManager::Init(lString8 path) {

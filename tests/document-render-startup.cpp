@@ -1,12 +1,14 @@
 #include "lvxmlutils.h"
 #include "crengine.h"
 #include "lvdocview.h"
+#include "lvrend.h"
 #include "testutil.h"
 #include "../cr3gui/src/settings.h"
 #include "../cr3gui/src/pb_device_profile.h"
 #include "../cr3gui/src/pbgrayupdate.h"
 #include <stdio.h>
 #include <string>
+#include <vector>
 lString32 pbSkinFileName;
 lString32 openedCacheFile;
 lString32 currentCacheDir;
@@ -57,6 +59,68 @@ static int testMarginPainting() {
     CHECK(before.right > after.right && before.bottom > after.bottom);
     CHECK(margins.getPageMargins() == lvRect(100,100,100,100));
     puts("PASS: margin-only settings delta immediately changes all four painted page bounds");
+    return 0;
+}
+
+static std::string pagePixels(LVDocView &view) {
+    LVDocImageRef image = view.getPageImage(0);
+    LVDrawBuf *buf = image->getDrawBuf();
+    std::string pixels;
+    for (int y = 0; y < buf->GetHeight(); ++y)
+        pixels.append((const char *)buf->GetScanLine(y), buf->GetRowSize());
+    return pixels;
+}
+
+static int testFontWeight() {
+    LVDocView view(8);
+    view.setDefaultFontFace(lString8("DejaVu Sans"));
+    view.Resize(600, 800);
+    CRPropRef preferences = LVCreatePropsContainer();
+    preferences->setInt(PROP_STATUS_LINE, 2);
+    preferences->setInt(PROP_FONT_SIZE, 32);
+    preferences->setInt(PROP_FONT_BASE_WEIGHT, 400);
+    preferences->setInt(PROP_FONT_WEIGHT_EMBOLDEN, 0);
+    view.propsUpdateDefaults(preferences);
+    view.propsApply(preferences);
+    view.setStyleSheet(lString8("body,section,p { display: block; } strong { font-weight: bold; } em { font-style: italic; }"));
+    lString8 xml("<FictionBook><body><section><p>Font weight: Привет! Regular, <strong>bold</strong>, <em>italic</em>.</p></section></body></FictionBook>");
+    CHECK(view.LoadDocument(LVCreateStringStream(xml), U"weight.fb2"));
+    const char *strengths[] = {"0", "0.25", "0.5", "0.75", "1", "1.25", "1.5", "1.75"};
+    const int weights[] = {400, 475, 550, 625, 700, 775, 850, 925};
+    std::vector<std::string> images;
+    for (unsigned i = 0; i < sizeof(weights)/sizeof(weights[0]); ++i) {
+        // Match the menu's settings-only delta, including its old base weight.
+        CRPropRef changed = LVClonePropsContainer(preferences);
+        changed->setString(PROP_FONT_WEIGHT_EMBOLDEN, strengths[i]);
+        view.propsApply(preferences ^ changed);
+        preferences = changed;
+        CHECK(LVRendGetBaseFontWeight() == weights[i]);
+        CHECK(view.propsGetCurrent()->getIntDef(PROP_FONT_BASE_WEIGHT) == weights[i]);
+        images.push_back(pagePixels(view));
+        for (unsigned j = 0; j < i; ++j) CHECK(images[i] != images[j]);
+
+        // Saved fractional choices must survive validation and a full reload.
+        CRPropRef current = LVClonePropsContainer(view.propsGetCurrent());
+        LVStreamRef saved = LVCreateMemoryStream(NULL, 0, false, LVOM_READWRITE);
+        CHECK(current->saveToStream(saved.get()));
+        CHECK(saved->SetPos(0) == 0);
+        LVStreamRef readable = LVCreateMemoryStream(saved);
+        CHECK(!readable.isNull());
+        CRPropRef loaded = LVCreatePropsContainer();
+        CHECK(loaded->loadFromStream(readable.get()));
+        view.propsUpdateDefaults(loaded);
+        CHECK(loaded->getIntDef(PROP_FONT_BASE_WEIGHT) == weights[i]);
+        CHECK(loaded->getStringDef(PROP_FONT_WEIGHT_EMBOLDEN) == lString32(strengths[i]));
+        view.propsApply(loaded);
+        CHECK(LVRendGetBaseFontWeight() == weights[i]);
+        CHECK(pagePixels(view) == images[i]);
+    }
+    // Key toggles still return to the original Normal/Bold appearances.
+    view.doCommand((LVDocCmd)DCMD_TOGGLE_BOLD, 0);
+    CHECK(LVRendGetBaseFontWeight() == 400 && pagePixels(view) == images[0]);
+    view.doCommand((LVDocCmd)DCMD_TOGGLE_BOLD, 0);
+    CHECK(LVRendGetBaseFontWeight() == 700 && pagePixels(view) == images[4]);
+    puts("PASS: quarter-step font weights paint distinct text, survive reloads and preserve Normal/Bold toggles");
     return 0;
 }
 static int testRendering(const char *defaultsFile, const char *epubFile, const char *fb2Css) {
@@ -188,6 +252,7 @@ static int testRendering(const char *defaultsFile, const char *epubFile, const c
     legacyWeight->setInt(PROP_FONT_WEIGHT_EMBOLDEN, 0);
     view.propsApply(legacyWeight);
     CHECK(view.propsGetCurrent()->getIntDef(PROP_FONT_BASE_WEIGHT) == 400);
+    CHECK(testFontWeight() == 0);
     CHECK(Utf8ToUnicode("😀").length() == 1);
     // Exercise the shipped stylesheet: upstream now requires explicit CSS
     // hints to collect FB2 notes/comments into the referencing page footer.

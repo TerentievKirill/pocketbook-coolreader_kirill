@@ -154,7 +154,8 @@ class CRSettingsMenu : public CRFullScreenMenu
 #endif
 
         CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef props, int id, LVFontRef font,
-                       CRGUIAcceleratorTableRef menuAccelerators, lvRect & rc );
+                       CRGUIAcceleratorTableRef menuAccelerators, lvRect & rc,
+                       lString32 scope = lString32() );
         virtual bool onCommand( int command, int params );
         virtual ~CRSettingsMenu()
         {

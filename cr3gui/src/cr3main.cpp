@@ -11,6 +11,7 @@
 
 #include "cr3main.h"
 #include "mainwnd.h"
+#include "lvperf.h"
 
 bool loadKeymaps( CRGUIWindowManager & winman, const char * keymapFile, const char * locations[] )
 {
@@ -204,8 +205,9 @@ bool getDirectoryFonts( lString32Collection & pathList, lString32Collection & ex
 }
 #endif
 
-bool InitCREngine( const char * exename, lString32Collection & fontDirs )
+bool InitCREngine( const char * exename, lString32Collection & fontDirs, lString32 fontCachePath )
 {
+    LVPerfScope timing("startup.fonts");
     CRLog::trace("InitCREngine(%s)", exename);
 
 #ifndef POCKETBOOK_FW6
@@ -236,6 +238,7 @@ bool InitCREngine( const char * exename, lString32Collection & fontDirs )
     //const char * fontDir8s = fontDir8.c_str();
     //InitFontManager( fontDir8 );
     InitFontManager(lString8::empty_str);
+    fontMan->BeginFontMetadataCache(fontCachePath);
 
     // Load font definitions into font manager
     // fonts are in files font1.lbf, font2.lbf, ... font32.lbf

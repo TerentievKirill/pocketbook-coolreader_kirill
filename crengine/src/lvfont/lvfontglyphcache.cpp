@@ -26,7 +26,7 @@
 
 void LVFontGlobalGlyphCache::refresh(LVFontGlyphCacheItem *item) {
     FONT_GLYPH_CACHE_GUARD
-    if (tail != item) {
+    if (head != item) {
         //move to head
         removeNoLock(item);
         putNoLock(item);
@@ -69,8 +69,6 @@ void LVFontGlobalGlyphCache::removeNoLock(LVFontGlyphCacheItem *item) {
         head = item->next_global;
     if (item == tail)
         tail = item->prev_global;
-    if (!head || !tail)
-        return;
     if (item->prev_global)
         item->prev_global->next_global = item->next_global;
     if (item->next_global)
@@ -176,8 +174,6 @@ void LVLocalGlyphCacheListStorage::remove(LVFontGlyphCacheItem *item)
         head = item->next_local;
     if (item == tail)
         tail = item->prev_local;
-    if (!head || !tail)
-        return;
     if (item->prev_local)
         item->prev_local->next_local = item->next_local;
     if (item->next_local)

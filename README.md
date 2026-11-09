@@ -1,10 +1,11 @@
 # CoolReader for PocketBook
 
-[Downloads](https://pocketbook.nimbushub.eu/) · [Installation](https://pocketbook.nimbushub.eu/installation.html) · [Release 1.0.5](https://github.com/dderugin/pocketbook-coolreader/releases/tag/v1.0.5)
+[Downloads](https://pocketbook.nimbushub.eu/) · [Installation](https://pocketbook.nimbushub.eu/installation.html) · [Release 1.0.6](https://github.com/dderugin/pocketbook-coolreader/releases/tag/v1.0.6)
 
-Release **1.0.5** improves page copying, prepares the next page during idle time,
-and preserves cached book text when battery, frontlight or clock indicators change.
-Full-buffer copies use bulk transfers with clipping, format and stride checks.
+Release **1.0.6** adds grouped settings with larger controls and a font sample,
+quarter-step font weights, faster font and page caches, and more reliable saving
+of reading position and preferences. Book layout changes apply once on Done.
+It retains the faster page copying, idle prefetch and cached status updates from 1.0.5.
 
 It provides one shared ARMv7 Linux executable and install ZIP for
 the four models below. Firmware snapshots used for verification:
@@ -16,7 +17,7 @@ the four models below. Firmware snapshots used for verification:
 | Era / PB700 | U700.6.10.3209 |
 | InkPad 4 / PB743G | U743g.6.11.1683 |
 
-Seventeen ARM regression groups and thirteen
+Twenty ARM regression groups and thirteen
 software probes on each additional firmware pass; interactive hardware testing
 and end-to-end device OTA acceptance remain pending. Firmware builds are no
 longer restricted to this list; unknown models and API levels below 6.10 are rejected. See the [device matrix](DEVICE-SUPPORT.md) and
@@ -41,8 +42,9 @@ now record executable-stack requirements and exercise the actual startup entry
 point on all four runtimes. The reported InkPad 4 failure has no device logs yet;
 this release does not establish that its cause is resolved on hardware.
 
-Every model uses the same download and Wi-Fi update channel. **Settings → Check
-for updates** checks manually; automatic checks are optional. **Settings → Version**
+Every model uses the same download and Wi-Fi update channel. **Settings → About &
+updates → Check for updates** checks manually; automatic checks are optional.
+**Settings → About & updates → Version**
 shows the installed release. Moving from the earlier PB632-only release requires
 one USB installation of the shared package and launcher; later shared releases
 can update over Wi-Fi.
@@ -64,6 +66,22 @@ then open **Applications → CoolReader**. For Library’s **Open with** menu,
 follow the [file-association instructions](https://pocketbook.nimbushub.eu/installation.html#file-associations).
 
 See [the shared guide](README-pocketbook-armv7.txt) for backups and troubleshooting.
+
+**Settings → Font & text → Font weight** offers 0 through 1.75 in steps of 0.25.
+Choices include short hints: 0 (Normal), 0.25 (Slightly heavier), 0.5 (Medium),
+0.75 (Semi-bold), 1 (Bold), 1.25 (Extra bold), 1.5 (Heavy) and 1.75 (Extra heavy).
+0 is the original Normal setting and 1 is the original Bold setting.
+Existing Normal/Bold preferences retain their appearance. The effect depends
+on the selected font and size; the renderer uses available font variants or
+synthesizes intermediate weights. Status-line weight remains Normal/Bold.
+
+Firmware 6 settings are grouped into Font & text, Page layout, Screen & sleep,
+Controls, Advanced, and About & updates. Larger labels, explicit two-choice
+buttons and size/margin steppers make changes easier to read and select.
+A font sample shows the staged face, size and weight without reformatting the
+book. Done applies changes from any settings submenu; Back returns to the
+parent, and Cancel on the main settings screen discards pending changes.
+The header identifies whether settings belong to this book or reader defaults.
 
 ## Build and test
 
@@ -97,7 +115,7 @@ List enabled targets with `python3 tools/targets.py --list`.
 
 The first run downloads approximately 1.1 GB of pinned SDK/firmware archives,
 verifies their SHA-256 hashes, prepares the Linux build environment, builds the
-ARM executable, and runs all sixteen ARM/QEMU regression groups and package
+ARM executable, and runs all twenty ARM/QEMU regression groups and package
 checks. No remote build server or connected PocketBook is required.
 
 Artifacts are written to `dist/`:
@@ -131,7 +149,7 @@ export POCKETBOOK_SDK="$PWD/work/sdk/SDK-B288-6.10"
 bash tools/build-touch-hd3.sh
 ```
 
-The script builds the ARM application, keeps debug symbols, runs sixteen ARM/QEMU
+The script builds the ARM application, keeps debug symbols, runs nineteen ARM/QEMU
 regression groups and checks packaging evidence before producing
 `dist/coolreader-touch-hd3-fw6.11.2001-dev.zip` and its SHA-256 file.
 Set `CR3_REVISION` to label a candidate and `CR3_BUILD_DIR` to use another build
@@ -193,3 +211,38 @@ SSH and FTP app for PocketBook Touch HD 3 / PB632. Its page includes USB
 installation, password setup, the SSH pipe-shell command, FTP client settings,
 security limits and troubleshooting. CoolReader is not required. Easy Connect
 has separate code and downloads in [its repository](https://github.com/dderugin/pocketbook-easy-connect).
+
+## Responsiveness and saved state
+
+PocketBook builds use a 512 KiB font glyph cache with hash lookup and corrected
+least-recently-used eviction. Three page images retain the current page and its
+neighbors. Idle prefetch follows the last page-turn direction and prepares only
+one neighbor per callback. Narrow screen changes compare/copy only their aligned
+pixel region; grayscale refresh decisions account for both old and new pixels.
+Document-cache writes use a cooperative 20 ms budget per idle slice. Individual
+storage operations can exceed that budget; input latency still needs device timing.
+
+Font headers are cached at `system/state/cr3/font-metadata-v1.ini` and reused only
+when file identity, size and nanosecond modification/change timestamps match.
+The cache is versioned, checksummed, optional and rebuilt after corruption.
+Installed font order and font-list hashes are preserved. Its first write and
+standby-cover generation run after an idle delay rather than during first display.
+
+Reading history and preferences are separate from these disposable caches.
+Current position is checkpointed after about 1.5 seconds of idle time, with a
+15-second deadline during continued input. Sleep and task-switch paths save
+synchronously. Explicit navigation wins over pending position restoration after
+layout changes. Settings changes still save immediately; font shortcuts synchronize
+the actual engine values, retaining the requested size rather than a DPI-scaled
+display size. Unchanged settings avoid redundant writes, failed saves
+retry, and valid `.bak` files recover unreadable state files without overwriting the
+recovery backup with a damaged primary. Sudden power loss before a checkpoint can
+still lose the most recent page turn.
+
+For on-device timing, launch the application with `CR3_PERF=1`. Standard-error
+logs record microseconds for font initialization, document parsing/layout, page
+images, screen flushes, prefetch, cover preparation and reading-state checkpoints.
+Timing is off by default. `CR3_DISABLE_PAGE_PREFETCH=1` and
+`CR3_DISABLE_FONT_METADATA_CACHE=1` allow controlled comparisons with the same
+executable. Record median and slowest page turns, cold/warm opening, and input
+latency while saving; emulation does not measure panel or storage latency.

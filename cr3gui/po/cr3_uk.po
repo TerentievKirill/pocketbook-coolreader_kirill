@@ -1933,3 +1933,115 @@ msgstr "Встановлено системна тема користувача.
 #: ../src/cr3pocketbook.cpp:5848
 msgid "Restored default system theme. CR3 will now restart."
 msgstr "Встановлено звичайна системна тема. CR3 буде перезавантажено."
+
+#: ../src/settings.cpp
+msgid "Slightly heavier"
+msgstr "Трохи жирніший"
+
+#: ../src/settings.cpp
+msgid "Medium"
+msgstr "Середній"
+
+#: ../src/settings.cpp
+msgid "Semi-bold"
+msgstr "Напівжирний"
+
+#: ../src/settings.cpp
+msgid "Extra bold"
+msgstr "Дуже жирний"
+
+#: ../src/settings.cpp
+msgid "Heavy"
+msgstr "Товстий"
+
+#: ../src/settings.cpp
+msgid "Extra heavy"
+msgstr "Дуже товстий"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Font & text"
+msgstr "Шрифт і текст"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Page layout"
+msgstr "Оформлення сторінки"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Screen & sleep"
+msgstr "Екран і сон"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Advanced"
+msgstr "Додатково"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "About & updates"
+msgstr "Про програму й оновлення"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Font face, size, weight and spacing"
+msgstr "Гарнітура, розмір, насиченість та інтервали"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Margins, hyphenation and footnotes"
+msgstr "Поля, переноси та виноски"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Refresh, orientation and status line"
+msgstr "Оновлення, поворот і рядок стану"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Rendering, document styles and cache"
+msgstr "Відтворення, стилі документа й кеш"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Version and software updates"
+msgstr "Версія та оновлення програми"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Reader defaults"
+msgstr "Типові налаштування"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Format defaults"
+msgstr "Налаштування формату"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "This book"
+msgstr "Ця книга"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Font sample"
+msgstr "Зразок шрифту"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Done"
+msgstr "Готово"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Back"
+msgstr "Назад"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Cancel"
+msgstr "Скасувати"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Done applies changes"
+msgstr "«Готово» застосує зміни"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Changes apply on Done"
+msgstr "Зміни застосуються після «Готово»"
+
+#: ../src/settings.cpp
+msgid "Buttons, taps and gestures"
+msgstr "Кнопки, дотики та жести"
+
+#: ../src/settings.cpp
+msgid "Line spacing"
+msgstr "Міжрядковий інтервал"
+
+#: ../src/settings.cpp
+msgid "Font sample (scaled to fit)"
+msgstr "Зразок шрифту (масштабовано)"

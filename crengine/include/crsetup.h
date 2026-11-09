@@ -139,6 +139,10 @@
 
 // PocketBook migration bootstrap: retain the previous dependency footprint.
 #ifdef POCKETBOOK_FW6
+#undef USE_GLYPHCACHE_HASHTABLE
+#undef GLYPH_CACHE_SIZE
+#define USE_GLYPHCACHE_HASHTABLE 1
+#define GLYPH_CACHE_SIZE 0x80000
 #undef USE_ZSTD
 #undef USE_HARFBUZZ
 #undef USE_FRIBIDI

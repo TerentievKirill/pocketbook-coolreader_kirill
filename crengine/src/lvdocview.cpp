@@ -39,6 +39,7 @@
 #include "../include/crsetup.h"
 #include "../include/fb2def.h"
 #include "../include/lvdocview.h"
+#include "../include/lvperf.h"
 #include "../include/rtfimp.h"
 
 #include "../include/lvstyles.h"
@@ -776,6 +777,7 @@ bool LVDocView::isPageImageReady( int delta )
 /// get page image
 LVDocImageRef LVDocView::getPageImage( int delta )
 {
+    LVPerfScope timing("page.image");
 	checkPos();
 	// find existing object in cache
 	LVDocImageRef ref;
@@ -2390,7 +2392,10 @@ int LVDocView::SetPos(int pos, bool savePos, bool allowScrollAfterEnd) {
 			_page = 0;
 		}
 	}
-	if (savePos)
+    // An explicit move wins over a pending restore from an older layout.
+    // getBookmark() calls checkPos(), so commit before capturing the pointer.
+    _posIsSet = true;
+    if (savePos)
 		_posBookmark = getBookmark();
 	_posIsSet = true;
 	updateScroll();
@@ -2442,6 +2447,7 @@ bool LVDocView::goToPage(int page, bool updatePosBookmark, bool regulateTwoPages
 			res = false;
 		}
 	}
+    _posIsSet = true;
     if (updatePosBookmark) {
         _posBookmark = getBookmark();
     }
@@ -3044,6 +3050,7 @@ void LVDocView::setRenderProps(int dx, int dy) {
 }
 
 void LVDocView::Render(int dx, int dy, LVRendPageList * pages) {
+    LVPerfScope timing("document.layout");
 	LVLock lock(getMutex());
 	{
 		if (!m_doc || m_doc->getRootNode() == NULL)
@@ -5089,6 +5096,7 @@ void LVDocView::insertBookmarkPercentInfo(int start_page, int end_y, int percent
 }
 
 bool LVDocView::ParseDocument() {
+    LVPerfScope timing("document.parse-or-cache");
 
 	createEmptyDocument();
 
@@ -6762,7 +6770,7 @@ void LVDocView::propsUpdateDefaults(CRPropRef props) {
 #if CR_INTERNAL_PAGE_ORIENTATION==1
     props->limitValueMinMax( PROP_ROTATE_ANGLE, 0, 3, 0 );
 #endif
-    static int int_option_weight[] = { 100, 200, 300, 400, 425, 450, 475, 500, 525, 550, 600, 650, 700, 800, 900, 950 };
+    static int int_option_weight[] = { 100, 200, 300, 400, 425, 450, 475, 500, 525, 550, 600, 625, 650, 700, 775, 800, 850, 900, 925, 950 };
     props->limitValueList(PROP_FONT_BASE_WEIGHT, int_option_weight, sizeof(int_option_weight) / sizeof(int), 3);
 #ifndef ANDROID
     props->setBoolDef(PROP_EMBEDDED_STYLES, true);
@@ -6957,8 +6965,14 @@ CRPropRef LVDocView::propsApply(CRPropRef props) {
                 REQUEST_RENDER("Setting shaping mode");
             }
         } else if (name == PROP_FONT_WEIGHT_EMBOLDEN) {
-            // Preserve the existing PocketBook Normal/Bold preference.
-            int weight = props->getBoolDef(PROP_FONT_WEIGHT_EMBOLDEN, false) ? 700 : 400;
+            // Keep legacy 0/1 appearances while allowing quarter-step strengths.
+            // Parse with a fixed decimal separator, regardless of UI language.
+            double strength = 0;
+            if (!value.atod(strength, '.'))
+                strength = props->getBoolDef(PROP_FONT_WEIGHT_EMBOLDEN, false) ? 1 : 0;
+            if (strength < 0) strength = 0;
+            if (strength > 1.75) strength = 1.75;
+            int weight = 400 + (int)(strength * 300 + 0.5);
             m_props->setInt(PROP_FONT_BASE_WEIGHT, weight);
             if (LVRendGetBaseFontWeight() != weight) {
                 LVRendSetBaseFontWeight(weight);

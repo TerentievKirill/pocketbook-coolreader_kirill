@@ -139,7 +139,7 @@
 // PocketBook frontend properties retained for configuration compatibility.
 #define PROP_FONT_EMBOLDING          "font.embolding" // currently supported: -16..64
 #define PROP_FONT_TRACKING           "crengine.style.tracking"
-#define PROP_FONT_WEIGHT_EMBOLDEN    "font.face.weight.embolden"
+#define PROP_FONT_WEIGHT_EMBOLDEN    "font.face.weight.embolden" // PocketBook strength: 0..1.75; legacy 0=Normal, 1=Bold
 #define PROP_FALLBACK_FONT_FACE      "crengine.font.fallback.face"
 #define PROP_STATUS_FONT_EMBOLDEN    "crengine.page.header.font.embolden"
 #define PROP_DISPLAY_STANDBY         "crengine.display.standby"

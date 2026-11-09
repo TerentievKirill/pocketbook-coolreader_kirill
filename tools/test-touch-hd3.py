@@ -30,8 +30,8 @@ runtime = firmware / 'runtime'
 out = build / 'arm-regressions'
 out.mkdir(exist_ok=True)
 makeflags = (build / 'crengine/CMakeFiles/crengine.dir/flags.make').read_text()
-def flags(name):
-    return shlex.split(re.search(r'^' + name + r' = (.*)$', makeflags, re.M).group(1))
+def flags(name, contents=makeflags):
+    return shlex.split(re.search(r'^' + name + r' = (.*)$', contents, re.M).group(1))
 options = flags('CXX_DEFINES') + flags('CXX_INCLUDES') + flags('CXX_FLAGS')
 options += ['-I' + str(build / 'cr3gui')]
 if profile['build']['cmake'].get('CR3_SHARED_PACKAGE') == 'ON':
@@ -181,6 +181,9 @@ for name, sources, engine, arguments in [
     ('standby-frontlight', ['tests/standby-frontlight.cpp'], False, []),
     ('css-null-ancestor', ['tests/css-selector-null-ancestor.cpp'], True, []),
     ('gray-buffer-copy', ['tests/gray-buffer-copy.cpp'], True, []),
+    ('performance-caches', ['tests/performance-caches.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', out]),
+    ('reader-checkpoint', ['tests/reader-checkpoint.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', firmware / 'ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', firmware / 'ebrmain/cramfs/fonts/DroidSans.ttf', out]),
+    ('settings-editor', ['tests/settings-editor.cpp', 'cr3gui/src/settings.cpp', 'cr3gui/src/fsmenu.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', firmware / 'ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', build / 'cr3gui/pb631fw5.cr3skin', out]),
     ('skin-language-symbol', ['tests/skin-language-symbol.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', firmware / 'ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', build / 'cr3gui/pb631fw5.cr3skin', out]),
     ('document-render', ['tests/document-render-startup.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', firmware / 'ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', firmware / 'ebrmain/cramfs/fonts/DroidSans.ttf', root / profile['package']['assets'] / 'cr3-defaults.ini', root / 'cr3gui/data/hyph/', epub, root / 'cr3gui/data/fb2.css']),
     ('reading-state-migration', ['tests/reading-state-migration.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', out / 'migration.fb2', out / 'migration.zip']),
@@ -194,7 +197,12 @@ for name, sources, engine, arguments in [
     ('atomic-faults', ['tests/atomic-faults.cpp'], True, [out]),
 ]:
     binary = out / name
-    command = [compiler] + options + sources
+    test_options = options
+    if name == 'settings-editor':
+        # The real menu must exercise the application's OTA/touch feature flags.
+        app_flags = (build / 'cr3gui/CMakeFiles/cr3-pb.app.dir/flags.make').read_text()
+        test_options = flags('CXX_DEFINES', app_flags) + flags('CXX_INCLUDES', app_flags) + flags('CXX_FLAGS', app_flags)
+    command = [compiler] + test_options + sources
     if engine:
         command += ['-Wl,--exclude-libs,ALL', '-Wl,--start-group'] + libraries + ['-Wl,--end-group', '-linkview'] + ['-l' + name for name in dependencies['runtime']]
     subprocess.run([str(x) for x in command + ['-o', binary]], check=True)

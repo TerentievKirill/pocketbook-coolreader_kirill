@@ -12,6 +12,7 @@ REQUIRED_TESTS = {
     'frontlight-status', 'ota-ui', 'ota-package', 'reference-initialization', 'css-null-ancestor', 'skin-language-symbol',
     'dependency-compatibility', 'web-tls', 'standby-frontlight',
     'gray-buffer-copy',
+    'performance-caches', 'reader-checkpoint', 'settings-editor',
     'document-render', 'reading-state-migration', 'dictionary-safety', 'history-persistence', 'archive-boundaries', 'atomic-faults',
 }
 

@@ -1148,6 +1148,7 @@ class CRMenuItem
         virtual bool isMainMenu() const { return false; }
         /// called on item selection
         virtual int onSelect() { return 0; }
+        virtual bool isSettingsPreview() const { return false; }
         virtual ~CRMenuItem() { }
         /// submenu for options dialog support
         virtual lString32 getSubmenuValue() { return lString32::empty_str; }
@@ -1173,6 +1174,13 @@ class CRMenu : public CRGUIWindowBase, public CRMenuItem {
         int _selectedItem;
         bool _pageUpdate;
         CRMenuSkinRef _skin;// = _wm->getSkin()->getMenuSkin( path.c_str() );
+        bool _settingsEditor = false;
+        bool _settingsStepper = false;
+        int _settingsDpi = 300;
+        lString32 _settingsScope;
+        CRPropRef _settingsBaseline;
+        LVFontRef _settingsLabelFont, _settingsValueFont;
+        virtual void drawTitleBar();
         virtual bool hasTouchSettingsNavigation() const {
             return _fullscreen && _skinName == U"#settings" &&
                    _wm->getScreen()->isTouchSupported();
@@ -1186,6 +1194,17 @@ class CRMenu : public CRGUIWindowBase, public CRMenuItem {
         void doCloseMenu(int command, bool highlight = false, int param = 0);
     public:
         virtual void highlightCommandItem( int cmd );
+        CRMenu *settingsRoot() const;
+        bool isSettingsEditor() const { return settingsRoot() != NULL; }
+        void enableSettingsEditor(CRPropRef props, lString32 scope, int dpi = 300);
+        void captureSettingsBaseline();
+        bool settingsChanged() const;
+        LVFontRef settingsFont(bool value = false);
+        void setSettingsStepper(bool enabled = true) { _settingsStepper = enabled; }
+        bool hasInlineSetting() const;
+        void drawSettingsItem(CRMenuItem &item, LVDrawBuf &buf, lvRect rc, bool selected);
+        void updateSettingsValue(int item, int option, bool step);
+        void invalidateSettingsValues();
         /// returns index of selected item, -1 if no item selected
         virtual int getSelectedItemIndex();
         virtual int getDefaultSelectionIndex() {
@@ -1457,7 +1476,8 @@ public:
 enum CRGuiButtons {
     BTN_CLOSE = -1,
     BTN_SCROLL_DOWN = -2,
-    BTN_SCROLL_UP = -3
+    BTN_SCROLL_UP = -3,
+    BTN_SETTINGS_DONE = -4
 };
 
 class CRButtonControl : public CRGUIControl

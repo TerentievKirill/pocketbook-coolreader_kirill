@@ -18,6 +18,10 @@
 #include <inkview.h>
 #include "pbdictionary.h"
 #include "pbgrayupdate.h"
+#include "pbscreenupdate.h"
+#include "pbprefetch.h"
+#include "pbcheckpoint.h"
+#include "lvperf.h"
 #include "pb_device_profile.h"
 #ifdef POCKETBOOK_FW6
 #include "pbstandbyfrontlight.h"
@@ -656,9 +660,13 @@ public:
         return CRGUIWindowManager::onKeyPressed(key, flags);
     }
 #ifdef BACKGROUND_CACHE_FILE_CREATION
-    void scheduleCacheSwap()
+    void scheduleCacheSwap(int delay = 1500)
     {
-        SetHardTimer(const_cast<char *>("UpdateCacheTimer"), cache_timer, 1500);
+#ifdef POCKETBOOK_FW6
+        SetWeakTimer("UpdateCacheTimer", cache_timer, delay);
+#else
+        SetHardTimer(const_cast<char *>("UpdateCacheTimer"), cache_timer, delay);
+#endif
     }
     void cancelCacheSwap()
     {
@@ -668,17 +676,24 @@ public:
 #endif
 };
 
+int main_handler(int type, int par1, int par2);
+
 CRPocketBookWindowManager * CRPocketBookWindowManager::instance = NULL;
 V3DocViewWin * main_win = NULL;
 
 #ifdef BACKGROUND_CACHE_FILE_CREATION
 void CRPocketBookWindowManager::updateCache()
 {
-    CRTimerUtil timeout(500);
-    if (m_incommand || !_events.empty() ||
-        main_win != getTopVisibleWindow() ||
-        CR_TIMEOUT == main_win->getDocView()->updateCache(timeout))
+    if (!main_win || exiting || isStandByMode || !IsTaskActive()) return;
+    if (m_incommand || !_events.empty() || isTouchMenuVisible ||
+        main_win != getTopVisibleWindow() || GetEventHandler() != main_handler) {
         scheduleCacheSwap();
+        return;
+    }
+    LVPerfScope timing("cache.save-slice");
+    CRTimerUtil timeout(20);
+    if (CR_TIMEOUT == main_win->getDocView()->updateCache(timeout))
+        scheduleCacheSwap(250);
 }
 
 static void cache_timer()
@@ -744,6 +759,11 @@ int listTocHandler(int action, int x, int y, int idx, int state)
 int main_handler(int type, int par1, int par2);
 #ifdef POCKETBOOK_FW6
 static void prefetchPageTimer();
+static bool need_save_cover = false;
+static void prepareStandbyCover();
+static void scheduleCoverPreparation();
+static void coverPreparationTimer();
+static void scheduleReaderCheckpoint();
 static void schedulePagePrefetch();
 #endif
 
@@ -758,20 +778,7 @@ void handle_LinksContextMenu(int index)
 
 void Draw4Bits(LVDrawBuf & src, lUInt8 *dest, int x, int y, int w, int h)
 {
-    lUInt8 * line = src.GetScanLine(y);
-    int limit = x + w -1;
-    int scanline = (w + 1)/2;
-
-    for (int yy = 0; yy < h; yy++) {
-        int sx = x;
-        for (int xx = 0; xx < scanline; xx++) {
-            dest[xx] = line[sx++] & 0xF0;
-            if (sx < limit)
-                dest[xx] |= (line[sx++] >> 4);
-        }
-        line += src.GetRowSize();
-        dest += scanline;
-    }
+    pbPackGray4(src, dest, x, y, w, h);
 }
 
 ibitmap* LVImageSourceRef_to_ibitmab(LVImageSourceRef &img) {
@@ -801,66 +808,24 @@ void CRPocketBookScreen::draw(int x, int y, int w, int h)
         Draw4Bits(*_front, _buf4bpp, x, y, w, h);
         Stretch(_buf4bpp, IMAGE_GRAY4, w, h, (w + 1)/2, x, y, w, h, 0);
     } else
-        Stretch(_front->GetScanLine(y), m_bpp, w, h, _front->GetRowSize(), x, y, w, h, 0);
+        Stretch(_front->GetScanLine(y) + (m_bpp == 2 ? x/4 : x), m_bpp, w, h, _front->GetRowSize(), x, y, w, h, 0);
 }
 
 void CRPocketBookScreen::flush( bool full )
 {
+    LVPerfScope timing("screen.flush");
     if ( _updateRect.isEmpty() && !full && !getTurboUpdateEnabled() ) {
         CRLog::trace("CRGUIScreenBase::flush() - update rectangle is empty");
         return;
     }
     if ( !_front.isNull() && !_updateRect.isEmpty() && !full ) {
-        // calculate really changed area
-        lvRect rc;
-        lvRect lineRect(_updateRect);
-        _update_gray = false;
-        int sz = _canvas->GetRowSize();
-        for ( int y = _updateRect.top; y < _updateRect.bottom; y++ ) {
-            if ( y>=0 && y<_height ) {
-                lUInt8 * line1 = _canvas->GetScanLine( y );
-                lUInt8 * line2 = _front->GetScanLine( y );
-                if ( memcmp( line1, line2, sz ) ) {
-                    // check if gray pixels changed
-                    if (m_bpp == 2) {
-                        for (int i = 0; !_update_gray && i < sz; i++) {
-                            if (line1[i] != line2[i]) {
-                                _update_gray = pbGray2Changed(line2[i], line1[i]);
-                                if (_update_gray)
-                                    CRLog::trace("gray(%d) at [%d, %d]", line1[i], i, y);
-                            }
-                        }
-                    } else if (m_bpp == 4) {
-                        for (int i = 0; !_update_gray && i < sz; i++) {
-                            if (line1[i] != line2[i])
-                                _update_gray = line1[i] != 0 && line1[i] != 0xF0;
-                            if (_update_gray)
-                                CRLog::trace("gray(%d) at [%d, %d]", line1[i], i, y);
-                        }
-                    } else if (m_bpp == 8) {
-                        for (int i = 0; !_update_gray && i < sz; i++) {
-                            if (line1[i] != line2[i])
-                                _update_gray = line1[i] != 0 && (line1[i] > 64 && line1[i] < 192);
-                            if (_update_gray)
-                                CRLog::trace("gray(%d) at [%d, %d]", line1[i], i, y);
-                        }
-                    }
-                    // line content is different
-                    lineRect.top = y;
-                    lineRect.bottom = y+1;
-                    rc.extend( lineRect );
-                    // copy line to front buffer
-                    memcpy( line2, line1, sz );
-                }
-            }
-        }
+        lvRect rc = pbSyncScreenRegion(*_canvas, *_front, _updateRect, _update_gray);
         if ( rc.isEmpty() ) {
             // no actual changes
             _updateRect.clear();
             return;
         }
-        _updateRect.top = rc.top;
-        _updateRect.bottom = rc.bottom;
+        _updateRect = rc;
     }
     if ( full) {
         _updateRect = getRect();
@@ -871,6 +836,7 @@ void CRPocketBookScreen::flush( bool full )
     update( _updateRect, full );
     _updateRect.clear();
 #ifdef POCKETBOOK_FW6
+    scheduleReaderCheckpoint();
     schedulePagePrefetch();
 #endif
 }
@@ -900,13 +866,13 @@ void CRPocketBookScreen::update( const lvRect & rc2, bool full )
         FullUpdate();
         resetFullUpdateCounter();
     } else {
-        draw(0, rc.top, _front->GetWidth(), rc.height());
+        draw(rc.left, rc.top, rc.width(), rc.height());
         if (!isDocWnd && rc.height() < 300) {
             if (_update_gray && !forcePartialBwUpdates) {
-                PartialUpdate(rc.left, rc.top, rc.right, rc.bottom);
+                PartialUpdate(rc.left, rc.top, rc.width(), rc.height());
                 CRLog::trace("PartialUpdate(%d, %d, %d, %d)", rc.left, rc.top, rc.right, rc.bottom);
             } else {
-                PartialUpdateBW(rc.left, rc.top, rc.right, rc.bottom);
+                PartialUpdateBW(rc.left, rc.top, rc.width(), rc.height());
                 CRLog::trace("PartialUpdateBW(%d, %d, %d, %d)", rc.left, rc.top, rc.right, rc.bottom);
             }
         } else if( !forcePartialBwUpdates ) {
@@ -4867,7 +4833,11 @@ int InitDoc(const char *exename, char *fileName)
     fontDirs.add(lString32(U""USERDATA"/share/cr3/fonts"));
     fontDirs.add(lString32(U""USERDATA2"/fonts"));
     CRLog::info("INIT...");
+#ifdef POCKETBOOK_FW6
+    if (!InitCREngine(exename, fontDirs, lString32(STATEPATH "/cr3/font-metadata-v1.ini")))
+#else
     if (!InitCREngine(exename, fontDirs))
+#endif
         return 0;
 
     {
@@ -5195,12 +5165,43 @@ lString32 getPbModelNumber() {
 }
 
 #ifdef POCKETBOOK_PRO
-void SetSaveStateTimer(){
-    if (exiting || !CRPocketBookDocView::instance) return;
-    exiting = true;
-    CRPocketBookDocView::instance->closing();
-    exiting = false;
+#ifdef POCKETBOOK_FW6
+static PBCheckpointPolicy checkpointPolicy;
+static void readerCheckpointTimer();
+static void scheduleReaderCheckpoint() {
+    if (!main_win || exiting || isStandByMode || !IsTaskActive()) return;
+    LVDocView *view = main_win->getDocView();
+    if (!view->IsDrawed()) return; // Saving must not start a cold layout from idle.
+    lInt64 now = CRTimerUtil::getSystemTimeMillis();
+    checkpointPolicy.observe(view->getDocument(), view->GetPos(), now, main_win->needsStateRetry());
+    int delay = checkpointPolicy.delay(now);
+    ClearTimer(readerCheckpointTimer);
+    if (delay >= 0) SetWeakTimer("ReaderCheckpoint", readerCheckpointTimer, delay);
 }
+#endif
+void SetSaveStateTimer() {
+    if (exiting || !CRPocketBookDocView::instance) return;
+    LVPerfScope timing("state.checkpoint");
+    if (CRPocketBookDocView::instance->checkpointState()) {
+#ifdef POCKETBOOK_FW6
+        checkpointPolicy.saved();
+#endif
+        if (pbGlobals) pbGlobals->saveState(main_win->getDocView()->getCurPage(), main_win->getDocView()->getPageCount());
+    }
+}
+#ifdef POCKETBOOK_FW6
+static void readerCheckpointTimer() {
+    if (exiting || isStandByMode || !IsTaskActive()) return;
+    if (!main_win || !main_win->getDocView()->IsDrawed() || GetEventHandler() != main_handler) {
+        SetWeakTimer("ReaderCheckpoint", readerCheckpointTimer, 1500);
+        return;
+    }
+    SetSaveStateTimer();
+    // Failed writes are retried without waiting for the next input.
+    if (main_win && main_win->needsStateRetry())
+        SetWeakTimer("ReaderCheckpoint", readerCheckpointTimer, 5000);
+}
+#endif
 
 #ifdef POCKETBOOK_PRO_FW5
 
@@ -5320,15 +5321,34 @@ bool pbCanShowUpdatePrompt() {
 
 // Weak, one-shot timer: never keeps the device awake and never renders while
 // hidden, asleep, in a native dialog or in a menu. No engine threads involved.
+static PBPrefetchDirection prefetchDirection;
 static void prefetchPageTimer() {
     if (!pbCanShowUpdatePrompt() || isTouchMenuVisible) return;
-    main_win->getDocView()->prepareAdjacentPage(1);
+    LVPerfScope timing("page.prefetch");
+    LVDocView *view = main_win->getDocView();
+    int direction = prefetchDirection.direction();
+    // One page per idle callback; return to input handling between neighbors.
+    if (view->prepareAdjacentPage(direction))
+        SetWeakTimer("PagePrefetch", prefetchPageTimer, 150);
+    else
+        view->prepareAdjacentPage(-direction);
 }
 static void schedulePagePrefetch() {
     ClearTimer(prefetchPageTimer);
-    // Allows repeatable on-device A/B timing with the same executable.
-    if (!getenv("CR3_DISABLE_PAGE_PREFETCH") && pbCanShowUpdatePrompt())
+    if (!getenv("CR3_DISABLE_PAGE_PREFETCH") && pbCanShowUpdatePrompt()) {
+        LVDocView *view = main_win->getDocView();
+        if (view->IsDrawed())
+            prefetchDirection.observe(view->getDocument(), view->getCurPage());
         SetWeakTimer("PagePrefetch", prefetchPageTimer, 350);
+    }
+}
+static void coverPreparationTimer() {
+    if (pbCanShowUpdatePrompt() && !isTouchMenuVisible) prepareStandbyCover();
+}
+static void scheduleCoverPreparation() {
+    ClearTimer(coverPreparationTimer);
+    if (need_save_cover && pbCanShowUpdatePrompt())
+        SetWeakTimer("CoverPreparation", coverPreparationTimer, 1200);
 }
 #endif
 
@@ -5378,12 +5398,20 @@ void restartStandByTimer();
 void enterStandByMode() {
 #ifdef POCKETBOOK_FW6
     ClearTimer(prefetchPageTimer);
+    ClearTimer(coverPreparationTimer);
+#ifdef BACKGROUND_CACHE_FILE_CREATION
+    CRPocketBookWindowManager::instance->cancelCacheSwap();
+#endif
     OTA_backgroundActive(false);
     setFrontlightStatusActive(false);
 #endif
 
     if( isStandByMode )
         return;
+#ifdef POCKETBOOK_FW6
+    ClearTimer(readerCheckpointTimer);
+    SetSaveStateTimer();
+#endif
 
     #if defined(POCKETBOOK_PRO) && !defined(POCKETBOOK_PRO_PRO2)
 
@@ -5442,6 +5470,10 @@ void exitStandByMode() {
 #ifdef POCKETBOOK_FW6
     OTA_backgroundActive(true);
     setFrontlightStatusActive(true);
+    scheduleCoverPreparation();
+#ifdef BACKGROUND_CACHE_FILE_CREATION
+    CRPocketBookWindowManager::instance->scheduleCacheSwap();
+#endif
 #endif
     restartStandByTimer();
 }
@@ -5461,109 +5493,10 @@ void stopStandByTimer() {
     ClearTimer(enterStandByMode);
 }
 
-static bool need_save_cover = false;
-int main_handler(int type, int par1, int par2)
-{
-#ifdef POCKETBOOK_FW6
-    // Any input postpones speculative work until after the next screen paint.
-    ClearTimer(prefetchPageTimer);
-#endif
-#ifdef CR3_SHARED_PACKAGE
-    static bool rejected = false;
-    if (rejected) return 0;
-    if (type == EVT_INIT && !pbdevice::supported(GetDeviceModel(), GetSoftwareVersion())) {
-        rejected = true;
-        fprintf(stderr, "[cr3] Unsupported model/firmware: model=%s firmware=%s\n",
-                GetDeviceModel() ? GetDeviceModel() : "(unknown)",
-                GetSoftwareVersion() ? GetSoftwareVersion() : "(unknown)");
-        Message(ICON_WARNING, "CoolReader", "Unknown model or unsupported firmware API. See the included guide.", 3000);
-        CloseApp();
-        return 0;
-    }
-#endif
-
-    if( isStandByMode ) switch (type) {
-
-        // Events that restore the normal mode
-        case EVT_PREVPAGE:
-        case EVT_NEXTPAGE:
-        case EVT_ORIENTATION:
-        case EVT_POINTERUP:
-        case EVT_KEYRELEASE:
-            exitStandByMode();
-            return 0;
-
-        // Ignored events
-        case EVT_KEYPRESS:
-        case EVT_KEYREPEAT:
-        case EVT_POINTERDOWN:
-        case EVT_POINTERMOVE:
-        case EVT_POINTERLONG:
-        case EVT_SHOW:
-#ifdef EVT_POINTERDRAG
-        case EVT_POINTERDRAG:
-#endif
-            return 0;
-
-        // Anything else goes normally
-        default:
-            break;
-    }
-
-    bool process_events = false;
-    int ret = 0;
-    if (CRLog::LL_TRACE == CRLog::getLogLevel()) {
-        CRLog::trace("main_handler(%s, %d, %d)", getEventName(type), par1, par2);
-    }
-    switch (type) {
-    case EVT_SHOW:
-#ifdef POCKETBOOK_FW6
-        OTA_backgroundActive(true);
-        setFrontlightStatusActive(true);
-#endif
-
-        CRPocketBookWindowManager::instance->update(true);
-        pbGlobals->BookReady();
-
-        // CRLog::trace("COVER_OFF_SAVE");
-        // CRLog::trace(USERLOGOPATH"/bookcover");
-        if (need_save_cover) {
-
-            // Check if it's a fresh cr3 update
-            if( access( PB_FRESH_UPDATE_MARKER, F_OK ) != -1 ) {
-                Message(ICON_INFORMATION,  const_cast<char*>("CoolReader"),
-                    (
-                        lString8( _("Updated to v") ) +
-                        lString8( CR_PB_VERSION ) +
-                        lString8( " / " ) +
-                        lString8( CR_PB_BUILD_DATE )
-                    ).c_str(), 4000);
-                iv_unlink(PB_FRESH_UPDATE_MARKER);
-                #ifdef POCKETBOOK_PRO_FW5
-                removeCustomSystemTheme();
-                #endif
-            }
-
-            #if defined(POCKETBOOK_PRO) && !defined(POCKETBOOK_PRO_PRO2)
-
-            // Else full screen update
-            else {
-                FullUpdate();
-            }
-
-            #endif
-
-            // Set/Remove custom system theme
-            #ifdef POCKETBOOK_PRO_FW5
-            CRPropRef props = CRPocketBookDocView::instance->getProps();
-            if( props->getIntDef(PROP_CUSTOM_SYSTEM_THEME, 0) == 0 )
-                removeCustomSystemTheme();
-            else
-                setCustomSystemTheme();
-            #endif
-
-            // startStatusUpdateThread(5000);
-
+static void prepareStandbyCover() {
+    if (!need_save_cover || !main_win || exiting) return;
+    LVPerfScope timing("startup.cover");
+    fontMan->SaveFontMetadataCache();
             ibitmap *cover = NULL;
 
             // Get with crengine
@@ -5751,13 +5684,130 @@ int main_handler(int type, int par1, int par2)
             }
 
             need_save_cover = false;
+}
+
+int main_handler(int type, int par1, int par2)
+{
+    LVPerfScope timing(LVPerfScope::enabled() ? getEventName(type) : "input.event");
+#ifdef POCKETBOOK_FW6
+    // Any input postpones speculative work until after the next screen paint.
+    ClearTimer(prefetchPageTimer);
+    ClearTimer(coverPreparationTimer);
+#endif
+#ifdef CR3_SHARED_PACKAGE
+    static bool rejected = false;
+    if (rejected) return 0;
+    if (type == EVT_INIT && !pbdevice::supported(GetDeviceModel(), GetSoftwareVersion())) {
+        rejected = true;
+        fprintf(stderr, "[cr3] Unsupported model/firmware: model=%s firmware=%s\n",
+                GetDeviceModel() ? GetDeviceModel() : "(unknown)",
+                GetSoftwareVersion() ? GetSoftwareVersion() : "(unknown)");
+        Message(ICON_WARNING, "CoolReader", "Unknown model or unsupported firmware API. See the included guide.", 3000);
+        CloseApp();
+        return 0;
+    }
+#endif
+
+    if( isStandByMode ) switch (type) {
+
+        // Events that restore the normal mode
+        case EVT_PREVPAGE:
+        case EVT_NEXTPAGE:
+        case EVT_ORIENTATION:
+        case EVT_POINTERUP:
+        case EVT_KEYRELEASE:
+            exitStandByMode();
+            return 0;
+
+        // Ignored events
+        case EVT_KEYPRESS:
+        case EVT_KEYREPEAT:
+        case EVT_POINTERDOWN:
+        case EVT_POINTERMOVE:
+        case EVT_POINTERLONG:
+        case EVT_SHOW:
+#ifdef EVT_POINTERDRAG
+        case EVT_POINTERDRAG:
+#endif
+            return 0;
+
+        // Anything else goes normally
+        default:
+            break;
+    }
+
+    bool process_events = false;
+    int ret = 0;
+    if (CRLog::LL_TRACE == CRLog::getLogLevel()) {
+        CRLog::trace("main_handler(%s, %d, %d)", getEventName(type), par1, par2);
+    }
+    switch (type) {
+    case EVT_SHOW:
+#ifdef POCKETBOOK_FW6
+        OTA_backgroundActive(true);
+        setFrontlightStatusActive(true);
+#ifdef BACKGROUND_CACHE_FILE_CREATION
+        CRPocketBookWindowManager::instance->scheduleCacheSwap();
+#endif
+#endif
+
+        CRPocketBookWindowManager::instance->update(true);
+        pbGlobals->BookReady();
+
+        // CRLog::trace("COVER_OFF_SAVE");
+        // CRLog::trace(USERLOGOPATH"/bookcover");
+        if (need_save_cover) {
+
+            // Check if it's a fresh cr3 update
+            if( access( PB_FRESH_UPDATE_MARKER, F_OK ) != -1 ) {
+                Message(ICON_INFORMATION,  const_cast<char*>("CoolReader"),
+                    (
+                        lString8( _("Updated to v") ) +
+                        lString8( CR_PB_VERSION ) +
+                        lString8( " / " ) +
+                        lString8( CR_PB_BUILD_DATE )
+                    ).c_str(), 4000);
+                iv_unlink(PB_FRESH_UPDATE_MARKER);
+                #ifdef POCKETBOOK_PRO_FW5
+                removeCustomSystemTheme();
+                #endif
+            }
+
+            #if defined(POCKETBOOK_PRO) && !defined(POCKETBOOK_PRO_PRO2)
+
+            // Else full screen update
+            else {
+                FullUpdate();
+            }
+
+            #endif
+
+            // Set/Remove custom system theme
+            #ifdef POCKETBOOK_PRO_FW5
+            CRPropRef props = CRPocketBookDocView::instance->getProps();
+            if( props->getIntDef(PROP_CUSTOM_SYSTEM_THEME, 0) == 0 )
+                removeCustomSystemTheme();
+            else
+                setCustomSystemTheme();
+            #endif
+
+            // startStatusUpdateThread(5000);
+
+#ifndef POCKETBOOK_FW6
+            prepareStandbyCover();
+#endif
         }
         restartStandByTimer();
         break;
 #ifdef POCKETBOOK_PRO
 #ifdef POCKETBOOK_FW6
     case EVT_FOREGROUND:
-        if (!isStandByMode) { OTA_backgroundActive(true); setFrontlightStatusActive(true); }
+        if (!isStandByMode) {
+            OTA_backgroundActive(true); setFrontlightStatusActive(true);
+#ifdef BACKGROUND_CACHE_FILE_CREATION
+            CRPocketBookWindowManager::instance->scheduleCacheSwap();
+#endif
+        }
         break;
     case EVT_HIDE:
 #endif
@@ -5765,15 +5815,27 @@ int main_handler(int type, int par1, int par2)
 #ifdef POCKETBOOK_FW6
         OTA_backgroundActive(false);
         setFrontlightStatusActive(false);
+#ifdef BACKGROUND_CACHE_FILE_CREATION
+        CRPocketBookWindowManager::instance->cancelCacheSwap();
 #endif
-    	SetWeakTimer("SaveStateTimer", SetSaveStateTimer, 500);
+#endif
+#ifdef POCKETBOOK_FW6
+        ClearTimer(readerCheckpointTimer);
+        SetSaveStateTimer();
+#else
+        SetWeakTimer("SaveStateTimer", SetSaveStateTimer, 500);
+#endif
         stopStandByTimer();
         break;
 #endif
     case EVT_EXIT:
 #ifdef POCKETBOOK_FW6
+        ClearTimer(readerCheckpointTimer);
         OTA_backgroundActive(false);
         setFrontlightStatusActive(false);
+#ifdef BACKGROUND_CACHE_FILE_CREATION
+        CRPocketBookWindowManager::instance->cancelCacheSwap();
+#endif
 #endif
         exiting = true;
         stopStandByTimer();
@@ -5876,8 +5938,11 @@ int main_handler(int type, int par1, int par2)
     if (process_events)
         CRPocketBookWindowManager::instance->processPostedEvents();
 #ifdef POCKETBOOK_FW6
-    if (type != EVT_HIDE && type != EVT_BACKGROUND && type != EVT_EXIT)
+    if (type != EVT_HIDE && type != EVT_BACKGROUND && type != EVT_EXIT) {
+        scheduleReaderCheckpoint();
         schedulePagePrefetch();
+        scheduleCoverPreparation();
+    }
 #endif
     return ret;
 }

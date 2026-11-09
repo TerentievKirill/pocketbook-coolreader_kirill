@@ -1934,3 +1934,115 @@ msgstr "Byl nastaven uživatelský motiv vzhledu. CR3 se nyní restartuje."
 #: ../src/cr3pocketbook.cpp:5848
 msgid "Restored default system theme. CR3 will now restart."
 msgstr "Byl obnoven výchozí motiv vzhledu. CR3 se nyní restartuje."
+
+#: ../src/settings.cpp
+msgid "Slightly heavier"
+msgstr "Mírně silnější"
+
+#: ../src/settings.cpp
+msgid "Medium"
+msgstr "Střední"
+
+#: ../src/settings.cpp
+msgid "Semi-bold"
+msgstr "Polotučné"
+
+#: ../src/settings.cpp
+msgid "Extra bold"
+msgstr "Extra tučné"
+
+#: ../src/settings.cpp
+msgid "Heavy"
+msgstr "Silné"
+
+#: ../src/settings.cpp
+msgid "Extra heavy"
+msgstr "Extra silné"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Font & text"
+msgstr "Písmo a text"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Page layout"
+msgstr "Rozvržení stránky"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Screen & sleep"
+msgstr "Obrazovka a spánek"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Advanced"
+msgstr "Pokročilé"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "About & updates"
+msgstr "O aplikaci a aktualizace"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Font face, size, weight and spacing"
+msgstr "Typ, velikost, tloušťka písma a řádkování"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Margins, hyphenation and footnotes"
+msgstr "Okraje, dělení slov a poznámky"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Refresh, orientation and status line"
+msgstr "Obnovování, otočení a stavový řádek"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Rendering, document styles and cache"
+msgstr "Vykreslování, styly dokumentu a mezipaměť"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Version and software updates"
+msgstr "Verze a aktualizace aplikace"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Reader defaults"
+msgstr "Výchozí nastavení čtečky"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Format defaults"
+msgstr "Výchozí nastavení formátu"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "This book"
+msgstr "Tato kniha"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Font sample"
+msgstr "Ukázka písma"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Done"
+msgstr "Hotovo"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Back"
+msgstr "Zpět"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Cancel"
+msgstr "Zrušit"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Done applies changes"
+msgstr "Hotovo uloží změny"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Changes apply on Done"
+msgstr "Změny se uloží tlačítkem Hotovo"
+
+#: ../src/settings.cpp
+msgid "Buttons, taps and gestures"
+msgstr "Tlačítka, klepnutí a gesta"
+
+#: ../src/settings.cpp
+msgid "Line spacing"
+msgstr "Řádkování"
+
+#: ../src/settings.cpp
+msgid "Font sample (scaled to fit)"
+msgstr "Ukázka písma (zmenšená)"

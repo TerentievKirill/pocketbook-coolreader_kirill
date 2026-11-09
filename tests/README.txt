@@ -71,7 +71,7 @@ Packaging compares the installed defaults file with its repository source.
 
 Shared package qualification
 ----------------------------
-The current primary suite has sixteen groups. shared-device-profiles validates
+The current primary suite has nineteen groups. shared-device-profiles validates
 model normalization, exact firmware admission, general DPI defaults, saved user
 and book overrides, and actual portrait/landscape rendering at all four registered
 screen sizes. config/pocketbook-devices.json generates the production header;
@@ -163,3 +163,28 @@ Reissued 1.0.4 firmware policy coverage:
 - Startup admission on all registered models, unknown models and old/malformed firmware.
 - V2 OTA API rules, future required APIs, V1 backwards compatibility, and independent archive policy checks.
 - All four model UI update flows accept changed firmware build numbers.
+
+Performance and checkpoint regressions
+--------------------------------------
+performance-caches checks glyph LRU eviction after hits and repeated clears,
+packed 4-bit output, narrow/clipped dirty regions and gray-to-white updates,
+retention of previous/current/next page images through direction reversals, and
+cold/warm font metadata registration. Registry checks include actual glyph loads,
+identical font-list hashes, replaced/deleted files, damaged checksums and avoiding
+redundant writes.
+
+reader-checkpoint writes and reopens actual history/settings files after page and
+font changes, including stale frontend preferences, failed writes followed by a
+successful retry, backup recovery, preservation of a good recovery backup, and
+bounded checkpoint deferral during sustained input. Firmware lifecycle and actual
+flash/e-ink timing remain physical-device checks.
+
+Native grouped settings regression
+---------------------------------
+settings-editor constructs the production settings and full-screen menu classes
+with a touch screen, checking the six groups, full-screen portrait/landscape
+geometry, actual touch targets, nearest size steps and bounds, explicit weight
+pickers, sample pixel changes without a global rendering-weight change, staged
+properties, Back/Cancel/Done behavior, and native menu preview images. Hardware
+capability calls and action labels are deterministic test doubles; no firmware
+dialogs or update requests are opened.

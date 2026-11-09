@@ -15,6 +15,7 @@
 //include <unistd.h>      /* pause() */
 #include "../include/crgui.h"
 #include "../include/crtrace.h"
+#include "../include/cri18n.h"
 
 //TODO: place to skin file
 #define ITEM_MARGIN 8
@@ -983,6 +984,262 @@ public:
     }
 };
 
+static void settingsText(LVDrawBuf &buf, lvRect rc, lString32 text, LVFontRef font,
+                         lUInt32 ink, bool center = false)
+{
+    LVDrawStateSaver state(buf);
+    lvRect clip;
+    buf.GetClipRect(&clip);
+    rc.intersect(clip);
+    if (rc.isEmpty() || font.isNull()) return;
+    buf.SetClipRect(&rc);
+    while (!text.empty() && (int)font->getTextWidth(text.c_str(), text.length()) > rc.width()) {
+        if (text.endsWith(U"…")) text.erase(text.length()-1, 1);
+        if (text.empty()) break;
+        text.erase(text.length()-1, 1);
+        if (!text.empty()) text << U"…";
+    }
+    int width = font->getTextWidth(text.c_str(), text.length());
+    buf.SetTextColor(ink);
+    font->DrawTextString(&buf, center ? rc.left + (rc.width()-width)/2 : rc.left,
+                        rc.top + (rc.height()-font->getHeight())/2,
+                        text.c_str(), text.length(), U'?');
+}
+
+class CRSettingsTextButtonSkin : public CRButtonSkin {
+    LVFontRef _font;
+    lString32 _text;
+    lUInt32 _ink, _paper;
+    bool _chosen, _enabled;
+public:
+    CRSettingsTextButtonSkin(LVFontRef font, lString32 text, lUInt32 ink, lUInt32 paper,
+                             bool chosen = false, bool enabled = true)
+        : _font(font), _text(text), _ink(ink), _paper(paper), _chosen(chosen), _enabled(enabled) {}
+    virtual void drawButton(LVDrawBuf &buf, const lvRect &rect, int flags = ENABLED) {
+        bool filled = _chosen || (flags & PRESSED);
+        lUInt32 ink = _enabled ? _ink : 0x888888;
+        lvRect rc(rect);
+        rc.shrinkBy(lvRect(3,3,3,3));
+        buf.FillRect(rc, filled ? ink : _paper);
+        buf.DrawFrame(rc, ink, 1);
+        rc.shrinkBy(lvRect(8,2,8,2));
+        settingsText(buf, rc, _text, _font, filled ? _paper : ink, true);
+    }
+};
+
+class CRSettingsButtonControl : public CRButtonControl {
+    bool _enabled;
+public:
+    CRSettingsButtonControl(CRGUIWindowBase *parent, lvRect rc, CRButtonSkinRef skin,
+                            int command, int param, bool enabled = true)
+        : CRButtonControl(parent, rc, skin, param, command, param), _enabled(enabled) {}
+    virtual bool isEnabled() const { return _enabled; }
+    virtual bool onTouch(CRGUITouchEventType type) {
+        // One action on release, including after a long hold.
+        return _enabled && type != CRTOUCH_DOWN_LONG && CRButtonControl::onTouch(type);
+    }
+};
+
+CRMenu *CRMenu::settingsRoot() const {
+    const CRMenu *menu = this;
+    while (menu->_menu) menu = menu->_menu;
+    return menu->_settingsEditor ? const_cast<CRMenu *>(menu) : NULL;
+}
+
+void CRMenu::enableSettingsEditor(CRPropRef props, lString32 scope, int dpi) {
+    _settingsEditor = true;
+    _props = props;
+    _settingsScope = scope;
+    _settingsDpi = std::max(120, std::min(600, dpi));
+}
+
+void CRMenu::captureSettingsBaseline() {
+    CRMenu *root = settingsRoot();
+    if (root) root->_settingsBaseline = LVClonePropsContainer(root->_props);
+}
+
+bool CRMenu::settingsChanged() const {
+    CRMenu *root = settingsRoot();
+    if (!root || root->_settingsBaseline.isNull()) return false;
+    CRPropRef a = root->_settingsBaseline, b = root->_props;
+    if (a->getCount() != b->getCount()) return true;
+    for (int i=0; i<a->getCount(); ++i)
+        if (strcmp(a->getName(i), b->getName(i)) || a->getValue(i) != b->getValue(i)) return true;
+    return false;
+}
+
+LVFontRef CRMenu::settingsFont(bool value) {
+    CRMenu *root = settingsRoot();
+    if (!root) return LVFontRef();
+    LVFontRef &font = value ? root->_settingsValueFont : root->_settingsLabelFont;
+    if (font.isNull()) {
+        CRRectSkinRef skin = root->getSkin()->getItemSkin();
+        font = fontMan->GetFont(((value ? 32 : 42)*root->_settingsDpi+150)/300,
+                               400, false, css_ff_sans_serif, UnicodeToUtf8(skin->getFontFace()));
+    }
+    return font;
+}
+
+bool CRMenu::hasInlineSetting() const {
+    return isSettingsEditor() && !_propName.empty() && !_props.isNull() &&
+        (_settingsStepper || _items.length() == 2);
+}
+
+void CRMenu::drawTitleBar() {
+    if (!isSettingsEditor() || !_wm->getScreen()->isTouchSupported()) {
+        CRGUIWindowBase::drawTitleBar();
+        return;
+    }
+    LVDrawBuf &buf = *_wm->getScreen()->getCanvas();
+    CRRectSkinRef skin = getSkin()->getTitleSkin();
+    lvRect header;
+    getTitleRect(header);
+    lUInt32 ink = skin->getTextColor(), paper = skin->getBackgroundColor();
+    buf.FillRect(header, paper);
+    buf.FillRect(header.left, header.bottom-2, header.right, header.bottom, ink);
+    LVFontRef font = settingsFont(true);
+    lString32 left = _menu ? lString32(_("Back")) : lString32(_("Cancel"));
+    lString32 done(_("Done"));
+    int width = std::max(header.height()*3/2, (int)font->getTextWidth(left.c_str(),left.length())+32);
+    width = std::max(width, (int)font->getTextWidth(done.c_str(),done.length())+32);
+    width = std::min(width, header.width()/3);
+    lvRect back(header), apply(header), caption(header);
+    back.right = back.left + width;
+    apply.left = apply.right - width;
+    back.shrinkBy(lvRect(8,12,8,12));
+    apply.shrinkBy(lvRect(8,12,8,12));
+    caption.left += width + 8; caption.right -= width + 8;
+    CRButtonSkinRef backSkin(new CRSettingsTextButtonSkin(font,left,ink,paper));
+    CRButtonSkinRef doneSkin(new CRSettingsTextButtonSkin(font,done,ink,paper,true));
+    backSkin->drawButton(buf,back); doneSkin->drawButton(buf,apply);
+    if (!_controlsCreated) {
+        addControl(new CRSettingsButtonControl(this,back,backSkin,DCMD_BUTTON_PRESSED,BTN_CLOSE));
+        addControl(new CRSettingsButtonControl(this,apply,doneSkin,DCMD_BUTTON_PRESSED,BTN_SETTINGS_DONE));
+    }
+    lvRect context(caption);
+    context.bottom = context.top + font->getHeight() + 8;
+    settingsText(buf,context,_menu ? _menu->getLabel() : settingsRoot()->_settingsScope,font,ink,true);
+    caption.top = context.bottom;
+    settingsText(buf,caption,_label,settingsFont(),ink,true);
+}
+
+void CRMenu::invalidateSettingsValues() {
+    for (int i=0; i<_items.length(); ++i)
+        if (_items[i]->isSettingsPreview()) _items[i]->setItemDirty();
+    setDirty();
+}
+
+void CRMenu::updateSettingsValue(int item, int option, bool step) {
+    if (item < 0 || item >= _items.length() || !_items[item]->isSubmenu()) return;
+    CRMenu *menu = static_cast<CRMenu *>(_items[item]);
+    if (!menu->hasInlineSetting()) return;
+    lString8 name = UnicodeToUtf8(menu->_propName);
+    lString32 current = menu->_props->getStringDef(name.c_str());
+    int selected = option;
+    if (step) {
+        int value = current.atoi();
+        selected = -1;
+        for (int i=0; i<menu->_items.length(); ++i) {
+            int candidate = menu->_items[i]->getPropValue().atoi();
+            if ((option ? candidate > value : candidate < value) &&
+                (selected < 0 || (option ? candidate < menu->_items[selected]->getPropValue().atoi()
+                                         : candidate > menu->_items[selected]->getPropValue().atoi())))
+                selected=i;
+        }
+    }
+    if (selected < 0 || selected >= menu->_items.length()) return;
+    if (current == menu->_items[selected]->getPropValue()) return;
+    menu->_props->setString(name.c_str(),menu->_items[selected]->getPropValue());
+    menu->setItemDirty();
+    invalidateControls();
+    _pageUpdate = true;
+    invalidateSettingsValues();
+}
+
+void CRMenu::drawSettingsItem(CRMenuItem &item, LVDrawBuf &buf, lvRect rc, bool selected) {
+    LVDrawStateSaver state(buf);
+    lvRect oldClip;
+    buf.GetClipRect(&oldClip);
+    lvRect clip(rc); clip.intersect(oldClip); buf.SetClipRect(&clip);
+    CRRectSkinRef skin = getSkin()->getClientSkin();
+    lUInt32 paper = skin->getBackgroundColor(), ink = getSkin()->getItemSkin()->getTextColor();
+    buf.FillRect(rc,paper);
+    int pad = settingsFont(true)->getHeight()/2;
+    rc.shrinkBy(lvRect(pad,6,pad,6));
+    if (selected) buf.FillRect(rc.left-pad,rc.top+8,rc.left-pad+4,rc.bottom-8,ink);
+    bool choices = !_propName.empty() && !item.isSubmenu();
+    if (choices) {
+        int size = settingsFont(true)->getHeight();
+        lvRect mark(rc.left,rc.top+(rc.height()-size)/2,rc.left+size,rc.top+(rc.height()+size)/2);
+        buf.DrawFrame(mark,ink,2);
+        if (_props->getStringDef(UnicodeToUtf8(_propName).c_str()) == item.getPropValue()) {
+            mark.shrinkBy(lvRect(7,7,7,7)); buf.FillRect(mark,ink);
+        }
+        rc.left += size+pad;
+    }
+    CRMenu *submenu = item.isSubmenu() ? static_cast<CRMenu *>(&item) : NULL;
+    lString32 value = item.getSubmenuValue();
+    bool inlineValue = submenu && submenu->hasInlineSetting();
+    lvRect label(rc), detail(rc);
+    LVFontRef labelFont = settingsFont();
+    if (choices && (_propName == PROP_FONT_FACE || _propName == PROP_STATUS_FONT_FACE || _propName == PROP_FALLBACK_FONT_FACE))
+        if (!item.getFont().isNull()) labelFont = item.getFont();
+    lString32 text = item.getLabel();
+    if (choices && (_propName == PROP_FONT_SIZE || _propName == PROP_STATUS_FONT_SIZE))
+        text = item.getPropValue() + U" px";
+    if (!value.empty() || inlineValue) {
+        int gap = std::max(4, pad/2);
+        int secondary = settingsFont(true)->getHeight();
+        if (inlineValue) secondary = std::min(secondary*2,std::max(secondary,rc.height()-labelFont->getHeight()-gap));
+        int height = labelFont->getHeight() + secondary + gap;
+        label.top = rc.top + (rc.height()-height)/2;
+        label.bottom = label.top + labelFont->getHeight();
+        detail.top = label.bottom + gap;
+        detail.bottom = rc.bottom;
+    }
+    if (submenu && !inlineValue) {
+        label.right -= pad*2; detail.right -= pad*2;
+        int half = std::max(5,pad/2), x=rc.right-pad, y=rc.top+rc.height()/2;
+        for (int dy=-half; dy<=half; ++dy)
+            buf.FillRect(x+half-abs(dy),y+dy,x+half-abs(dy)+3,y+dy+1,ink);
+    }
+    settingsText(buf,label,text,labelFont,ink);
+    if (!inlineValue) {
+        if (!value.empty()) settingsText(buf,detail,value,settingsFont(true),ink);
+        return;
+    }
+    int index=0;
+    while (index<_items.length() && _items[index]!=&item) ++index;
+    int buttonHeight = std::min(detail.height(), settingsFont(true)->getHeight()*2);
+    detail.bottom = detail.top + buttonHeight;
+    int buttonWidth = submenu->_settingsStepper ? buttonHeight*3/2 : (detail.width()-pad)/2;
+    lString32 current = submenu->_props->getStringDef(UnicodeToUtf8(submenu->_propName).c_str());
+    for (int option=0; option<2; ++option) {
+        lvRect button(detail);
+        if (option) button.left = button.right-buttonWidth;
+        else button.right = button.left+buttonWidth;
+        lString32 caption = submenu->_settingsStepper ? lString32(option ? U"+" : U"−") : submenu->_items[option]->getLabel();
+        bool enabled = true;
+        if (submenu->_settingsStepper) {
+            enabled = false;
+            for (int i=0; i<submenu->_items.length(); ++i) {
+                int candidate=submenu->_items[i]->getPropValue().atoi();
+                if (option ? candidate>current.atoi() : candidate<current.atoi()) enabled=true;
+            }
+        }
+        bool chosen = !submenu->_settingsStepper && current==submenu->_items[option]->getPropValue();
+        CRButtonSkinRef buttonSkin(new CRSettingsTextButtonSkin(settingsFont(true),caption,ink,paper,chosen,enabled));
+        buttonSkin->drawButton(buf,button);
+        if (!_controlsCreated)
+            addControl(new CRSettingsButtonControl(this,button,buttonSkin,
+                submenu->_settingsStepper ? DCMD_SETTINGS_STEP : DCMD_SETTINGS_CHOICE,index*2+option,enabled));
+    }
+    if (submenu->_settingsStepper) {
+        detail.left += buttonWidth+pad; detail.right -= buttonWidth+pad;
+        settingsText(buf,detail,value,settingsFont(true),ink,true);
+    }
+}
+
 /// draw title bar using current skin, with optional scroll/tab/page indicator
 void CRGUIWindowBase::drawClient()
 {
@@ -1004,6 +1261,33 @@ void CRGUIWindowBase::drawScroll(CRScrollSkinRef sskin, lvRect rect, bool vertic
 {
     LVDrawBuf & buf = *_wm->getScreen()->getCanvas();
     if (hasTouchSettingsNavigation() && !vertical) {
+        CRMenu *menu=dynamic_cast<CRMenu *>(this);
+        if (menu && menu->isSettingsEditor()) {
+            CRRectSkinRef titleSkin=getSkin()->getTitleSkin();
+            lUInt32 ink=titleSkin->getTextColor(), paper=titleSkin->getBackgroundColor();
+            buf.FillRect(rect,paper);
+            buf.FillRect(rect.left,rect.top,rect.right,rect.top+1,ink);
+            int pages=pagesize>0 ? (maxpos+pagesize-1)/pagesize : 0;
+            lvRect label(rect);
+            if (pages>1) {
+                int width=rect.height()*3/2;
+                lvRect previous(rect),next(rect);
+                previous.right=previous.left+width; next.left=next.right-width;
+                CRButtonSkinRef a(new CRSettingsNavigationButtonSkin(titleSkin));
+                CRButtonSkinRef b(new CRSettingsNavigationButtonSkin(titleSkin,true));
+                a->drawButton(buf,previous,isScrollEnabled(false)?CRButtonSkin::ENABLED:0);
+                b->drawButton(buf,next,isScrollEnabled(true)?CRButtonSkin::ENABLED:0);
+                if (!_controlsCreated) {
+                    addControl(new CRScrollButtonControl(this,previous,a,false));
+                    addControl(new CRScrollButtonControl(this,next,b,true));
+                }
+                label.left=previous.right; label.right=next.left;
+                settingsText(buf,label,lString32::itoa(pos/pagesize+1)+U" / "+lString32::itoa(pages),menu->settingsFont(true),ink,true);
+            } else {
+                settingsText(buf,label,lString32(menu->settingsChanged()?_("Done applies changes"):_("Changes apply on Done")),menu->settingsFont(true),ink,true);
+            }
+            return;
+        }
         CRRectSkinRef titleSkin = getSkin()->getTitleSkin();
         titleSkin->draw(buf, rect);
         buf.FillRect(rect.left, rect.top, rect.right, rect.top + 1,
@@ -1413,6 +1697,11 @@ int CRMenuItem::DrawIcon(LVDrawBuf & buf, lvRect & rc, lvRect & bordersRc)
 
 void CRMenuItem::Draw( LVDrawBuf & buf, lvRect & rc, CRRectSkinRef skin, CRRectSkinRef valueSkin, bool selected )
 {
+    if (_menu && _menu->isSettingsEditor()) {
+        _menu->drawSettingsItem(*this,buf,rc,selected);
+        _itemDirty = false;
+        return;
+    }
     _itemDirty = false;
     lvRect itemBorders = skin->getBorderWidths();
     skin->draw( buf, rc );
@@ -1480,6 +1769,11 @@ int CRMenu::getTopItem()
 
 void CRMenu::Draw( LVDrawBuf & buf, lvRect & rc, CRRectSkinRef skin, CRRectSkinRef valueSkin, bool selected )
 {
+    if (_menu && _menu->isSettingsEditor()) {
+        _menu->drawSettingsItem(*this,buf,rc,selected);
+        _itemDirty = false;
+        return;
+    }
     CRLog::trace("enter CRMenu::Draw()");
     CRMenuSkinRef menuSkin = _skin; //getSkin();
     //CRRectSkinRef valueSkin = menuSkin->getValueSkin();
@@ -1593,6 +1887,11 @@ lvPoint CRMenu::getItemSize()
 
 bool CRMenu::getStatusRect(lvRect &rc)
 {
+    if (isSettingsEditor() && _wm->getScreen()->isTouchSupported()) {
+        rc = _rect;
+        rc.top = rc.bottom - settingsFont(true)->getHeight()*2 - 12;
+        return !rc.isEmpty();
+    }
     if (!hasTouchSettingsNavigation() || _pageItems <= 0)
         return CRGUIWindowBase::getStatusRect(rc);
     CRMenuSkinRef skin = getSkin();
@@ -1620,6 +1919,10 @@ bool CRMenu::getTitleRect(lvRect &rc)
 {
     if (!CRGUIWindowBase::getTitleRect(rc))
         return false;
+    if (isSettingsEditor() && _wm->getScreen()->isTouchSupported()) {
+        rc.bottom = rc.top + settingsFont()->getHeight()*2 + 24;
+        return true;
+    }
     if (!_fullscreen || _pageItems <= 0 || getSkinName() != U"#settings")
         return true;
     CRMenuSkinRef skin = getSkin();
@@ -1648,6 +1951,7 @@ int CRMenu::getItemHeight()
     int separatorHeight = 0;
     if ( !separatorSkin.isNull() )
         separatorHeight = separatorSkin->getMinSize().y;
+    if (isSettingsEditor()) separatorHeight=1;
     int h = itemSkin->getFont()->getHeight() * 5/4;
     lvPoint minsize = skin->getMinSize();
     if ( minsize.y>0 && h < minsize.y )
@@ -1856,6 +2160,7 @@ void CRMenu::drawClient()
     if ( !separatorSkin.isNull() )
         separatorHeight = separatorSkin->getMinSize().y;
 
+    if (isSettingsEditor()) separatorHeight=1;
     //lvRect itemBorders = itemSkin->getBorderWidths();
 
     bool showShortcuts = skin->getShowShortcuts();
@@ -1918,8 +2223,12 @@ void CRMenu::drawClient()
 
         lvRect itemRc( rc );
 
-        if (!_controlsCreated)
-            addControl(new CRMenuItemControl(this, itemRc, index));
+        if (!_controlsCreated && !item->isSettingsPreview()) {
+            lvRect hit(itemRc);
+            if (isSettingsEditor() && item->isSubmenu() && static_cast<CRMenu *>(item)->hasInlineSetting())
+                hit.bottom = hit.top + hit.height()/2;
+            addControl(new CRMenuItemControl(this, hit, index));
+        }
         if ( showShortcuts ) {
             int shortcutSize = HOTKEY_SIZE;
             if ( shortcutSize < ss->getMinSize().x )
@@ -1946,7 +2255,8 @@ void CRMenu::drawClient()
             lvRect r(rc);
             r.top += itemSize.y;
             r.bottom = r.top + separatorHeight;
-            separatorSkin->draw(buf, r);
+            if (isSettingsEditor()) buf.FillRect(r,getSkin()->getItemSkin()->getTextColor());
+            else separatorSkin->draw(buf, r);
         }
         rc.top += itemSize.y + separatorHeight;
     }
@@ -2031,12 +2341,19 @@ void CRMenu::reconfigure( int flags )
 {
     _skin.Clear();
     getSkin();
-    _fullscreen = _fullscreen || _skin->getFullScreen();
+    _fullscreen = isSettingsEditor() || _fullscreen || _skin->getFullScreen();
     CRGUIWindowBase::reconfigure( flags );
     int pageItems = _pageItems;
-    if ( _skin->getMinItemCount()>0 && pageItems<_skin->getMinItemCount() )
+    if (isSettingsEditor()) {
+        int label = settingsFont()->getHeight(), value = settingsFont(true)->getHeight();
+        int usable = _wm->getScreen()->getHeight() - label*2 - value*2 - 36;
+        int target = _propName.empty() ? label*2+value+4 : label*2+8;
+        pageItems = std::max(4,std::min(10,usable/std::max(1,target)));
+        if (_items.length()) pageItems = std::min(pageItems,std::max(6,_items.length()));
+    }
+    if (!isSettingsEditor() && _skin->getMinItemCount()>0 && pageItems<_skin->getMinItemCount() )
         pageItems = _skin->getMinItemCount();
-    if ( _skin->getMaxItemCount()>0 && pageItems>_skin->getMaxItemCount() )
+    if (!isSettingsEditor() && _skin->getMaxItemCount()>0 && pageItems>_skin->getMaxItemCount() )
         pageItems = _skin->getMaxItemCount();
     if ( pageItems!=_pageItems ) {
         // change items per page
@@ -2045,7 +2362,7 @@ void CRMenu::reconfigure( int flags )
     }
 
     // reconfigure submenus
-    LVPtrVector<CRMenuItem> items = getItems();
+    LVPtrVector<CRMenuItem> &items = getItems();
     for ( int i=0; i<items.length(); i++) {
         if (items[i]->isSubmenu()) {
             CRMenu * submenu = static_cast<CRMenu *>(items[i]);
@@ -2115,6 +2432,21 @@ void CRMenu::setCurItem(int nItem)
 bool CRMenu::onCommand( int command, int params )
 {
     CRLog::trace( "CRMenu::onCommand(%d, %d)", command, params );
+    if (isSettingsEditor()) {
+        if (command == DCMD_SETTINGS_CHOICE || command == DCMD_SETTINGS_STEP) {
+            updateSettingsValue(params/2, params&1, command == DCMD_SETTINGS_STEP);
+            return true;
+        }
+        if ((command == DCMD_BUTTON_PRESSED || command == DCMD_BUTTON_PRESSED_LONG) && params == BTN_SETTINGS_DONE) {
+            CRMenu *root=settingsRoot();
+            closeAllMenu(root->getId(),0);
+            return true;
+        }
+        if (command == DCMD_BUTTON_PRESSED && params == BTN_CLOSE && !_menu) {
+            closeMenu(0); // Root Cancel discards the staged property copy.
+            return true;
+        }
+    }
     if (DCMD_BUTTON_PRESSED == command || DCMD_BUTTON_PRESSED_LONG == command) {
         switch (params) {
         case BTN_CLOSE:
@@ -2211,7 +2543,7 @@ bool CRMenu::onItemSelect(int itemId, int param)
 
     if (item->isSubmenu()) {
         CRMenu * menu = (CRMenu *)item;
-        if ( menu->getItems().length() <= 3 ) {
+        if (!isSettingsEditor() && menu->getItems().length() <= 3 ) {
             // toggle 2 and 3 choices w/o menu
             menu->toggleSubmenuValue();
             item->setItemDirty();
@@ -2227,10 +2559,16 @@ bool CRMenu::onItemSelect(int itemId, int param)
                 // set property
             CRLog::trace("Setting property value");
             _props->setString( UnicodeToUtf8(getPropName()).c_str(), item->getPropValue() );
+            if (_menu && isSettingsEditor()) {
+                _menu->invalidateControls();
+                _menu->_pageUpdate=true;
+                _menu->invalidateSettingsValues();
+            }
             doCloseMenu(getId());
             return true;
         }
-        doCloseMenu(item->getId(), true, param);
+        if (isSettingsEditor()) closeAllMenu(item->getId(),param);
+        else doCloseMenu(item->getId(), true, param);
         return true;
 	}
 }

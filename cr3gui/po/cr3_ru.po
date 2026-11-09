@@ -1936,3 +1936,115 @@ msgstr "Установлена пользовательская системна
 #: ../src/cr3pocketbook.cpp:5848
 msgid "Restored default system theme. CR3 will now restart."
 msgstr "Восстановлена системная тема по умолчанию. CR3 будет перезапущен."
+
+#: ../src/settings.cpp
+msgid "Slightly heavier"
+msgstr "Немного жирнее"
+
+#: ../src/settings.cpp
+msgid "Medium"
+msgstr "Средний"
+
+#: ../src/settings.cpp
+msgid "Semi-bold"
+msgstr "Полужирный"
+
+#: ../src/settings.cpp
+msgid "Extra bold"
+msgstr "Очень жирный"
+
+#: ../src/settings.cpp
+msgid "Heavy"
+msgstr "Толстый"
+
+#: ../src/settings.cpp
+msgid "Extra heavy"
+msgstr "Очень толстый"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Font & text"
+msgstr "Шрифт и текст"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Page layout"
+msgstr "Оформление страницы"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Screen & sleep"
+msgstr "Экран и сон"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Advanced"
+msgstr "Дополнительно"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "About & updates"
+msgstr "О программе и обновления"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Font face, size, weight and spacing"
+msgstr "Гарнитура, размер, насыщенность и интервалы"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Margins, hyphenation and footnotes"
+msgstr "Поля, переносы и сноски"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Refresh, orientation and status line"
+msgstr "Обновление, поворот и строка состояния"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Rendering, document styles and cache"
+msgstr "Отрисовка, стили документа и кэш"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Version and software updates"
+msgstr "Версия и обновления программы"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Reader defaults"
+msgstr "Настройки по умолчанию"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Format defaults"
+msgstr "Настройки формата"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "This book"
+msgstr "Эта книга"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Font sample"
+msgstr "Образец шрифта"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Done"
+msgstr "Готово"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Back"
+msgstr "Назад"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Cancel"
+msgstr "Отмена"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Done applies changes"
+msgstr "«Готово» применит изменения"
+
+#: ../src/settings.cpp ../src/crgui.cpp
+msgid "Changes apply on Done"
+msgstr "Изменения применятся по «Готово»"
+
+#: ../src/settings.cpp
+msgid "Buttons, taps and gestures"
+msgstr "Кнопки, касания и жесты"
+
+#: ../src/settings.cpp
+msgid "Line spacing"
+msgstr "Межстрочный интервал"
+
+#: ../src/settings.cpp
+msgid "Font sample (scaled to fit)"
+msgstr "Образец шрифта (масштабирован)"

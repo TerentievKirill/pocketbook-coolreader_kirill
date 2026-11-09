@@ -54,13 +54,22 @@ records the registry.
 
 Updates and testing
 -------------------
-Version 1.0.5 adds bulk page copying, idle next-page preparation and cached
-status-header updates. It retains firmware API rules for startup and OTA.
-Existing shared 1.0.3 and 1.0.4 installations can update over Wi-Fi.
-Seventeen ARM regression groups pass; interactive device testing is pending.
+Version 1.0.6 adds six settings groups, larger text and touch controls, a font
+sample and quarter-step weights from 0 (Normal) to 1.75 (Extra heavy). Font size,
+line spacing and margins have direct +/- controls. Done applies pending changes;
+Back returns to the parent menu, and Cancel on the main screen discards changes.
+Font/page caches and idle work improve responsiveness. Reading position is saved
+after idle periods and during sleep/task switching; failed saves retry and valid
+backups recover unreadable settings/history. Settings-only font changes retain
+the requested values. Sudden power loss can still lose the most recent page turn.
+It retains the page-copy and cached status improvements from 1.0.5 and the firmware
+API rules for startup and OTA. Existing shared installations can update over Wi-Fi.
+Twenty ARM regression groups and four firmware-runtime checks pass. This build was
+copied to a PB632; interactive device and end-to-end OTA testing remain pending.
 
-Settings > Check for updates checks one shared release channel for every
-supported model. Settings > Version shows the installed release version.
+Settings > About & updates > Check for updates checks one shared release
+channel for every supported model. Settings > About & updates > Version shows
+the installed release version.
 Automatic checks remain optional, quiet while offline and inactive during sleep.
 Downloads require confirmation and show progress/cancellation. The package's
 checksum, family and device/firmware compatibility are verified before staging.

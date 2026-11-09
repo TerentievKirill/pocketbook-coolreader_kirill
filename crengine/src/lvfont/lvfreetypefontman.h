@@ -44,6 +44,7 @@
 #include "lvthread.h"
 #include "lvfontglyphcache.h"
 #include "lvfontdef.h"
+#include "lvfontmetadatacache.h"
 #include "lvfontcache.h"
 #include "lvstring8collection.h"
 
@@ -63,6 +64,7 @@ private:
     LVFontCache _cache;
     FT_Library _library;
     LVFontGlobalGlyphCache _globalCache;
+    LVFontMetadataCache _metadataCache;
     lString32 _requiredChars;
     LVHashTable<lString8, LVHashTable<lString8, font_lang_compat>* > _supportedLangs;
 #if (DEBUG_FONT_MAN == 1)
@@ -161,6 +163,9 @@ public:
     virtual bool RegisterExternalFont(int documentId, lString32 name, lString8 family_name, bool bold, bool italic);
 
     virtual bool RegisterFont(lString8 name);
+    virtual void BeginFontMetadataCache(lString32 filename);
+    virtual bool SaveFontMetadataCache() { return _metadataCache.save(); }
+    virtual int GetFontMetadataCacheHits() const { return _metadataCache.hits(); }
 
     virtual bool Init(lString8 path);
 

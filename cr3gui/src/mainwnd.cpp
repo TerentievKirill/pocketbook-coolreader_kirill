@@ -537,8 +537,7 @@ bool V3DocViewWin::loadHistory( lString32 filename )
 {
 	CRLog::trace("V3DocViewWin::loadHistory( %s )", UnicodeToUtf8(filename).c_str());
     _historyFileName = filename;
-    LVStreamRef stream = LVOpenFileStream( filename.c_str(), LVOM_READ );
-    return loadHistory( stream );
+    return _stateWriter.loadHistory(*_docview, filename);
 }
 
 void V3DocViewWin::closing()
@@ -551,11 +550,7 @@ void V3DocViewWin::closing()
 
 	CRLog::trace("V3DocViewWin::closing(), before docview->savePosition()");
 	_dict = NULL;
-    _docview->savePosition();
-    CRLog::trace("after docview->savePosition()");
-    _props->setInt(PROP_FONT_SIZE, _docview->getFontSize());
-    saveSettings(lString32::empty_str);
-    saveHistory( lString32::empty_str, _props->getBoolDef( PROP_AUTOSAVE_BOOKMARKS, true ) );
+    checkpointState(_props->getBoolDef(PROP_AUTOSAVE_BOOKMARKS, true));
 }
 
 bool V3DocViewWin::loadDocument( lString32 filename )
@@ -586,8 +581,7 @@ bool V3DocViewWin::saveHistory( lString32 filename, bool exportBookmarks )
     }
     _historyFileName = filename;
     log << "V3DocViewWin::saveHistory(" << filename << ")";
-    LVStreamRef serialized = LVCreateMemoryStream(NULL, 0, false, LVOM_WRITE);
-    bool saved = saveHistory(serialized) && LVWriteFileAtomic(filename, serialized);
+    bool saved = _stateWriter.saveHistory(*_docview, filename);
     if (!saved) CRLog::error("Cannot save reading history to %s", LCSTR(filename));
     reportSaveResult(saved, true);
     return saved;
@@ -610,8 +604,8 @@ bool V3DocViewWin::loadSettings( lString32 filename )
 {
 	CRLog::debug("loading settings from %s", LCSTR(filename));
     _settingsFileName = filename;
-    LVStreamRef stream = LVOpenFileStream( filename.c_str(), LVOM_READ );
-    if ( stream.isNull() ) {
+    bool loaded = _stateWriter.loadSettings(filename, _props);
+    if (!loaded) {
 		CRLog::debug("settings file not found: %s", LCSTR(filename));
         _docview->propsUpdateDefaults( _props );
         _docview->propsApply( _props );
@@ -621,7 +615,7 @@ bool V3DocViewWin::loadSettings( lString32 filename )
         //setAccelerators( _wm->getAccTables().get(lString32("main"), _props) );
         return false;
     }
-    if ( _props->loadFromStream( stream.get() ) ) {
+    if (loaded) {
         _props->setIntDef(PROP_FILE_PROPS_FONT_SIZE, 26);
         _docview->propsUpdateDefaults( _props );
         initTapDefaultActions(_props);
@@ -667,17 +661,27 @@ bool V3DocViewWin::saveSettings( lString32 filename )
     }
     _settingsFileName = filename;
     log << "V3DocViewWin::saveSettings(" << filename << ")";
-    LVStreamRef serialized = LVCreateMemoryStream(NULL, 0, false, LVOM_WRITE);
-    bool saved = _props->saveToStream(serialized.get()) && LVWriteFileAtomic(filename, serialized);
+    bool saved = _stateWriter.saveSettings(*_docview, _props, filename);
     if (!saved)
         CRLog::error("Cannot save settings to %s", LCSTR(filename));
     reportSaveResult(saved, false);
     return saved;
 }
 
+bool V3DocViewWin::checkpointState(bool exportBookmarks)
+{
+    if (!_docview->isDocumentOpened()) return false;
+    bool history = saveHistory(lString32::empty_str, exportBookmarks);
+    bool settings = saveSettings(lString32::empty_str);
+    return history && settings;
+}
+
 void V3DocViewWin::applySettings()
 {
     //showWaitIcon();
+    if (_props->getStringDef(PROP_SKIN_FILE) != _newProps->getStringDef(PROP_SKIN_FILE) &&
+        !_wm->setSkin(_newProps->getStringDef(PROP_SKIN_FILE)))
+        _newProps->setString(PROP_SKIN_FILE, _props->getStringDef(PROP_SKIN_FILE));
     CRPropRef delta = _props ^ _newProps;
     CRLog::trace( "applySettings() - %d options changed", delta->getCount() );
 #ifdef CR_POCKETBOOK
@@ -702,7 +706,9 @@ void V3DocViewWin::showSettingsMenu()
     _newProps = LVClonePropsContainer( _props );
     lvRect rc = _wm->getScreen()->getRect();
     CRMenu * mainMenu = new CRSettingsMenu( _wm, _newProps, MCMD_SETTINGS_APPLY, menuFont,
-                                           getMenuAccelerators(), rc );
+                                           getMenuAccelerators(), rc,
+                                           lString32(_(_settingsFileName.endsWith(U"_cr3.ini") ? "This book" :
+                                               (_settingsFileName.endsWith(U"/cr3.ini") ? "Reader defaults" : "Format defaults"))) );
     _wm->activateWindow( mainMenu );
 }
 
@@ -1202,6 +1208,12 @@ bool V3DocViewWin::onCommand( int command, int params )
         return true;
     case MCMD_BOOKMARK_LIST_GO_MODE:
         showBookmarksMenu(true);
+        return true;
+    case DCMD_SET_BASE_FONT_WEIGHT:
+    case DCMD_TOGGLE_BOLD:
+        _docview->doCommand((LVDocCmd)command, params);
+        saveSettings(lString32::empty_str);
+        setDirty();
         return true;
     case DCMD_ZOOM_IN:
     case DCMD_ZOOM_OUT:

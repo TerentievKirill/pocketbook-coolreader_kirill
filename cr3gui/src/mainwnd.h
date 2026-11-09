@@ -18,6 +18,7 @@
 #include <inkview.h>
 #include "fsmenu.h"
 #include "settings.h"
+#include "readingstate.h"
 #ifdef POCKETBOOK_PRO
     #include "pb_toc.h"
 #endif
@@ -117,6 +118,7 @@ protected:
     lString32 _cssDir;
     bool _settingsSaveFailed;
     bool _historySaveFailed;
+    CRReadingStateWriter _stateWriter;
     void reportSaveResult(bool saved, bool history);
     time_t _loadFileStart;
     lString32 _fileName;
@@ -130,6 +132,8 @@ public:
     bool loadCSS( lString32 filename );
     bool loadSettings( lString32 filename );
     bool saveSettings( lString32 filename );
+    bool checkpointState(bool exportBookmarks = false);
+    bool needsStateRetry() const { return _settingsSaveFailed || _historySaveFailed; }
     bool loadHistory( lString32 filename );
     bool saveHistory( lString32 filename, bool exportBookmarks = true );
     bool loadHistory( LVStreamRef stream );
