@@ -1,6 +1,6 @@
 # CoolReader for PocketBook
 
-[Downloads](https://pocketbook.nimbushub.eu/) · [Installation](https://pocketbook.nimbushub.eu/installation.html) · [Release 1.0.6](https://github.com/dderugin/pocketbook-coolreader/releases/tag/v1.0.6)
+[Downloads](https://readertools.eu/coolreader/downloads/) · [Installation](https://readertools.eu/coolreader/installation/) · [Manual](https://readertools.eu/coolreader/manual/) · [Release 1.0.6](https://github.com/dderugin/pocketbook-coolreader/releases/tag/v1.0.6)
 
 Release **1.0.6** adds grouped settings with larger controls and a font sample,
 quarter-step font weights, faster font and page caches, and more reliable saving
@@ -63,7 +63,7 @@ its existing downloads and update channel remain separate.
 Extract the release ZIP and merge its **system** and **applications** folders
 into the reader’s USB storage, preserving existing settings. Safely eject it,
 then open **Applications → CoolReader**. For Library’s **Open with** menu,
-follow the [file-association instructions](https://pocketbook.nimbushub.eu/installation.html#file-associations).
+follow the [file-association instructions](https://readertools.eu/coolreader/installation/#file-associations).
 
 See [the shared guide](README-pocketbook-armv7.txt) for backups and troubleshooting.
 
@@ -205,8 +205,8 @@ retain their own notices and licenses in their source directories.
 
 ## Easy Connect companion tool
 
-The [download website](https://pocketbook.nimbushub.eu/) also hosts
-[Easy Connect](https://pocketbook.nimbushub.eu/easy-connect.html), a standalone
+The [tools website](https://readertools.eu/) also hosts
+[Easy Connect](https://readertools.eu/easy-connect/), a standalone
 SSH and FTP app for PocketBook Touch HD 3 / PB632. Its page includes USB
 installation, password setup, the SSH pipe-shell command, FTP client settings,
 security limits and troubleshooting. CoolReader is not required. Easy Connect
