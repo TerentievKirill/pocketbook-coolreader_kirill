@@ -13,7 +13,7 @@ REQUIRED_TESTS = {
     'dependency-compatibility', 'web-tls', 'standby-frontlight',
     'gray-buffer-copy',
     'performance-caches', 'reader-checkpoint', 'settings-editor',
-    'document-render', 'reading-state-migration', 'dictionary-safety', 'history-persistence', 'archive-boundaries', 'atomic-faults',
+    'document-render', 'reading-state-migration', 'dictionary-browser', 'dictionary-safety', 'native-dictionary-api', 'dictionary-download', 'stardict', 'history-persistence', 'archive-boundaries', 'atomic-faults',
 }
 
 def sha256(path):

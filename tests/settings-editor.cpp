@@ -1,4 +1,5 @@
 #include "../cr3gui/src/settings.h"
+#include "../cr3gui/src/reader_menu.h"
 #include "lvdocviewprops.h"
 #include "lvrend.h"
 #include "testutil.h"
@@ -17,6 +18,9 @@ bool isFrontLightSupported() { return true; }
 bool isTaskManagerSupported() { return true; }
 void OTA_scheduleUpdate(const char *) {}
 void OTA_showVersion() {}
+CRMenu *pbCreateDictionaryDownloadsMenu(CRMenu *parent,int id) {
+    return new CRMenu(parent->getWindowManager(),parent,id,"Dictionaries","",LVFontRef(),LVFontRef());
+}
 const char *getCommandName(int, int) { return "Action"; }
 const char *getKeyName(int, int) { return "Key"; }
 
@@ -31,9 +35,10 @@ public:
 };
 class Manager : public CRGUIWindowManager {
 public:
-    int applied=0;
+    int applied=0, lastCommand=0, lastParam=0;
     Manager(CRGUIScreen *screen) : CRGUIWindowManager(screen) {}
     void postCommand(int command,int param=0) {
+        if (command==MCMD_SETTINGS || command==DCMD_PAGEDOWN) { lastCommand=command; lastParam=param; }
         if (command==9000) ++applied;
         else CRGUIWindowManager::postCommand(command,param);
     }
@@ -68,16 +73,17 @@ static int check(const char *skin,const char *out) {
     original->setInt(PROP_INTERLINE_SPACE,100);
     CRPropRef staged=LVClonePropsContainer(original);
     CRSettingsMenu *root=makeMenu(wm,staged);
-    CHECK(root->isSettingsEditor() && root->getItems().length()==6);
+    CHECK(root->isSettingsEditor() && !root->isActionMenu() && root->getItems().length()==7);
     CHECK(root->getItems()[0]->getLabel()=="Font & text");
-    CHECK(root->getItems()[5]->getLabel()=="About & updates");
-    CHECK(child(root,5)->getItems().length()==3);
+    CHECK(root->getItems()[5]->getLabel()=="Dictionaries");
+    CHECK(root->getItems()[6]->getLabel()=="About & updates");
+    CHECK(child(root,6)->getItems().length()==3);
     CHECK(!root->settingsChanged());
     for (int rotated=0;rotated<2;++rotated) {
         wm.reconfigure(rotated?1448:1072,rotated?1072:1448,rotated?CR_ROTATE_ANGLE_90:CR_ROTATE_ANGLE_0);
         root->reconfigure(CRGUI_CONFIGURE_FLAG_SCREEN_ORIENTATION);
         wm.update(true,true);
-        CHECK(root->getPageCount()==1);
+        CHECK(root->getPageCount()<=2);
         lvRect header,client,footer;
         CHECK(root->getTitleRect(header) && root->getClientRect(client) && root->getScrollRect(footer));
         CHECK(header.bottom==client.top && client.bottom==footer.top);
@@ -160,7 +166,54 @@ static int check(const char *skin,const char *out) {
     fonts->onTouchEvent(header.right-50,header.top+header.height()/2,CRTOUCH_UP);
     wm.processPostedEvents();
     CHECK(wm.applied==1 && wm.getWindowCount()==0);
-    puts("PASS: actual grouped settings, portrait/landscape, staged values, pickers, Back, Cancel and Done");
+    // Long-press MAIN_MENU uses the same layout, with immediate commands and
+    // no staged settings, while retaining configured tools and parameters.
+    CRGUIAcceleratorTableRef shortcuts(new CRGUIAcceleratorTable());
+    CRGUIAcceleratorTableRef configured(new CRGUIAcceleratorTable());
+    const int legacy[]={PB_CMD_MAIN_MENU,MCMD_ABOUT,MCMD_RECENT_BOOK_LIST,MCMD_CITES_LIST,MCMD_CITE,
+        DCMD_SAVE_HISTORY,DCMD_SAVE_TO_CACHE,MCMD_HELP,MCMD_HELP_KEYS};
+    for (int i=0;i<9;++i) configured->add(i+1,0,legacy[i],0);
+    configured->add(10,0,MCMD_BOOKMARK_LIST,0);
+    configured->add(11,0,DCMD_PAGEDOWN,10);
+    for (int rotated=0;rotated<2;++rotated) {
+        wm.reconfigure(rotated?1448:1072,rotated?1072:1448,rotated?CR_ROTATE_ANGLE_90:CR_ROTATE_ANGLE_0);
+        CRMenu *reader=createReaderMenu(&wm,shortcuts,configured,true);
+        wm.activateWindow(reader); wm.update(true,true);
+        CHECK(reader->isActionMenu() && !reader->settingsChanged());
+        CHECK(reader->getItems().length()==6 && reader->getPageCount()==1);
+        CHECK(reader->getItems()[0]->getId()==MCMD_SETTINGS && reader->getItems()[0]->getLabel()=="Settings");
+        CHECK(reader->getItems()[2]->getId()==MCMD_BOOKMARK_LIST_GO_MODE);
+        CHECK(configured->length()==11);
+        preview(screen,std::string(out)+(rotated?"/reader-menu-landscape.pgm":"/reader-menu-portrait.pgm"));
+        lvRect rows; CHECK(reader->getClientRect(rows));
+        reader->onTouchEvent(rows.left+70,rows.top+reader->getItemHeight()/2,CRTOUCH_DOWN);
+        reader->onTouchEvent(rows.left+70,rows.top+reader->getItemHeight()/2,CRTOUCH_UP);
+        wm.processPostedEvents();
+        CHECK(wm.lastCommand==MCMD_SETTINGS && wm.lastParam==0 && wm.applied==1 && wm.getWindowCount()==0);
+        CHECK(original->getIntDef(PROP_FONT_SIZE)==42);
+        reader=createReaderMenu(&wm,shortcuts,configured,true);
+        wm.activateWindow(reader); wm.update(true,true);
+        CHECK(reader->onCommand(MCMD_SELECT_6));
+        CRMenu *more=static_cast<CRMenu *>(wm.getTopVisibleWindow());
+        CHECK(more!=reader && more->getLabel()=="More tools" && more->isActionMenu());
+        CHECK(more->findItem(DCMD_SAVE_HISTORY) && more->findItem(DCMD_SAVE_TO_CACHE) && more->findItem(MCMD_HELP_KEYS));
+        CHECK(more->findItem(MCMD_RECENT_BOOK_LIST));
+        CHECK(more->findItem(MCMD_BOOKMARK_LIST)->getLabel()=="Save a bookmark");
+        wm.update(true,true);
+        preview(screen,std::string(out)+(rotated?"/reader-tools-landscape.pgm":"/reader-tools-portrait.pgm"));
+        CRMenuItem *custom=more->findItem(DCMD_PAGEDOWN); CHECK(custom);
+        CHECK(custom->onSelect()==1);
+        CHECK(wm.lastCommand==DCMD_PAGEDOWN && wm.lastParam==10 && wm.getWindowCount()==0);
+        wm.processPostedEvents();
+        reader=createReaderMenu(&wm,shortcuts,configured,false);
+        wm.activateWindow(reader); wm.update(true,true);
+        CHECK(reader->getTitleRect(header)); int last=wm.lastCommand;
+        reader->onTouchEvent(header.right-50,header.top+header.height()/2,CRTOUCH_DOWN);
+        reader->onTouchEvent(header.right-50,header.top+header.height()/2,CRTOUCH_UP);
+        wm.processPostedEvents();
+        CHECK(wm.getWindowCount()==0 && wm.lastCommand==last && wm.applied==1);
+    }
+    puts("PASS: actual grouped settings, portrait/landscape, staged values, pickers, Back, Cancel and Done; long-press reader menu, Settings touch route, retained tools, custom parameters and Read");
     return 0;
 }
 int main(int argc,char **argv) {

@@ -1,0 +1,182 @@
+[
+  {
+    "label": "Czech definitions",
+    "filename": "reader-cs.dic",
+    "size": 6752960,
+    "sha256": "96c25af8ec75ea86a306bab6a61584cc6166cf1e3b6b0418289df436d0750e12",
+    "credit": "reader.dict / Wiktionary\nCC BY-SA 4.0\nConverted to PocketBook format by ReaderTools.\nSources and credits: https://readertools.eu/downloads/dictionaries/20261110/credits.txt",
+    "url": "https://readertools.eu/downloads/dictionaries/20261110/reader-cs.dic"
+  },
+  {
+    "label": "Czech → English",
+    "filename": "wikdict-cs-en.dic",
+    "size": 644505,
+    "sha256": "a138e796f0519d7dc770452a0e3760215aca26de9c2d3bd73b430d85ac4ed478",
+    "credit": "WikDict / FreeDict / Wiktionary / DBnary\nCC BY-SA 4.0\nConverted to PocketBook format by ReaderTools.\nSources and credits: https://readertools.eu/downloads/dictionaries/20261110/credits.txt",
+    "url": "https://readertools.eu/downloads/dictionaries/20261110/wikdict-cs-en.dic"
+  },
+  {
+    "label": "Czech → Russian",
+    "filename": "wikdict-cs-ru.dic",
+    "size": 339925,
+    "sha256": "0fc5cfa1f514d9541ddbee77e053924961e6b7cd190e84aa12fef79e7f3dd94c",
+    "credit": "WikDict / FreeDict / Wiktionary / DBnary\nCC BY-SA 4.0\nConverted to PocketBook format by ReaderTools.\nSources and credits: https://readertools.eu/downloads/dictionaries/20261110/credits.txt",
+    "url": "https://readertools.eu/downloads/dictionaries/20261110/wikdict-cs-ru.dic"
+  },
+  {
+    "label": "English definitions",
+    "filename": "reader-en.dic",
+    "size": 71441224,
+    "sha256": "498041ee55a7868acabac40a33344be3d737ca0eea4f9f8929048a97b7cbe010",
+    "credit": "reader.dict / Wiktionary\nCC BY-SA 4.0\nConverted to PocketBook format by ReaderTools.\nSources and credits: https://readertools.eu/downloads/dictionaries/20261110/credits.txt",
+    "url": "https://readertools.eu/downloads/dictionaries/20261110/reader-en.dic"
+  },
+  {
+    "label": "English → Czech",
+    "filename": "wikdict-en-cs.dic",
+    "size": 2645228,
+    "sha256": "c138237303e57aa40c394fba37e6d488ab4b8293336ec6643a0851833a03a4bc",
+    "credit": "WikDict / FreeDict / Wiktionary / DBnary\nCC BY-SA 4.0\nConverted to PocketBook format by ReaderTools.\nSources and credits: https://readertools.eu/downloads/dictionaries/20261110/credits.txt",
+    "url": "https://readertools.eu/downloads/dictionaries/20261110/wikdict-en-cs.dic"
+  },
+  {
+    "label": "English → Russian",
+    "filename": "wikdict-en-ru.dic",
+    "size": 5549170,
+    "sha256": "a634c866d25b2c30f97b46a749e5d52fb57140bf4521a27272716689abc99130",
+    "credit": "WikDict / FreeDict / Wiktionary / DBnary\nCC BY-SA 4.0\nConverted to PocketBook format by ReaderTools.\nSources and credits: https://readertools.eu/downloads/dictionaries/20261110/credits.txt",
+    "url": "https://readertools.eu/downloads/dictionaries/20261110/wikdict-en-ru.dic"
+  },
+  {
+    "label": "Russian definitions",
+    "filename": "reader-ru.dic",
+    "size": 82435042,
+    "sha256": "e3435a14fe7f90b98c5f2db2c3f85273e660173f187461bd9a48a57dba5dfe0b",
+    "credit": "reader.dict / Wiktionary\nCC BY-SA 4.0\nConverted to PocketBook format by ReaderTools.\nSources and credits: https://readertools.eu/downloads/dictionaries/20261110/credits.txt",
+    "url": "https://readertools.eu/downloads/dictionaries/20261110/reader-ru.dic"
+  },
+  {
+    "label": "Russian → Czech",
+    "filename": "wikdict-ru-cs.dic",
+    "size": 339435,
+    "sha256": "56bb78eb5ced9ab652d6b3953fee8ce08822d927484eca969a0669b039532947",
+    "credit": "WikDict / FreeDict / Wiktionary / DBnary\nCC BY-SA 4.0\nConverted to PocketBook format by ReaderTools.\nSources and credits: https://readertools.eu/downloads/dictionaries/20261110/credits.txt",
+    "url": "https://readertools.eu/downloads/dictionaries/20261110/wikdict-ru-cs.dic"
+  },
+  {
+    "label": "Russian → English",
+    "filename": "wikdict-ru-en.dic",
+    "size": 1344237,
+    "sha256": "da3c674d92ff2dfd4fa0aeccf9d5f7a8589b35cdd210ff9ee4baea06085afeba",
+    "credit": "WikDict / FreeDict / Wiktionary / DBnary\nCC BY-SA 4.0\nConverted to PocketBook format by ReaderTools.\nSources and credits: https://readertools.eu/downloads/dictionaries/20261110/credits.txt",
+    "url": "https://readertools.eu/downloads/dictionaries/20261110/wikdict-ru-en.dic"
+  },
+  {
+    "label": "Ukrainian definitions",
+    "filename": "reader-uk.dic",
+    "size": 4218849,
+    "sha256": "aa72cc65ec94c53563b144c1d0409f6a238f9ff00b331348ba6f41f66d650ee3",
+    "credit": "reader.dict / Wiktionary\nCC BY-SA 4.0\nConverted to PocketBook format by ReaderTools.\nSources and credits: https://readertools.eu/downloads/dictionaries/20261110/credits.txt",
+    "url": "https://readertools.eu/downloads/dictionaries/20261110/reader-uk.dic"
+  },
+  {
+    "label": "Czech definitions",
+    "filename": "reader-cs.stardict",
+    "format": "stardict",
+    "size": 3645127,
+    "installed_size": 8187603,
+    "sha256": "432106887b2dc322e9d07bcf0c7a74698ffd81819f73f7e7888dc9d633709c0b",
+    "credit": "reader.dict / Wiktionary\nCC BY-SA 4.0\nhttps://www.reader-dict.com/legal-mentions",
+    "url": "https://readertools.eu/downloads/dictionaries/stardict-20261110/reader-cs.zip"
+  },
+  {
+    "label": "Czech → English",
+    "filename": "wikdict-cs-en.stardict",
+    "format": "stardict",
+    "size": 633946,
+    "installed_size": 3239356,
+    "sha256": "4f42314730cc69caba49f3016ece8d6a216e6c27a4fa3add1d1aa6ec2f20809a",
+    "credit": "WikDict / FreeDict / Wiktionary / DBnary\nCC BY-SA 4.0\nhttps://www.wikdict.com/page/about",
+    "url": "https://readertools.eu/downloads/dictionaries/stardict-20261110/wikdict-cs-en.zip"
+  },
+  {
+    "label": "Czech → Russian",
+    "filename": "wikdict-cs-ru.stardict",
+    "format": "stardict",
+    "size": 317320,
+    "installed_size": 1596362,
+    "sha256": "06b7fe1c3ede2241ca06e78a038a1e8f176bc05361933ff9a5f7777341bd09b8",
+    "credit": "WikDict / FreeDict / Wiktionary / DBnary\nCC BY-SA 4.0\nhttps://www.wikdict.com/page/about",
+    "url": "https://readertools.eu/downloads/dictionaries/stardict-20261110/wikdict-cs-ru.zip"
+  },
+  {
+    "label": "English definitions",
+    "filename": "reader-en.stardict",
+    "format": "stardict",
+    "size": 49837964,
+    "installed_size": 65261746,
+    "sha256": "8f67091fb05717f79d1991a832d8922f369462718c159ef95b954274955f7a43",
+    "credit": "reader.dict / Wiktionary\nCC BY-SA 4.0\nhttps://www.reader-dict.com/legal-mentions",
+    "url": "https://readertools.eu/downloads/dictionaries/stardict-20261110/reader-en.zip"
+  },
+  {
+    "label": "English → Czech",
+    "filename": "wikdict-en-cs.stardict",
+    "format": "stardict",
+    "size": 2057871,
+    "installed_size": 9538910,
+    "sha256": "a0b6c8d61a0127a5c7ed96b1c488b2dfc41119bee2987dbe60bf9655f72b0f85",
+    "credit": "WikDict / FreeDict / Wiktionary / DBnary\nCC BY-SA 4.0\nhttps://www.wikdict.com/page/about",
+    "url": "https://readertools.eu/downloads/dictionaries/stardict-20261110/wikdict-en-cs.zip"
+  },
+  {
+    "label": "English → Russian",
+    "filename": "wikdict-en-ru.stardict",
+    "format": "stardict",
+    "size": 4161986,
+    "installed_size": 19560864,
+    "sha256": "1c227fd9aad1e94efdf73a22228f43b7aad6e99ed97001b9039ca62b4f647751",
+    "credit": "WikDict / FreeDict / Wiktionary / DBnary\nCC BY-SA 4.0\nhttps://www.wikdict.com/page/about",
+    "url": "https://readertools.eu/downloads/dictionaries/stardict-20261110/wikdict-en-ru.zip"
+  },
+  {
+    "label": "Russian definitions",
+    "filename": "reader-ru.stardict",
+    "format": "stardict",
+    "size": 36499619,
+    "installed_size": 143357816,
+    "sha256": "1aef8cb5f3c8514c9aee73a25976848f76c16727100a62fcf2e6abc025899140",
+    "credit": "reader.dict / Wiktionary\nCC BY-SA 4.0\nhttps://www.reader-dict.com/legal-mentions",
+    "url": "https://readertools.eu/downloads/dictionaries/stardict-20261110/reader-ru.zip"
+  },
+  {
+    "label": "Russian → Czech",
+    "filename": "wikdict-ru-cs.stardict",
+    "format": "stardict",
+    "size": 313381,
+    "installed_size": 1732368,
+    "sha256": "f09e9263706fd3b6f8b75615ce352d4280763b05b5a5da3baf9313eede272179",
+    "credit": "WikDict / FreeDict / Wiktionary / DBnary\nCC BY-SA 4.0\nhttps://www.wikdict.com/page/about",
+    "url": "https://readertools.eu/downloads/dictionaries/stardict-20261110/wikdict-ru-cs.zip"
+  },
+  {
+    "label": "Russian → English",
+    "filename": "wikdict-ru-en.stardict",
+    "format": "stardict",
+    "size": 1262104,
+    "installed_size": 7352460,
+    "sha256": "248f59b0f331bbbc8272774135e68de4e7d713b41ad1e179ae8158a0e6220504",
+    "credit": "WikDict / FreeDict / Wiktionary / DBnary\nCC BY-SA 4.0\nhttps://www.wikdict.com/page/about",
+    "url": "https://readertools.eu/downloads/dictionaries/stardict-20261110/wikdict-ru-en.zip"
+  },
+  {
+    "label": "Ukrainian definitions",
+    "filename": "reader-uk.stardict",
+    "format": "stardict",
+    "size": 2346896,
+    "installed_size": 6905478,
+    "sha256": "6c9d07d5c9a0710e42a07a1976cef640feafd78a0e0c7ab6a7cb66dab4ce1601",
+    "credit": "reader.dict / Wiktionary\nCC BY-SA 4.0\nhttps://www.reader-dict.com/legal-mentions",
+    "url": "https://readertools.eu/downloads/dictionaries/stardict-20261110/reader-uk.zip"
+  }
+]

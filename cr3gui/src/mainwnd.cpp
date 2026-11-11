@@ -49,6 +49,10 @@
 #endif
 
 
+#ifdef POCKETBOOK_FW6
+#include "reader_menu.h"
+#endif
+
 #define SECONDS_BEFORE_PROGRESS_BAR 2
 
 
@@ -831,6 +835,11 @@ void V3DocViewWin::showCitesMenu()
 
 void V3DocViewWin::showMainMenu()
 {
+#ifdef POCKETBOOK_FW6
+    CRMenu *menu=createReaderMenu(_wm,getMenuAccelerators(),
+        _wm->getAccTables().get(lString32("mainMenuItems")),!_helpFile.empty());
+    _wm->activateWindow(menu);
+#else
     lvRect fullRc = _wm->getScreen()->getRect();
     CRFullScreenMenu * menu_win = new CRFullScreenMenu(
             _wm, 0, lString32(_("Main Menu")), 8, fullRc );
@@ -940,6 +949,7 @@ VIEWER_MENU_4ABOUT=About...
 
     menu_win->reconfigure(0);
     _wm->activateWindow( menu_win );
+#endif
 }
 
 void addPropLine( lString8 & buf, const char * description, const lString32 & value )

@@ -1048,9 +1048,16 @@ CRMenu *CRMenu::settingsRoot() const {
 
 void CRMenu::enableSettingsEditor(CRPropRef props, lString32 scope, int dpi) {
     _settingsEditor = true;
+    _actionMenu = false;
     _props = props;
     _settingsScope = scope;
     _settingsDpi = std::max(120, std::min(600, dpi));
+}
+
+void CRMenu::enableActionMenu(lString32 scope, int dpi) {
+    // Reuse the readable menu layout without staging any reader preferences.
+    enableSettingsEditor(LVCreatePropsContainer(),scope,dpi);
+    _actionMenu = true;
 }
 
 void CRMenu::captureSettingsBaseline() {
@@ -1098,8 +1105,8 @@ void CRMenu::drawTitleBar() {
     buf.FillRect(header, paper);
     buf.FillRect(header.left, header.bottom-2, header.right, header.bottom, ink);
     LVFontRef font = settingsFont(true);
-    lString32 left = _menu ? lString32(_("Back")) : lString32(_("Cancel"));
-    lString32 done(_("Done"));
+    lString32 left = (_menu || isActionMenu()) ? lString32(_("Back")) : lString32(_("Cancel"));
+    lString32 done(isActionMenu() ? _("Read") : _("Done"));
     int width = std::max(header.height()*3/2, (int)font->getTextWidth(left.c_str(),left.length())+32);
     width = std::max(width, (int)font->getTextWidth(done.c_str(),done.length())+32);
     width = std::min(width, header.width()/3);
@@ -1284,7 +1291,8 @@ void CRGUIWindowBase::drawScroll(CRScrollSkinRef sskin, lvRect rect, bool vertic
                 label.left=previous.right; label.right=next.left;
                 settingsText(buf,label,lString32::itoa(pos/pagesize+1)+U" / "+lString32::itoa(pages),menu->settingsFont(true),ink,true);
             } else {
-                settingsText(buf,label,lString32(menu->settingsChanged()?_("Done applies changes"):_("Changes apply on Done")),menu->settingsFont(true),ink,true);
+                settingsText(buf,label,lString32(menu->isActionMenu() ? _("Choose an action") :
+                    menu->settingsChanged()?_("Done applies changes"):_("Changes apply on Done")),menu->settingsFont(true),ink,true);
             }
             return;
         }

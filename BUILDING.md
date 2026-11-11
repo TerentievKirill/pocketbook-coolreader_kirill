@@ -1,5 +1,59 @@
 # PocketBook builds
 
+## Dictionary downloads
+
+`config/dictionaries.json` is the curated, checksum-pinned list used by
+Settings > Dictionaries on firmware 6 builds. CMake validates it and generates
+the application table; builds do not contact dictionary providers.
+
+Entries with `format: "stardict"` point to an original StarDict ZIP archive.
+Their filename is the destination folder ending in `.stardict`, and
+`installed_size` reserves space for the unpacked files alongside the download.
+The installer verifies the archive hash, extracts only dictionary files into a
+private staging folder, validates indexes and data ranges, then renames the whole
+folder into place. Existing installations are preserved. Lookup reads mapped
+indexes with sparse record offsets and keeps only one decompressed dictzip chunk;
+alternate forms use the `.syn` index without expanding millions of entries.
+The native PocketBook format remains available in the PocketBook versions submenu for each language.
+Original StarDict sources are mirrored with attribution under immutable
+`/downloads/dictionaries/stardict-<version>/` URLs.
+
+To prepare new packs, cache the StarDict source archives named
+`wikdict-{source}-{target}.zip` for every direction between `en`, `ru` and `cs`,
+and `reader-{language}.zip` for `en`, `ru`, `uk` and `cs`. WikDict archives come
+from `https://download.wikdict.com/dictionaries/stardict/`; monolingual archives
+come from `https://www.reader-dict.com/file/{language}/dict-{language}-{language}-noetym.zip`.
+Use Python 3.12+ and the PyGlossary checkout pinned by `CONVERTER` in
+`tools/prepare-dictionaries.py` on `PYTHONPATH`, then run:
+
+```sh
+python3 tools/prepare-dictionaries.py <cached-archives> <output> --version YYYYMMDD
+```
+
+The output contains ten native `.dic` packs, their catalogue, upstream metadata,
+source checksums and attribution. Alternate word forms become searchable entries.
+Articles exceeding the native record limit are shortened with a notice and counted
+in `sources.json`. The data remains CC BY-SA 4.0; preserve credits and source links.
+Retain the cached source archives to reproduce that version, since upstream URLs
+can change. Check the packs against the firmware dictionary engine before hosting.
+Publish packs, `credits.txt`, `sources.json` and `catalog.json` together under a new,
+immutable `/downloads/dictionaries/<version>/` directory, then copy its catalogue
+to `config/dictionaries.json`. Never overwrite a published version.
+
+The `stardict` ARM regression checks plain/dictzip data, compressed and 64-bit
+indexes, Unicode and alternate forms, multiple definitions, malformed records,
+traversal/duplicate filenames, interrupted unpacking and existing-file safety.
+`native-dictionary-api` exercises the production adapter against a firmware-shaped
+C library: next/previous require a dictionary object and sized output buffers,
+while exact lookup uses pointer outputs. It checks long articles, changing words,
+end-of-list results and deferred article snapshots. The suggestion UI owns the
+displayed strings so rebuilding a list cannot invalidate its input arguments.
+The `dictionary-download` ARM regression covers the language menus and both formats in both orientations,
+delayed Wi-Fi requests, verification and installation, existing-file preservation,
+network errors, cancellation during download and verification, and a complete
+StarDict ZIP download followed by an actual lookup. It uses fake
+network/UI callbacks; physical-reader Wi-Fi and touch testing remain separate.
+
 Build families are declared in `config/targets/*.json`: `pb632-fw6` retains the
 Touch HD 3 configuration; `pocketbook-armv7-softfp` produces one experimental
 shared package for four known models with separately pinned validation firmware. See
@@ -11,7 +65,7 @@ CR3_REVISION=local bash tools/docker-build-pocketbook.sh pb632-fw6
 ```
 
 This selects the SDK, compiler flags, firmware runtime and package assets from
-the profile. A firmware dependency/ABI check and the sixteen ARM regressions
+the profile. A firmware dependency/ABI check and the twenty-four ARM regressions
 must pass before packaging. Reports include target identity and the complete
 profile is embedded in `system/share/cr3/metadata/build-info.json`. Different profiles use separate build
 directories and Docker input caches. The first profiled build recompiles objects;
@@ -22,7 +76,7 @@ The original PB632 commands and output names below remain supported.
 Build the shared package with:
 
 ```sh
-CR3_RELEASE_VERSION=1.0.4 CR3_REVISION=shared-ota bash tools/docker-build-pocketbook.sh pocketbook-armv7-softfp
+CR3_RELEASE_VERSION=1.0.7 CR3_REVISION=shared-ota bash tools/docker-build-pocketbook.sh pocketbook-armv7-softfp
 ```
 
 This uses the independent `coolreader-pocketbook-armv7-softfp-work` volume and
@@ -55,7 +109,7 @@ From the repository root:
 CR3_REVISION=local bash tools/docker-build-touch-hd3.sh
 ```
 
-This builds the PocketBook ARM executable, runs all sixteen ARM/QEMU regression
+This builds the PocketBook ARM executable, runs all twenty-four ARM/QEMU regression
 groups and package checks, and writes the ZIP, SHA-256 file, test report and
 separate debug symbols into `dist/`. It does not install or publish the build.
 

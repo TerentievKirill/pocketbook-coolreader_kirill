@@ -1,11 +1,19 @@
 # CoolReader for PocketBook
 
-[Downloads](https://readertools.eu/coolreader/downloads/) · [Installation](https://readertools.eu/coolreader/installation/) · [Manual](https://readertools.eu/coolreader/manual/) · [Release 1.0.6](https://github.com/dderugin/pocketbook-coolreader/releases/tag/v1.0.6)
+[Downloads](https://readertools.eu/coolreader/downloads/) · [Installation](https://readertools.eu/coolreader/installation/) · [Manual](https://readertools.eu/coolreader/manual/) · [Release 1.0.7](https://github.com/dderugin/pocketbook-coolreader/releases/tag/v1.0.7)
 
-Release **1.0.6** adds grouped settings with larger controls and a font sample,
-quarter-step font weights, faster font and page caches, and more reliable saving
-of reading position and preferences. Book layout changes apply once on Done.
-It retains the faster page copying, idle prefetch and cached status updates from 1.0.5.
+Release **1.0.7** adds free dictionary downloads for English, Russian, Ukrainian
+and Czech, original StarDict support, and a clearer dictionary window with labeled
+controls and readable entry previews. Hold the centre of the page for the new
+Reader menu, with Settings first and additional tools under More tools.
+
+It fixes native dictionary browsing crashes, HTML appearing in suggestion rows,
+and Google/Wikipedia lookups. Downloaded dictionaries work offline; web lookups
+use PocketBook's browser over Wi-Fi. Factory-protected dictionaries may remain
+unavailable to third-party apps; free downloads provide an alternative.
+
+It retains the grouped settings, quarter-step font weights, faster page/font
+caches and more reliable saved reading state introduced in 1.0.6.
 
 It provides one shared ARMv7 Linux executable and install ZIP for
 the four models below. Firmware snapshots used for verification:
@@ -17,7 +25,7 @@ the four models below. Firmware snapshots used for verification:
 | Era / PB700 | U700.6.10.3209 |
 | InkPad 4 / PB743G | U743g.6.11.1683 |
 
-Twenty ARM regression groups and thirteen
+Twenty-four ARM regression groups and thirteen
 software probes on each additional firmware pass; interactive hardware testing
 and end-to-end device OTA acceptance remain pending. Firmware builds are no
 longer restricted to this list; unknown models and API levels below 6.10 are rejected. See the [device matrix](DEVICE-SUPPORT.md) and
@@ -115,7 +123,7 @@ List enabled targets with `python3 tools/targets.py --list`.
 
 The first run downloads approximately 1.1 GB of pinned SDK/firmware archives,
 verifies their SHA-256 hashes, prepares the Linux build environment, builds the
-ARM executable, and runs all twenty ARM/QEMU regression groups and package
+ARM executable, and runs all twenty-four ARM/QEMU regression groups and package
 checks. No remote build server or connected PocketBook is required.
 
 Artifacts are written to `dist/`:
@@ -149,7 +157,7 @@ export POCKETBOOK_SDK="$PWD/work/sdk/SDK-B288-6.10"
 bash tools/build-touch-hd3.sh
 ```
 
-The script builds the ARM application, keeps debug symbols, runs nineteen ARM/QEMU
+The script builds the ARM application, keeps debug symbols, runs twenty-three ARM/QEMU
 regression groups and checks packaging evidence before producing
 `dist/coolreader-touch-hd3-fw6.11.2001-dev.zip` and its SHA-256 file.
 Set `CR3_REVISION` to label a candidate and `CR3_BUILD_DIR` to use another build

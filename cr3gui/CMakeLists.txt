@@ -1,4 +1,4 @@
-set(CR3_RELEASE_VERSION "1.0.6" CACHE STRING "Stable OTA version (SemVer)")
+set(CR3_RELEASE_VERSION "1.0.7" CACHE STRING "Stable OTA version (SemVer)")
 if(NOT CR3_RELEASE_VERSION MATCHES "^(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)$")
     message(FATAL_ERROR "CR3_RELEASE_VERSION must be MAJOR.MINOR.PATCH")
 endif()
@@ -15,6 +15,14 @@ endif()
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     ${CMAKE_SOURCE_DIR}/config/pocketbook-devices.json ${CMAKE_SOURCE_DIR}/tools/generate-device-profiles.py)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
+execute_process(COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/generate-dictionary-catalog.py
+    ${CMAKE_SOURCE_DIR}/config/dictionaries.json ${CMAKE_CURRENT_BINARY_DIR}/dictionary_catalog.h
+    RESULT_VARIABLE dictionary_catalog_result)
+if(NOT dictionary_catalog_result EQUAL 0)
+    message(FATAL_ERROR "Dictionary catalogue generation failed")
+endif()
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    ${CMAKE_SOURCE_DIR}/config/dictionaries.json ${CMAKE_SOURCE_DIR}/tools/generate-dictionary-catalog.py)
 option(CR3_SHARED_PACKAGE "Experimental shared PocketBook package; USB updates only" OFF)
 if(CR3_SHARED_PACKAGE)
     add_definitions(-DCR3_SHARED_PACKAGE=1)
@@ -47,6 +55,9 @@ set(CR3_SOURCES
 if(POCKETBOOK_PRO)
     list(APPEND CR3_SOURCES src/web.cpp src/web_transfer.cpp src/ota_update.cpp src/pb_toc.cpp)
     add_definitions(-DPOCKETBOOK_PRO=1)
+    if(POCKETBOOK_FW6)
+        list(APPEND CR3_SOURCES src/dictionary_download.cpp src/stardict.cpp src/stardict_install.cpp src/pb_dictionary_engine.cpp)
+    endif()
     if(POCKETBOOK_PRO_PRO2)
         add_definitions(-DPOCKETBOOK_PRO_PRO2=1)
     elseif(POCKETBOOK_PRO_FW5)

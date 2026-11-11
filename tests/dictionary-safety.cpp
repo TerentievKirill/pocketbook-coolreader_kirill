@@ -2,6 +2,27 @@
 #include "testutil.h"
 #include <string>
 int main() {
+    // Native SDIC dictionaries can contain exactly the same HTML as StarDict.
+    CHECK(PbDictionary::preview("<div>/<font color=\"gray\">med.s(ı)n</font>/, <font color='green'>noun</font><div>лекарство &amp; медицина</div>") ==
+        lString32("/ med.s(ı)n /, noun лекарство & медицина"));
+    CHECK(PbDictionary::preview("<b title='a > b'>medicine</b> &lt;3 &#8212; препарат") == lString32("medicine <3 — препарат"));
+    CHECK(PbDictionary::preview("\002bold\001 \003strong\001\nplain") == lString32("bold strong plain"));
+    CHECK(PbDictionary::preview("a < b > c, 1 < 3") == lString32("a < b > c, 1 < 3"));
+    CHECK(PbDictionary::preview("unfinished <tag") == lString32("unfinished <tag"));
+    CHECK(PbDictionary::preview(NULL).empty());
+    CHECK(PbDictionary::preview(std::string(500,'a').c_str()).length() == 256);
+    PbDictionary::ArticleSnapshot pending;
+    {
+        std::string word = "house", translation(12000, 'x');
+        pending.set(word.c_str(), translation.c_str());
+        word.assign(1000, 'z'); translation.assign(20000, 'y');
+    }
+    CHECK(pending.present() && !strcmp(pending.word(), "house"));
+    CHECK(strlen(pending.translation()) == 12000 && pending.translation()[0] == 'x');
+    PbDictionary::ArticleSnapshot retained(pending.word(), pending.translation());
+    pending.clear();
+    CHECK(!pending.present() && !strcmp(retained.word(), "house"));
+    CHECK(strlen(retained.translation()) == 12000);
     char buffer[256];
     for (int length : {255, 256, 300}) {
         std::string source(length, 'a');

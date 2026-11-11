@@ -32,6 +32,6 @@ docker run --rm --init --platform linux/amd64 \
     --mount "type=bind,source=$root/work/qualification,target=/qualification" \
     -e CR3_QUALIFICATION_DIR=/qualification \
     -e CR3_ARCHIVE_DIR=/downloads \
-    -e "CR3_TARGET=$target" -e "CR3_RELEASE_VERSION=${CR3_RELEASE_VERSION:-1.0.6}" -e "CR3_REVISION=$revision" -e "JOBS=${JOBS:-4}" \
+    -e "CR3_TARGET=$target" -e "CR3_RELEASE_VERSION=${CR3_RELEASE_VERSION:-1.0.7}" -e "CR3_REVISION=$revision" -e "JOBS=${JOBS:-4}" \
     -e "CR3_HOST_UID=$(id -u)" -e "CR3_HOST_GID=$(id -g)" \
     "$image" bash /src/tools/docker/entrypoint.sh

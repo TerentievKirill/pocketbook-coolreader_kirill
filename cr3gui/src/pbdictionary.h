@@ -2,11 +2,59 @@
 #define PB_DICTIONARY_H_INCLUDED
 #include "lvstring.h"
 #include "lvutf8.h"
+#include "lvxmlutils.h"
 #include <regex.h>
 #include <set>
 #include <string>
 
 namespace PbDictionary {
+// Suggestion rows are plain text, regardless of the dictionary's storage format.
+inline lString32 preview(const char *translation) {
+    const size_t limit = 32768;
+    std::string input(translation ? translation : "", translation ? strnlen(translation, limit) : 0);
+    std::string text;
+    for (size_t i = 0; i < input.size(); ++i) {
+        char c = input[i];
+        if (c == 1 || c == 2 || c == 3) continue; // legacy PocketBook style markers
+        if (c == '<' && i + 1 < input.size()) {
+            size_t start = i + 1;
+            if (input[start] == '/') ++start;
+            bool tag = start < input.size() && ((input[start] >= 'a' && input[start] <= 'z') ||
+                (input[start] >= 'A' && input[start] <= 'Z') || input[start] == '!' || input[start] == '?');
+            if (tag) {
+                char quote = 0; size_t end = start;
+                for (; end < input.size(); ++end) {
+                    char next = input[end];
+                    if (quote) { if (next == quote) quote = 0; }
+                    else if (next == '\'' || next == '"') quote = next;
+                    else if (next == '>') break;
+                }
+                if (end < input.size()) { text += ' '; i = end; continue; }
+            }
+        }
+        text += c;
+    }
+    lString32 value = Utf8ToUnicode(text.c_str());
+    PreProcessXmlString(value, 0);
+    value.trim();
+    return value.substr(0, 256);
+}
+// Deferred UI updates outlive native lookup buffers and suggestion menu rows.
+class ArticleSnapshot {
+    lString8 _word, _translation;
+    bool _present = false;
+public:
+    ArticleSnapshot() {}
+    ArticleSnapshot(const char *word, const char *translation) { set(word, translation); }
+    void set(const char *word, const char *translation) {
+        lString8 nextWord(word ? word : ""), nextTranslation(translation ? translation : "");
+        _word = nextWord; _translation = nextTranslation; _present = word != NULL;
+    }
+    void clear() { _present = false; _word.clear(); _translation.clear(); }
+    bool present() const { return _present; }
+    const char *word() const { return _word.c_str(); }
+    const char *translation() const { return _translation.c_str(); }
+};
 class RedirectPatterns {
     regex_t patterns[2];
     bool valid[2];

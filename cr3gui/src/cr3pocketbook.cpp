@@ -17,6 +17,11 @@
 #include "cr3version.h"
 #include <inkview.h>
 #include "pbdictionary.h"
+#ifdef POCKETBOOK_FW6
+#include "dictionary_download.h"
+#include "pb_dictionary_engine.h"
+#include "stardict.h"
+#endif
 #include "pbgrayupdate.h"
 #include "pbscreenupdate.h"
 #include "pbprefetch.h"
@@ -383,6 +388,11 @@ static bool exiting = false;
 char key_buffer[KEY_BUFFER_LEN];
 
 #include <cri18n.h>
+#include "dictionary_ui.h"
+#include "pb_browser.h"
+#ifdef POCKETBOOK_FW6
+#include "pb_browser_ui.h"
+#endif
 
 class CRPocketBookScreen : public CRGUIScreenBase {
 private:
@@ -1586,6 +1596,16 @@ public:
 
 #endif // !POCKETBOOK_FW6
 
+#ifndef POCKETBOOK_FW6
+#define pbEnumDictionaries EnumDictionaries
+#define pbOpenDictionary OpenDictionary
+#define pbCloseDictionary CloseDictionary
+#define pbLookupWordExact LookupWordExact
+#define pbLookupWord LookupWord
+#define pbLookupNext LookupNext
+#define pbLookupPrevious LookupPrevious
+#endif
+
 class CRPbDictionaryDialog;
 class CRPbDictionaryMenu;
 
@@ -1601,13 +1621,10 @@ private:
     lString32 _word;
     lString32 _searchPattern;
     bool _active;
-    bool _dictsLoaded;
     int _selectedIndex;
     int _itemsCount;
-    LVImageSourceRef _toolBarImg;
     int _translateResult;
-    char *_newWord;
-    char *_newTranslation;
+    PbDictionary::ArticleSnapshot _pendingArticle;
 private:
     void searchDictionary();
     void loadDictionaries();
@@ -1622,6 +1639,7 @@ public:
     virtual void draw();
     virtual void translate(const lString32 &w);
     virtual lString8 createArticle(const char *word, const char *translation);
+    void showArticle(const char *word,const char *translation,int selected);
     virtual bool onCommand( int command, int params );
 
     virtual bool onTouchEvent( int x, int y, CRGUITouchEventType evType );
@@ -1635,19 +1653,17 @@ public:
     void doActivate();
     void doDeactivate();
     int getCurItem() { return _selectedIndex; }
-    void setTranslation(lString8 translation);
+    void setTranslation(lString8 translation, bool html = false);
     void setCurItem(int index);
     virtual void drawTitleBar();
+    virtual bool getTitleRect(lvRect &rc);
     virtual void Update();
     bool isArticleListActive();
     void closeDictionary();
     virtual void setRect( const lvRect & rc );
     void scheduleDictListUpdate(const char *word, const char *translation)
     {
-        if (_newWord == NULL) {
-            _newWord = const_cast<char *>(word);
-            _newTranslation = const_cast<char *>(translation);
-        }
+        if (!_pendingArticle.present()) _pendingArticle.set(word, translation);
     }
     virtual void reconfigure( int flags );
     int getDesiredHeight();
@@ -1659,8 +1675,8 @@ public:
 class CRPbDictionaryMenuItem : public CRMenuItem
 {
 private:
-    const char *_word;
-    const char *_translation;
+    lString8 _word;
+    lString8 _translation;
     lString32 _word16;
     lString32 _translation16;
 protected:
@@ -1668,8 +1684,8 @@ protected:
 public:
     CRPbDictionaryMenuItem(CRMenu * menu, int id, const char *word, const char *translation);
     virtual void Draw( LVDrawBuf & buf, lvRect & rc, CRRectSkinRef skin, CRRectSkinRef valueSkin, bool selected );
-    const char * getWord() { return _word; }
-    const char * getTranslation() { return _translation; }
+    const char * getWord() { return _word.c_str(); }
+    const char * getTranslation() { return _translation.c_str(); }
 };
 
 class CRPbDictionaryMenu : public CRMenu
@@ -1678,9 +1694,11 @@ private:
     CRPbDictionaryView *_parent;
 protected:
     virtual void drawTitleBar() { _parent->drawTitleBar(); }
+    virtual bool getTitleRect(lvRect &rc) { return _parent->getTitleRect(rc); }
 public:
     CRPbDictionaryMenu(CRGUIWindowManager * wm, CRPbDictionaryView *parent);
     virtual const lvRect & getRect() { return _rect; }
+    bool getEntriesRect(lvRect &rc) { return getClientRect(rc); }
     virtual bool onCommand( int command, int params = 0 );
     virtual void setCurItem(int nItem);
     bool newPage(const char *word, const char *translation);
@@ -1688,29 +1706,14 @@ public:
     bool prevPage();
     int getTopItem() { return _topItem; }
     int getSelectedItem() { return _selectedItem; }
-    const char * getCurItemWord();
-    int getPageInItemCount()
-    {
-        CRMenuSkinRef skin = getSkin();
-        if ( !skin.isNull() )
-           return skin->getMinItemCount();
-
-        return 0;
-    }
-    virtual void draw() { CRMenu::draw(); _dirty = false; }
+    virtual void draw();
     void invalidateMenu()
     {
         _pageUpdate = true;
         setDirty();
     }
     virtual void reconfigure( int flags );
-    virtual lvPoint getMaxItemSize()
-    {
-        lvPoint pt = CRMenu::getMaxItemSize();
 
-        pt.y = pt.y * 3/4;
-        return pt;
-    }
 };
 
 static void translate_timer()
@@ -2911,6 +2914,7 @@ public:
     virtual ~CRPocketBookDocView()
     {
         instance = NULL;
+        if (main_win==this) main_win=NULL;
         if (_dictDlg != NULL)
             delete _dictDlg;
         if (m_bmFromSkin) {
@@ -3130,15 +3134,14 @@ static void paused_rotate_timer()
 
 CRPbDictionaryView::CRPbDictionaryView(CRGUIWindowManager * wm, CRPbDictionaryDialog *parent)
     : CRViewDialog(wm, lString32::empty_str, lString8::empty_str, lvRect(), false, true), _parent(parent),
-    _dictsTable(16), _active(false), _dictsLoaded(false), _itemsCount(7), _translateResult(0),
-    _newWord(NULL), _newTranslation(NULL)
+    _dictsTable(16), _dictNames(NULL), _dictIndex(-1), _dictCount(0),
+    _active(false), _selectedIndex(PB_DICT_DEACTIVATE), _itemsCount(7), _translateResult(0)
 {
     bool default_dict = false;
     setSkinName(lString32("#dict"));
     lvRect rect = _wm->getScreen()->getRect();
     CRWindowSkinRef skin = getSkin();
     if ( !skin.isNull() ) {
-        _toolBarImg = _wm->getSkin()->getImage(U"cr3_dict_tools.png");
         CRRectSkinRef clientSkin = skin->getClientSkin();
         if ( !clientSkin.isNull() ) {
             getDocView()->setBackgroundColor(clientSkin->getBackgroundColor());
@@ -3155,17 +3158,20 @@ CRPbDictionaryView::CRPbDictionaryView(CRGUIWindowManager * wm, CRPbDictionaryDi
     CRPropRef props = CRPocketBookDocView::instance->getProps();
     getDocView()->setVisiblePageCount(props->getIntDef(PROP_POCKETBOOK_DICT_PAGES, 1));
     lString32 lastDict = props->getStringDef(PROP_POCKETBOOK_DICT, pbGlobals->getDictionary());
+    loadDictionaries();
+    // A protected or removed saved dictionary must not hide user installations.
+    int savedIndex = -1;
+    if (!_dictsTable.get(lastDict, savedIndex)) lastDict.clear();
     if ((default_dict = lastDict.empty())) {
         CRLog::trace("last dictionary is empty");
-        loadDictionaries();
         if (_dictCount > 0)
             lastDict = Utf8ToUnicode(lString8(_dictNames[0]));
         CRLog::trace("_dictCount = %d", _dictCount);
     }
     if (!lastDict.empty()) {
-        _dictIndex = 0;
-        int rc = OpenDictionary((char *)UnicodeToUtf8(lastDict).c_str());
-        CRLog::trace("OpenDictionary() returned = %d", rc);
+        _dictsTable.get(lastDict, _dictIndex);
+        int rc = pbOpenDictionary((char *)UnicodeToUtf8(lastDict).c_str());
+        CRLog::trace("pbOpenDictionary() returned = %d", rc);
         if (rc == 1) {
             _caption = lastDict;
             getDocView()->createDefaultDocument(lString32(), Utf8ToUnicode(TR("@Word_not_found")));
@@ -3177,26 +3183,35 @@ CRPbDictionaryView::CRPbDictionaryView(CRGUIWindowManager * wm, CRPbDictionaryDi
             return;
         }
         lString8 dName =  UnicodeToUtf8(lastDict);
-        CRLog::error("OpenDictionary(%s) returned %d", dName.c_str(), rc);
+        CRLog::error("pbOpenDictionary(%s) returned %d", dName.c_str(), rc);
     }
     _dictIndex = -1;
+#ifdef POCKETBOOK_FW6
+    _caption = lString32(_("Dictionary"));
+    getDocView()->createDefaultDocument(lString32::empty_str,
+        lString32(_("No accessible dictionary is available. Tap the dictionary name above, then Get dictionaries to install one.")));
+#else
     getDocView()->createDefaultDocument(lString32::empty_str, Utf8ToUnicode(TR("@Dic_error")));
+#endif
 }
 
 void CRPbDictionaryView::loadDictionaries()
 {
-    _dictNames = EnumDictionaries();
-    for (_dictCount = 0; _dictNames[_dictCount]; _dictCount++) {
+    _dictsTable.clear();
+    _dictNames = pbEnumDictionaries();
+    for (_dictCount = 0; _dictNames && _dictNames[_dictCount]; _dictCount++) {
         _dictsTable.set(Utf8ToUnicode( lString8(_dictNames[_dictCount]) ), _dictCount);
     }
     CRLog::trace("_dictCount = %d", _dictCount);
-    _dictsLoaded = true;
+    if (_dictIndex >= 0 && !_dictsTable.get(_caption, _dictIndex)) {
+        pbCloseDictionary(); _dictIndex = -1;
+    }
 }
 
 CRPbDictionaryView::~CRPbDictionaryView()
 {
     if (_dictIndex >= 0)
-        CloseDictionary();
+        pbCloseDictionary();
     delete _dictMenu;
     _dictMenu = NULL;
 }
@@ -3224,63 +3239,20 @@ bool CRPbDictionaryView::isDirty()
     return CRViewDialog::isDirty();
 }
 
+bool CRPbDictionaryView::getTitleRect(lvRect &rc)
+{
+    if (!CRViewDialog::getTitleRect(rc)) return false;
+    rc.bottom = rc.top+dictview::titleHeight(_rect);
+    return true;
+}
+
 void CRPbDictionaryView::drawTitleBar()
 {
-    CRLog::trace("CRPbDictionaryView::drawTitleBar()");
-    LVDrawBuf & buf = *_wm->getScreen()->getCanvas();
-    CRWindowSkinRef skin( _wm->getSkin()->getWindowSkin(_skinName.c_str()) );
-    CRRectSkinRef titleSkin = skin->getTitleSkin();
-    lvRect titleRc;
-
-    if ( !getTitleRect( titleRc ) )
-        return;
-
-   // CRLog::trace("CRPbDictionaryView::drawTitleBar() titleRc ( %d, %d, %d, %d ) w= %d", titleRc.left, titleRc.top, titleRc.right, titleRc.bottom, titleRc.width() );
-    titleSkin->draw( buf, titleRc );
-    lvRect borders = titleSkin->getBorderWidths();
-    buf.SetTextColor( skin->getTextColor() );
-    buf.SetBackgroundColor( skin->getBackgroundColor() );
-    int imgWidth = 0;
-    int hh = titleRc.bottom - titleRc.top;
-    if ( !_icon.isNull() ) {
-        int w = _icon->GetWidth();
-        int h = _icon->GetHeight();
-        buf.Draw( _icon, titleRc.left + hh/2-w/2, titleRc.top + hh/2 - h/2, w, h );
-        imgWidth = w + 8;
-       // CRLog::trace("CRPbDictionaryView::drawTitleBar() _icon ( %d, %d, %d, %d )", titleRc.left + hh/2-w/2, titleRc.top + hh/2 - h/2, w, h );
-    }
-    int tbWidth = 0;
-    if (!_toolBarImg.isNull())
-    {
-        tbWidth = _toolBarImg->GetWidth();
-        int h = _toolBarImg->GetHeight();
-        titleRc.right -= (tbWidth + titleSkin->getBorderWidths().right);
-        buf.Draw(_toolBarImg, titleRc.right, titleRc.top + hh/2 - h/2, tbWidth, h );
-       // CRLog::trace("CRPbDictionaryView::drawTitleBar() _toolBarImg tbWidth=%d, h=%d ( %d, %d, %d, %d )", tbWidth, h, titleRc.right, titleRc.top + hh/2 - h/2, tbWidth, h );
-    }
-    lvRect textRect = titleRc;
-    textRect.left += imgWidth;
-    titleSkin->drawText( buf, textRect, _caption );
-    if (_active)
-    {
-        lvRect selRc;
-
-        if (_selectedIndex != 0 && tbWidth > 0) {
-            int itemWidth = tbWidth/(_itemsCount -1);
-            selRc = titleRc;
-            selRc.left = titleRc.right + itemWidth * (_selectedIndex -1);
-            selRc.right = selRc.left + itemWidth;
-            CRLog::trace("CRPbDictionaryView::drawTitleBar() _selectedIndex=%d, ( %d, %d, %d, %d )", _selectedIndex, selRc.left, selRc.top, selRc.right, selRc.bottom );
-        } else {
-            selRc = textRect;
-            selRc.left += borders.left;
-            CRLog::trace("CRPbDictionaryView::drawTitleBar() else textRect _selectedIndex=%d, ( %d, %d, %d, %d )", _selectedIndex, selRc.left, selRc.top, selRc.right, selRc.bottom );
-        }
-        selRc.top += borders.top;
-        selRc.bottom -= borders.bottom;
-        buf.InvertRect(selRc.left, selRc.top, selRc.right, selRc.bottom);
-       // CRLog::trace("CRPbDictionaryView::drawTitleBar() InvertRect ( %d, %d, %d, %d )", selRc.left, selRc.top, selRc.right, selRc.bottom );
-    }
+    lvRect rc;
+    CRWindowSkinRef skin = getSkin();
+    if (skin.isNull() || !getTitleRect(rc)) return;
+    dictview::header(*_wm->getScreen()->getCanvas(),skin->getTitleSkin(),rc,
+        dictview::name(_caption),_selectedIndex,_active);
 }
 
 void CRPbDictionaryView::draw()
@@ -3298,26 +3270,40 @@ void CRPbDictionaryView::draw()
         fontMan->SetAntialiasMode(font_aa_big);
 }
 
+class CRDictionaryChoiceItem : public CRMenuItem {
+    bool _current, _star;
+public:
+    CRDictionaryChoiceItem(CRMenu *menu,int id,const lString32 &raw,bool current)
+        : CRMenuItem(menu,id,dictview::name(raw),LVImageSourceRef(),LVFontRef(),raw.c_str()), _current(current), _star(raw.pos(U" (StarDict)")>=0) {}
+    virtual lString32 getSubmenuValue() {
+        return lString32(_current ? _("Selected") : _("Offline")) + U" · " +
+            (_star ? _("StarDict") : _("PocketBook"));
+    }
+    virtual void Draw(LVDrawBuf &buf,lvRect &rc,CRRectSkinRef skin,CRRectSkinRef,bool selected) {
+        dictview::entry(buf,skin,rc,_label,getSubmenuValue(),selected);
+        _itemDirty=false;
+    }
+};
+
 void CRPbDictionaryView::selectDictionary()
 {
     CRLog::trace("selectDictionary()");
     LVFontRef valueFont(fontMan->GetFont( VALUE_FONT_SIZE, 400, true, css_ff_sans_serif, lString8("Liberation Sans")));
     CRMenu * dictsMenu = new CRMenu(_wm, NULL, PB_CMD_SELECT_DICT,
-                                    lString32(""), LVImageSourceRef(), LVFontRef(), valueFont,
+                                    lString32(_("Choose dictionary")), LVImageSourceRef(), LVFontRef(), valueFont,
                                     CRPocketBookDocView::instance->getNewProps(), PROP_POCKETBOOK_DICT);
     dictsMenu->setAccelerators(_wm->getAccTables().get("menu"));
     dictsMenu->setSkinName(lString32("#settings"));
-    if (!_dictsLoaded) {
-        loadDictionaries();
-    }
+    loadDictionaries();
     for (int i = 0; i < _dictCount; i++) {
         lString32 dictName = Utf8ToUnicode(_dictNames[i]);
-        dictsMenu->addItem( new CRMenuItem(dictsMenu, i,
-                                           dictName,
-                                           LVImageSourceRef(),
-                                           LVFontRef(),
-                                           dictName.c_str()));
+        dictsMenu->addItem(new CRDictionaryChoiceItem(dictsMenu,i,dictName,dictName==_caption));
     }
+#ifdef POCKETBOOK_FW6
+    CRMenu *downloads = pbCreateDictionaryDownloadsMenu(dictsMenu, _dictCount);
+    downloads->setLabel(lString32(_("Get dictionaries")));
+    dictsMenu->addItem(downloads);
+#endif
     dictsMenu->reconfigure( 0 );
     _wm->activateWindow(dictsMenu);
 }
@@ -3333,17 +3319,18 @@ void CRPbDictionaryView::onDictionarySelect()
     CRPocketBookDocView::instance->applySettings();
     CRPropRef props = CRPocketBookDocView::instance->getProps();
     lString32 lastDict = props->getStringDef(PROP_POCKETBOOK_DICT);
-    int index = _dictsTable.get(lastDict);
+    int index = -1;
+    _dictsTable.get(lastDict, index);
     CRLog::trace("CRPbDictionaryView::onDictionarySelect(%d)", index);
-    while (index >= 0 && index <= _dictCount) {
+    while (index >= 0 && index < _dictCount) {
         if (_dictIndex >= 0) {
             if (index == _dictIndex) {
                 break; /* The same dictionary selected */
             }
-            CloseDictionary();
+            pbCloseDictionary();
         }
-        int rc = OpenDictionary(_dictNames[index]);
-        CRLog::trace("OpenDictionary(%s) returned %d", _dictNames[index], rc);
+        int rc = pbOpenDictionary(_dictNames[index]);
+        CRLog::trace("pbOpenDictionary(%s) returned %d", _dictNames[index], rc);
         if (rc == 1) {
             _dictIndex = index;
             CRPocketBookDocView::instance->saveSettings(lString32());
@@ -3363,7 +3350,7 @@ void CRPbDictionaryView::onDictionarySelect()
 void CRPbDictionaryView::noTranslation()
 {
     setTranslation(CRViewDialog::makeFb2Xml(lString8::empty_str));
-    _newWord = _newTranslation = NULL;
+    _pendingArticle.clear();
     setCurItem(PB_DICT_EXIT);
 }
 
@@ -3376,9 +3363,10 @@ void CRPbDictionaryView::setCurItem(int index)
         index = 0;
     _selectedIndex = index;
     if (index == PB_DICT_ARTICLE_LIST) {
-        if (_newWord != NULL) {
-            _dictMenu->newPage(_newWord, _newTranslation);
-            _newWord = _newTranslation = NULL;
+        if (_pendingArticle.present()) {
+            PbDictionary::ArticleSnapshot article = _pendingArticle;
+            _pendingArticle.clear();
+            _dictMenu->newPage(article.word(), article.translation());
         } else
             _dictMenu->invalidateMenu();
     }
@@ -3395,20 +3383,18 @@ void CRPbDictionaryView::searchDictionary()
 }
 
 void CRPbDictionaryView::launchDictBrowser(const char *urlBase) {
-    lString32 lang = main_win->getBookLanguage();
-    CRLog::trace("launchDictBrowser(): main_win->getBookLanguage() = %s", UnicodeToUtf8(lang).c_str());
-    if( lang.empty() ) {
-        lang = crCurrentLang;
-        CRLog::trace("launchDictBrowser(): crCurrentLang = %s", UnicodeToUtf8(lang).c_str());
+    lString32 word=_word;
+    if (isArticleListActive()) {
+        int selected=_dictMenu->getSelectedItem();
+        if (selected>=0 && selected<_dictMenu->getItems().length())
+            word=Utf8ToUnicode(static_cast<CRPbDictionaryMenuItem *>(_dictMenu->getItems()[selected])->getWord());
     }
-    if( lang.empty() ) {
-        lang = lString32("en");
-        CRLog::trace("launchDictBrowser(): default to en");
-    }
-
-    lString32 url = lString32(urlBase);
-    url.replace(lString32("[LANG]"), lang);
-    launchBrowser( url + _word );
+    word.trim();
+    if (word.empty()) return;
+    lString32 language=main_win ? main_win->getBookLanguage() : lString32();
+    std::string url=pbweb::searchURL(urlBase,UnicodeToUtf8(language).c_str(),
+        UnicodeToUtf8(crCurrentLang).c_str(),UnicodeToUtf8(word).c_str());
+    launchBrowser(Utf8ToUnicode(url.c_str()));
 }
 
 void CRPbDictionaryView::closeDictionary()
@@ -3492,241 +3478,49 @@ bool CRPbDictionaryView::onCommand( int command, int params )
     return false;
 }
 
-bool CRPbDictionaryView::onTouchEvent( int x, int y, CRGUITouchEventType evType )
+bool CRPbDictionaryView::onTouchEvent(int x,int y,CRGUITouchEventType evType)
 {
- // CRLog::trace("CRPbDictionaryView::onTouchEvent( %d, %d, %d )", x, y, int( evType ) );
-
-  if (_active)
-  {
-   // CRLog::trace("CRPbDictionaryView::onTouchEvent _active %d ( %d, %d, %d )",  _active, x, y, int( evType ) );
-    switch ( evType )
-    {
-    case CRTOUCH_UP:
-      CRLog::trace("CRPbDictionaryView::onTouchEvent( x=%d, y=%d,evType= %d )", x, y, int( evType ) );
-
-      CRLog::trace("CRPbDictionaryView::onTouchEvent _selectedIndex=%d )", _selectedIndex );
-      {
-
-        lvPoint pn( x, y );
-        CRWindowSkinRef skin( _wm->getSkin()->getWindowSkin(_skinName.c_str()) );
-        CRRectSkinRef titleSkin = skin->getTitleSkin();
-        lvRect titleRc;
-        lvRect clientRc= _dictMenu->getRect();
-        lvPoint pnItm= _dictMenu->getMaxItemSize();
-        //pnItm= _dictMenu->getItemSize();
-        if ( _toolBarImg.isNull() || !getTitleRect( titleRc ) || !getClientRect( titleRc ) || !pnItm.y )
-          return true;
-
-        // CRLog::trace("CRDV::onTouchEvent() titleRc ( %d, %d, %d, %d )", titleRc.left, titleRc.top, titleRc.right, titleRc.bottom );
-        // CRLog::trace("CRDV::onTouchEvent() clientRc( %d, %d, %d, %d ) pnItm.x=%d pnItm.y=%d", clientRc.left, clientRc.top, clientRc.right, clientRc.bottom, pnItm.x, pnItm.y );
-
-        titleRc.bottom= titleRc.top;
-        titleRc.top= clientRc.top;
-        clientRc.top= titleRc.bottom;
-
-        CRLog::trace("===========================================================================================" );
-        // CRLog::trace("CRDV::onTouchEvent() titleRc ( %d, %d, %d, %d )", titleRc.left, titleRc.top, titleRc.right, titleRc.bottom );
-        // CRLog::trace("CRDV::onTouchEvent() clientRc( %d, %d, %d, %d ) pnItm.x=%d pnItm.y=%d", clientRc.left, clientRc.top, clientRc.right, clientRc.bottom, pnItm.x, pnItm.y );
-
-        int command = 0;
-        lvRect tmpRc;
-        if ( titleRc.isPointInside( pn ) )
-        {
-          CRLog::trace("onTouchEvent() point inside title" );
-
-          int tbWidth = _toolBarImg->GetWidth();
-          tmpRc= titleRc;
-          tmpRc.right -= ( tbWidth + titleSkin->getBorderWidths().right );
-          CRLog::trace("CRDV::onTouchEvent() PB_DICT_SELECT tmpRc ( %d, %d, %d, %d )", tmpRc.left, tmpRc.top, tmpRc.right, tmpRc.bottom );
-          if ( tmpRc.isPointInside( pn ) )
-          {
-            _selectedIndex= PB_DICT_SELECT;
-            selectDictionary();
-            CRLog::trace("onTouchEvent() PB_DICT_SELECT %d", _selectedIndex );
+    if (!_active) return false;
+    if (evType != CRTOUCH_UP) return true;
+    lvRect title,client;
+    if (getTitleRect(title)) {
+        int item = dictview::Header(title).hit(x,y);
+        if (item >= 0) {
+            if (item==PB_DICT_GOOGLE || item==PB_DICT_WIKIPEDIA) {
+                launchDictBrowser(item==PB_DICT_GOOGLE ? PB_BROWSER_QUERY_GOOGLE : PB_BROWSER_QUERY_WIKIPEDIA);
+            } else {
+                setCurItem(item);
+                onItemSelect();
+            }
             return true;
-          }
-
-          tmpRc= titleRc;
-          tmpRc.left += tmpRc.right - ( tbWidth + titleSkin->getBorderWidths().right );
-          CRLog::trace("CRDV::onTouchEvent() toolBar tmpRc ( %d, %d, %d, %d )", tmpRc.left, tmpRc.top, tmpRc.right, tmpRc.bottom );
-          if ( tmpRc.isPointInside( pn ) )// in toolBar
-          {
-            CRLog::trace("onTouchEvent() point inside toolbar" );
-
-            int itemWidth = tbWidth/(_itemsCount-1);
-
-            tmpRc.right = tmpRc.left + itemWidth;
-            CRLog::trace("CRDV::onTouchEvent() PB_DICT_EXIT tmpRc ( %d, %d, %d, %d )", tmpRc.left, tmpRc.top, tmpRc.right, tmpRc.bottom );
-            if ( tmpRc.isPointInside( pn ) )
-            {
-                CRLog::trace("onTouchEvent() PB_DICT_EXIT %d", PB_DICT_EXIT );
-                closeDictionary();
-                return true;
-            }
-
-            tmpRc.left  += itemWidth;
-            tmpRc.right += itemWidth;
-            CRLog::trace("CRDV::onTouchEvent() PB_DICT_GOOGLE tmpRc ( %d, %d, %d, %d )", tmpRc.left, tmpRc.top, tmpRc.right, tmpRc.bottom );
-            if ( tmpRc.isPointInside( pn ) )
-            {
-                CRLog::trace("onTouchEvent() PB_DICT_GOOGLE %d", PB_DICT_GOOGLE );
-                setCurItem( PB_DICT_GOOGLE );
-                onItemSelect();
-                Update();
-                return true;
-            }
-
-            tmpRc.left  += itemWidth;
-            tmpRc.right += itemWidth;
-            CRLog::trace("CRDV::onTouchEvent() PB_DICT_WIKIPEDIA tmpRc ( %d, %d, %d, %d )", tmpRc.left, tmpRc.top, tmpRc.right, tmpRc.bottom );
-            if ( tmpRc.isPointInside( pn ) )
-            {
-                CRLog::trace("onTouchEvent() PB_DICT_WIKIPEDIA %d", PB_DICT_WIKIPEDIA );
-                setCurItem( PB_DICT_WIKIPEDIA );
-                onItemSelect();
-                Update();
-                return true;
-            }
-
-            tmpRc.left  += itemWidth;
-            tmpRc.right += itemWidth;
-            CRLog::trace("CRDV::onTouchEvent() PB_DICT_ARTICLE_LIST tmpRc ( %d, %d, %d, %d )", tmpRc.left, tmpRc.top, tmpRc.right, tmpRc.bottom );
-            if ( tmpRc.isPointInside( pn ) )
-            {
-                CRLog::trace("onTouchEvent() PB_DICT_ARTICLE_LIST %d", PB_DICT_ARTICLE_LIST );
-                setCurItem( PB_DICT_ARTICLE_LIST );
-                onItemSelect();
-                Update();
-                return true;
-            }
-
-            tmpRc.left  += itemWidth;
-            tmpRc.right += itemWidth;
-            CRLog::trace("CRDV::onTouchEvent() PB_DICT_DEACTIVATE tmpRc ( %d, %d, %d, %d )", tmpRc.left, tmpRc.top, tmpRc.right, tmpRc.bottom );
-            if ( tmpRc.isPointInside( pn ) )
-            {
-                CRLog::trace("onTouchEvent() PB_DICT_DEACTIVATE %d", PB_DICT_DEACTIVATE );
-                setCurItem( PB_DICT_DEACTIVATE );
-                onItemSelect();
-                Update();
-                return true;
-            }
-
-            tmpRc.left  += itemWidth;
-            tmpRc.right += itemWidth;
-            CRLog::trace("CRDV::onTouchEvent() PB_DICT_SEARCH tmpRc ( %d, %d, %d, %d )", tmpRc.left, tmpRc.top, tmpRc.right, tmpRc.bottom );
-            if ( tmpRc.isPointInside( pn ) )
-            {
-                CRLog::trace("onTouchEvent() PB_DICT_SEARCH %d", PB_DICT_SEARCH );
-                setCurItem( PB_DICT_SEARCH );
-                searchDictionary();
-                Update();
-                return true;
-            }
-            }
-
-        }//if ( titleRc.isPointInside
-
-        if ( clientRc.isPointInside( pn ) )
-        {
-          CRLog::trace("onTouchEvent() point inside client" );
-
-          switch ( _selectedIndex )
-          {
-          case PB_DICT_SELECT:
-            break;
-
-          case PB_DICT_EXIT:
-            tmpRc= clientRc;
-            tmpRc.bottom -= clientRc.height()/2;
-            CRLog::trace("CRDV::onTouchEvent() PB_DICT_EXIT tmpRc ( %d, %d, %d, %d )", tmpRc.left, tmpRc.top, tmpRc.right, tmpRc.bottom );
-            if ( tmpRc.isPointInside( pn ) )
-              command = PB_CMD_UP;
-            else
-              command = PB_CMD_DOWN;
-
-             _wm->postCommand( command, 0 );
-             return true;
-            break;
-
-          case PB_DICT_ARTICLE_LIST:
-            tmpRc= clientRc;
-            tmpRc.left += clientRc.width() * 2/3;
-            if ( tmpRc.isPointInside( pn ) )//PgUp, PgDn
-            {
-            CRLog::trace("CRDV::onTouchEvent() PB_DICT_ARTICLE_LIST tmpRc ( %d, %d, %d, %d )", tmpRc.left, tmpRc.top, tmpRc.right, tmpRc.bottom );
-              tmpRc.bottom -= clientRc.height()/2;
-              if ( tmpRc.isPointInside( pn ) )
-                command = PB_CMD_UP;
-              else
-                command = PB_CMD_DOWN;
-
-            // _wm->postCommand( command, 0 );
-            // return true;
-              return _dictMenu->onCommand( command, 1 );
-            }
-            else//select item
-            {
-                tmpRc= clientRc;
-                tmpRc.right  -= clientRc.width() * 1/3;
-                tmpRc.bottom -= clientRc.height()/2;
-
-                int strcount= clientRc.height()/pnItm.y;
-                int pgitcount= _dictMenu->getPageInItemCount();
-                int nselect= ( y - clientRc.top ) / pnItm.y;
-
-                if( nselect >= 0 && nselect <= pgitcount ) {
-
-                    if ( nselect != _dictMenu->getSelectedItem() )
-                        _dictMenu->setCurItem( nselect );
-                    translate( lString32(_dictMenu->getCurItemWord()) );
-                    Update();
-                    _wm->postCommand( PB_DICT_DEACTIVATE, 0 );
-                }
-
-                CRLog::trace("CRDV::onTouchEvent() PB_DICT_ARTICLE_LIST tmpRc ( %d, %d, %d, %d ) _SelectedItem=%d _topItem=%d strcount%d  pgitcount=%d  nselect= %d" , tmpRc.left, tmpRc.top, tmpRc.right, tmpRc.bottom, _dictMenu->getSelectedItem(), _dictMenu->getTopItem(), strcount, _dictMenu->getPageInItemCount(),  nselect );
-
-                return true;
-            }
-            break;
-
-          case PB_DICT_DEACTIVATE:
-            tmpRc= clientRc;
-            tmpRc.bottom -= clientRc.height()/2;
-            CRLog::trace("CRDV::onTouchEvent() PB_DICT_DEACTIVATE tmpRc ( %d, %d, %d, %d )", tmpRc.left, tmpRc.top, tmpRc.right, tmpRc.bottom );
-            if ( tmpRc.isPointInside( pn ) )
-              command = PB_CMD_UP;
-            else
-              command = PB_CMD_DOWN;
-
-             _wm->postCommand( command, 0 );
-             return true;
-           // return this->onCommand( command, 1 );
-
-            break;
-
-          case PB_DICT_SEARCH:
-            break;
-          }
-        }//if ( clientRc.isPointInside ..
-      }
-
-    break;
-
-    default:
-    break;
-
+        }
+    }
+    if (!getClientRect(client)) return true;
+    if (isArticleListActive()) {
+        if (!_dictMenu->getEntriesRect(client)) return true;
+        dictview::Entries layout(client);
+        if (layout.previous.isPointInside(lvPoint(x,y))) return _dictMenu->onCommand(PB_CMD_UP,1);
+        if (layout.next.isPointInside(lvPoint(x,y))) return _dictMenu->onCommand(PB_CMD_DOWN,1);
+        int row = layout.hit(x,y,_dictMenu->getItems().length());
+        if (row >= 0) {
+            _dictMenu->setCurItem(row);
+            _dictMenu->onCommand(MCMD_OK,0);
+        }
+    } else if (client.isPointInside(lvPoint(x,y))) {
+        // Keep article scrolling available without reserving part of each entry.
+        onCommand(y < client.top+client.height()/2 ? PB_CMD_UP : PB_CMD_DOWN,0);
     }
     return true;
-  }
-
- // return true;
-  return false;
-  //return CRViewDialog::onTouchEvent( x, y, evType );
 }
 
 lString8 CRPbDictionaryView::createArticle(const char *word, const char *translation)
 {
+#ifdef POCKETBOOK_FW6
+    if (pbUsingStarDict()) {
+        std::string text = "<h2>" + stardict::escape(word ? word : "") + "</h2>" + (translation ? translation : "");
+        return lString8(text.c_str());
+    }
+#endif
     lString8 article;
 
     article << "<title><p>" << word << "</p></title>";
@@ -3783,6 +3577,20 @@ lString8 CRPbDictionaryView::createArticle(const char *word, const char *transla
     return article;
 }
 
+void CRPbDictionaryView::showArticle(const char *word,const char *translation,int selected)
+{
+    PbDictionary::ArticleSnapshot article(word,translation);
+    _word = Utf8ToUnicode(article.word());
+    _pendingArticle = article;
+    lString8 body = createArticle(article.word(),article.translation());
+#ifdef POCKETBOOK_FW6
+    if (pbUsingStarDict()) setTranslation(lString8("<html><body>")+body+"</body></html>",true);
+    else
+#endif
+    setTranslation(CRViewDialog::makeFb2Xml(body));
+    setCurItem(selected);
+}
+
 lString32 CRPbDictionaryView::detectDictionaryRedirectFor(const char *translation) {
     if (CRPocketBookDocView::instance->getProps()->getStringDef(PROP_POCKETBOOK_DICT)
             != lString32("Webster's 1913 Dictionary")) return lString32();
@@ -3792,6 +3600,18 @@ lString32 CRPbDictionaryView::detectDictionaryRedirectFor(const char *translatio
 void CRPbDictionaryView::translate(const lString32 &w)
 {
     getDocView()->setFontSize( pbCrFontSize );
+
+    // The dialog is cached for the book; retry after installing the first dictionary.
+    if (_dictIndex < 0) {
+        loadDictionaries();
+        if (_dictCount > 0 && pbOpenDictionary(_dictNames[0])) {
+            _dictIndex = 0;
+            _caption = Utf8ToUnicode(_dictNames[0]);
+            CRPocketBookDocView::instance->getProps()->setString(PROP_POCKETBOOK_DICT, _caption);
+            CRPocketBookDocView::instance->saveSettings(lString32());
+            _word.clear();
+        }
+    }
 
     lString8 body;
 
@@ -3812,16 +3632,16 @@ void CRPbDictionaryView::translate(const lString32 &w)
         char *word = NULL, *translation = NULL;
 
         CRLog::trace("CRPbDictionaryView::translate() LookupWordExact");
-        _translateResult = LookupWordExact((char *)what.c_str(), &word, &translation);
-        CRLog::trace("LookupWordExact(%s) returned %d", what.c_str(), _translateResult);
+        _translateResult = pbLookupWordExact((char *)what.c_str(), &word, &translation);
+        CRLog::trace("pbLookupWordExact(%s) returned %d", what.c_str(), _translateResult);
 
         if( _translateResult == 0 ) {
             word = NULL;
             translation = NULL;
 
             CRLog::trace("CRPbDictionaryView::translate() LookupWord");
-            _translateResult = LookupWord((char *)what.c_str(), &word, &translation);
-            CRLog::trace("LookupWord(%s) returned %d", what.c_str(), _translateResult);
+            _translateResult = pbLookupWord((char *)what.c_str(), &word, &translation);
+            CRLog::trace("pbLookupWord(%s) returned %d", what.c_str(), _translateResult);
         }
 
         if( _translateResult == 0 ) {
@@ -3831,8 +3651,8 @@ void CRPbDictionaryView::translate(const lString32 &w)
             translation = NULL;
 
             CRLog::trace("CRPbDictionaryView::translate() LookupWord - lowercase");
-            _translateResult = LookupWord((char *)what.c_str(), &word, &translation);
-            CRLog::trace("LookupWord(%s) returned %d", what.c_str(), _translateResult);
+            _translateResult = pbLookupWord((char *)what.c_str(), &word, &translation);
+            CRLog::trace("pbLookupWord(%s) returned %d", what.c_str(), _translateResult);
         }
 
         if (_translateResult != 0 && !word) _translateResult = 0;
@@ -3848,34 +3668,39 @@ void CRPbDictionaryView::translate(const lString32 &w)
             if (_translateResult == 1) {
                 _selectedIndex = PB_DICT_ARTICLE_LIST;
                 _dictMenu->newPage(word, translation);
-                _newWord = _newTranslation = NULL;
+                _pendingArticle.clear();
                 setDirty();
                 return;
             }
             body = createArticle(word, translation);
-            _newWord = word;
-            _newTranslation = translation;
+            _pendingArticle.set(word, translation);
         } else {
-            _newWord = _newTranslation = NULL;
-            body << TR("@Word_not_found");
+            _pendingArticle.clear();
+            body << "<p>" << _("Word not found.") << "</p><p>"
+                 << _("Try Search to edit the word, or tap the dictionary name to try another dictionary.") << "</p>";
         }
         break;
       }
     } else if (_dictCount <= 0) {
-        body << TR("@Dic_not_installed");
+        body << "<p>" << _("No dictionaries installed.") << "</p><p>"
+             << _("Tap the dictionary name above, then Get dictionaries. Downloads are free and work offline.") << "</p>";
     } else {
         body << TR("@Dic_error");
     }
     setDirty();
     _selectedIndex = PB_DICT_DEACTIVATE;
+    #ifdef POCKETBOOK_FW6
+    if (pbUsingStarDict()) setTranslation(lString8("<html><body>") + body + "</body></html>", true);
+    else
+#endif
     setTranslation(CRViewDialog::makeFb2Xml( body ));
     CRLog::trace("CRPbDictionaryView::translate() end");
 }
 
-void CRPbDictionaryView::setTranslation(lString8 translation)
+void CRPbDictionaryView::setTranslation(lString8 translation, bool html)
 {
     _stream = LVCreateStringStream( translation );
-    getDocView()->LoadDocument(_stream, U"dictionary.fb2");
+    getDocView()->LoadDocument(_stream, html ? U"dictionary.html" : U"dictionary.fb2");
 }
 
 void CRPbDictionaryView::reconfigure( int flags )
@@ -3916,57 +3741,20 @@ int CRPbDictionaryView::getDesiredHeight()
 
 lString32 CRPbDictionaryMenuItem::createItemValue(const char * translation)
 {
-    lString32 src = Utf8ToUnicode(translation);
-    lString32 dst;
-    int count = src.length();
-    if (count > 256)
-        count = 256;
-    for (int i = 0; i < count; i++) {
-        lChar32 currentChar = src[i];
-        if ((currentChar == 1 || currentChar == 2 || currentChar == 3))
-            continue;
-        if (currentChar == '\n')
-            currentChar = ' ';
-        dst << currentChar;
-    }
-    return dst;
+    return dictview::entrySummary(PbDictionary::preview(translation));
 }
 
 CRPbDictionaryMenuItem::CRPbDictionaryMenuItem(CRMenu * menu, int id, const char *word, const char *translation)
     : CRMenuItem(menu, id, lString32::empty_str, LVImageSourceRef(), LVFontRef() ), _word( word ), _translation(translation)
 {
     _word16 = Utf8ToUnicode(word);
-    _translation16 = createItemValue(_translation);
+    _translation16 = createItemValue(_translation.c_str());
 }
 
-void CRPbDictionaryMenuItem::Draw( LVDrawBuf & buf, lvRect & rc, CRRectSkinRef skin, CRRectSkinRef valueSkin, bool selected)
+void CRPbDictionaryMenuItem::Draw(LVDrawBuf &buf,lvRect &rc,CRRectSkinRef skin,CRRectSkinRef,bool selected)
 {
     _itemDirty = false;
-    lvRect itemBorders = skin->getBorderWidths();
-    skin->draw( buf, rc );
-    buf.SetTextColor( 0x000000 );
-    buf.SetBackgroundColor( 0xFFFFFF );
-    int imgWidth = DrawIcon( buf, rc, itemBorders );
-    lvRect textRect = rc;
-    textRect.left += imgWidth;
-    lString32 word = _word16 + " ";
-    lvPoint sz = skin->measureTextItem(word);
-    textRect.right = textRect.left + sz.x;
-    skin->drawText( buf, textRect, word);
-    textRect.left = textRect.right + 1;
-    textRect.right = rc.right;
-    valueSkin->drawText( buf, textRect, _translation16 );
-    if (selected) {
-#ifdef CR_INVERT_PRSERVE_GRAYS
-        if (buf.GetBitsPerPixel() > 2){
-		buf.InvertRect( rc.left, rc.top, rc.right, rc.bottom);
-		buf.InvertRect( rc.left + 2, rc.top + 2, rc.right -2 , rc.bottom - 2);
-           // buf.Rect(rc, 2, buf.GetTextColor());
-	}
-        else
-#endif /* CR_INVERT_PRSERVE_GRAYS */
-            buf.InvertRect(rc.left, rc.top, rc.right, rc.bottom);
-    }
+    dictview::entry(buf,skin,rc,_word16,_translation16,selected);
 }
 
 
@@ -3977,13 +3765,38 @@ CRPbDictionaryMenu::CRPbDictionaryMenu(CRGUIWindowManager * wm, CRPbDictionaryVi
     setSkinName(lString32("#dict-list"));
 }
 
+void CRPbDictionaryMenu::draw()
+{
+    LVDrawBuf &buf = *_wm->getScreen()->getCanvas();
+    lvRect client;
+    if (!getClientRect(client)) return;
+    if (_pageUpdate) buf.FillRect(client,0xffffff);
+    _parent->drawTitleBar();
+    dictview::Entries layout(client);
+    CRMenuSkinRef skin = getSkin();
+    for (int i=0;i<_items.length() && i<layout.count;++i) {
+        if (!_pageUpdate && !_items[i]->isItemDirty()) continue;
+        lvRect row = layout.row(i);
+        _items[i]->Draw(buf,row,skin->getItemSkin(),skin->getValueSkin(),i==_selectedItem);
+    }
+    if (_pageUpdate) dictview::navigation(buf,skin->getItemSkin(),layout);
+    _pageUpdate = false; _dirty = false;
+}
+
 bool CRPbDictionaryMenu::newPage(const char *firstWord, const char *firstTranslation)
 {
     char *word = NULL, *translation = NULL;
+    // These arguments may belong to the old first menu row. Copy before clearing.
+    PbDictionary::ArticleSnapshot first(firstWord, firstTranslation);
+    // Returning from a definition must resume browsing at that entry, rather
+    // than at the end of the previously populated suggestion list.
+    if (!first.word()[0]) return false;
+    if (!pbLookupWordExact(const_cast<char *>(first.word()),&word,&translation))
+        pbLookupWord(const_cast<char *>(first.word()),&word,&translation);
     _items.clear();
-    addItem(new CRPbDictionaryMenuItem(this, 0, firstWord, firstTranslation));
+    addItem(new CRPbDictionaryMenuItem(this, 0, first.word(), first.translation()));
     for (int i = 1; i < _pageItems; i++) {
-        int result = LookupNext(&word, &translation);
+        int result = pbLookupNext(&word, &translation);
         if (result == 0)
             break;
         addItem(new CRPbDictionaryMenuItem(this, i, word, translation));
@@ -4000,9 +3813,9 @@ bool CRPbDictionaryMenu::nextPage()
         return false;
     CRPbDictionaryMenuItem *last = static_cast<CRPbDictionaryMenuItem *>(_items[_items.length() - 1]);
 
-    int result = LookupWord(const_cast<char *>(last->getWord()), &word, &translation);
+    int result = pbLookupWord(const_cast<char *>(last->getWord()), &word, &translation);
     if (result != 0) {
-        result = LookupNext(&word, &translation);
+        result = pbLookupNext(&word, &translation);
         if (result != 0)
             return newPage(word, translation);
     }
@@ -4016,10 +3829,10 @@ bool CRPbDictionaryMenu::prevPage()
         return false;
     CRPbDictionaryMenuItem *first = static_cast<CRPbDictionaryMenuItem *>(_items[_topItem]);
 
-    int result = LookupWord(const_cast<char *>(first->getWord()), &word, &translation);
+    int result = pbLookupWord(const_cast<char *>(first->getWord()), &word, &translation);
     if (result != 0) {
         for (int i = 0; i < _pageItems; i++) {
-            int result = LookupPrevious(&word, &translation);
+            int result = pbLookupPrevious(&word, &translation);
             if (result == 0)
                 break;
             _items.insert(0, new CRPbDictionaryMenuItem(this, i, word, translation));
@@ -4037,6 +3850,7 @@ bool CRPbDictionaryMenu::prevPage()
 void CRPbDictionaryMenu::setCurItem(int nItem)
 {
     int lastOnPage = getLastOnPage();
+    if (lastOnPage <= 0) return;
     if (nItem < _topItem) {
         prevPage();
     } else if (nItem > lastOnPage -1) {
@@ -4048,52 +3862,31 @@ void CRPbDictionaryMenu::setCurItem(int nItem)
     _parent->Update();
 }
 
-const char * CRPbDictionaryMenu::getCurItemWord()
+bool CRPbDictionaryMenu::onCommand(int command,int params)
 {
-    CRPbDictionaryMenuItem *item = static_cast<CRPbDictionaryMenuItem *>(_items[_selectedItem]);
-    return item->getWord();
-}
-
-bool CRPbDictionaryMenu::onCommand( int command, int params )
-{
-    CRLog::trace("CRPbDictionaryMenu::onCommand( %d, %d )", command, params);
+    int target = PB_DICT_DEACTIVATE;
     switch (command) {
     case MCMD_CANCEL:
-        _parent->closeDictionary();
-        return true;
+        _parent->closeDictionary(); return true;
     case MCMD_OK:
     case PB_CMD_RIGHT:
-        _parent->setCurItem(_parent->getCurItem() + 1);
         break;
     case PB_CMD_LEFT:
-        _parent->setCurItem(_parent->getCurItem() - 1);
-        break;
+        target = PB_DICT_WIKIPEDIA; break;
     case PB_CMD_UP:
-        if (params > 0)
-        {
-            prevPage();
-            setCurItem( _selectedItem );
-        }
-        else
-            setCurItem(_selectedItem - 1);
+        if (params > 0) { prevPage(); setCurItem(_selectedItem); }
+        else setCurItem(_selectedItem-1);
         return true;
     case PB_CMD_DOWN:
-        if (params > 0)
-        {
-            nextPage();
-            setCurItem( _selectedItem );
-        }
-        else
-            setCurItem(_selectedItem + 1);
+        if (params > 0) { nextPage(); setCurItem(_selectedItem); }
+        else setCurItem(_selectedItem+1);
         return true;
     default:
         return false;
     }
     if (_selectedItem >= 0 && _selectedItem < _items.length()) {
         CRPbDictionaryMenuItem *item = static_cast<CRPbDictionaryMenuItem *>(_items[_selectedItem]);
-
-        _parent->setTranslation(CRViewDialog::makeFb2Xml(
-                _parent->createArticle(item->getWord(), item->getTranslation())));
+        _parent->showArticle(item->getWord(),item->getTranslation(),target);
     }
     return true;
 }
@@ -4102,9 +3895,10 @@ void CRPbDictionaryMenu::reconfigure( int flags )
 {
     int pageitems = _pageItems;
     CRMenu::reconfigure(flags);
-    if (_items.length() == 0)
-        return;
-    if (_pageItems > pageitems) {
+    lvRect client;
+    if (getClientRect(client)) _pageItems = dictview::Entries(client).count;
+    if (_items.length() == 0) return;
+    if (_pageItems != pageitems) {
         CRPbDictionaryMenuItem *item = static_cast<CRPbDictionaryMenuItem *>(_items[0]);
         if (_parent->isArticleListActive())
             // reload menu contents
@@ -4734,7 +4528,17 @@ void pbLaunchWaitBinary(const char *binary) {
     pbLaunchWaitBinary(binary, "");
 }
 
+#ifdef POCKETBOOK_FW6
+static bool pbBrowserCanLaunch() {
+    return !exiting && !isStandByMode && IsTaskActive() && CRPocketBookDocView::instance && main_win;
+}
+static void pbBrowserRestore() { pbRestoreUpdateScreen(); }
+#endif
+
 void launchBrowser(lString32 url) {
+#ifdef POCKETBOOK_FW6
+    pbScheduleBrowser(UnicodeToUtf8(url).c_str());
+#else
 
 #ifdef POCKETBOOK_PRO_FW5
     if( isBrowserScriptSupported() ) {
@@ -4749,6 +4553,7 @@ void launchBrowser(lString32 url) {
         CRLog::trace("launchBrowser(): The browser binary is not present @ %s", PB_BROWSER_BINARY);
         Message(ICON_WARNING,  const_cast<char*>("CoolReader"), "Couldn't find the browser binary @ "PB_BROWSER_BINARY, 2000);
     }
+#endif
 }
 
 
@@ -5171,7 +4976,7 @@ static void readerCheckpointTimer();
 static void scheduleReaderCheckpoint() {
     if (!main_win || exiting || isStandByMode || !IsTaskActive()) return;
     LVDocView *view = main_win->getDocView();
-    if (!view->IsDrawed()) return; // Saving must not start a cold layout from idle.
+    if (!view || !view->IsDrawed()) return; // Saving must not start a cold layout from idle.
     lInt64 now = CRTimerUtil::getSystemTimeMillis();
     checkpointPolicy.observe(view->getDocument(), view->GetPos(), now, main_win->needsStateRetry());
     int delay = checkpointPolicy.delay(now);
@@ -5311,7 +5116,7 @@ bool pbAutoUpdateEnabled() {
     return CRPocketBookDocView::instance && CRPocketBookDocView::instance->getProps()->getIntDef(PROP_OTA_AUTO_CHECK, 1) != 0;
 }
 bool pbCanRunBackgroundUpdate() {
-    return !exiting && !isStandByMode && IsTaskActive();
+    return !exiting && !isStandByMode && IsTaskActive() && !pbDictionaryDownloadBusy();
 }
 bool pbCanShowUpdatePrompt() {
     return pbCanRunBackgroundUpdate() && GetEventHandler() == main_handler &&
@@ -5402,6 +5207,8 @@ void enterStandByMode() {
 #ifdef BACKGROUND_CACHE_FILE_CREATION
     CRPocketBookWindowManager::instance->cancelCacheSwap();
 #endif
+    pbCancelBrowser();
+    pbCancelDictionaryDownload();
     OTA_backgroundActive(false);
     setFrontlightStatusActive(false);
 #endif
@@ -5813,6 +5620,8 @@ int main_handler(int type, int par1, int par2)
 #endif
     case EVT_BACKGROUND:
 #ifdef POCKETBOOK_FW6
+        pbCancelBrowser(false);
+        pbCancelDictionaryDownload(false);
         OTA_backgroundActive(false);
         setFrontlightStatusActive(false);
 #ifdef BACKGROUND_CACHE_FILE_CREATION
@@ -5830,6 +5639,8 @@ int main_handler(int type, int par1, int par2)
 #endif
     case EVT_EXIT:
 #ifdef POCKETBOOK_FW6
+        pbCancelBrowser();
+        pbCancelDictionaryDownload();
         ClearTimer(readerCheckpointTimer);
         OTA_backgroundActive(false);
         setFrontlightStatusActive(false);

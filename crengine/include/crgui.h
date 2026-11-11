@@ -1175,6 +1175,7 @@ class CRMenu : public CRGUIWindowBase, public CRMenuItem {
         bool _pageUpdate;
         CRMenuSkinRef _skin;// = _wm->getSkin()->getMenuSkin( path.c_str() );
         bool _settingsEditor = false;
+        bool _actionMenu = false;
         bool _settingsStepper = false;
         int _settingsDpi = 300;
         lString32 _settingsScope;
@@ -1196,6 +1197,8 @@ class CRMenu : public CRGUIWindowBase, public CRMenuItem {
         virtual void highlightCommandItem( int cmd );
         CRMenu *settingsRoot() const;
         bool isSettingsEditor() const { return settingsRoot() != NULL; }
+        bool isActionMenu() const { CRMenu *root=settingsRoot(); return root && root->_actionMenu; }
+        void enableActionMenu(lString32 scope, int dpi = 300);
         void enableSettingsEditor(CRPropRef props, lString32 scope, int dpi = 300);
         void captureSettingsBaseline();
         bool settingsChanged() const;

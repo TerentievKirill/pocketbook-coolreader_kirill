@@ -25,6 +25,7 @@
 #include "ota_update.h"
 #ifdef POCKETBOOK_FW6
 #include "ota_menu.h"
+#include "dictionary_download.h"
 #endif
 #endif
 
@@ -2002,6 +2003,9 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
     mainMenu->addItem(screenMenu);
     if (controlSettingsMenu) mainMenu->addItem(controlSettingsMenu);
     mainMenu->addItem(advancedMenu);
+#ifdef POCKETBOOK_FW6
+    mainMenu->addItem(pbCreateDictionaryDownloadsMenu(mainMenu, _menuItemId++));
+#endif
     mainMenu->addItem(aboutMenu);
     captureSettingsBaseline();
     reconfigure(0);

@@ -31,6 +31,11 @@ class ValidationEvidence(TestCase):
             with patch.object(metadata, 'source_metadata', return_value=source), \
                     patch.object(metadata, 'firmware_path', return_value=firmware):
                 self.assertEqual(metadata.verified_report(report, binary, root, root), report)
+                for required_dictionary_test in ('dictionary-browser', 'dictionary-download', 'stardict', 'native-dictionary-api'):
+                    missing_dictionary_test = copy.deepcopy(report)
+                    missing_dictionary_test['passed'].remove(required_dictionary_test)
+                    with self.assertRaisesRegex(ValueError, 'Required ARM regressions'):
+                        metadata.verified_report(missing_dictionary_test, binary, root, root)
                 for key, bad in [('status', 'failed'), ('passed', []), ('binary_sha256', 'wrong'),
                                  ('source', {}), ('configuration_sha256', 'wrong'), ('target', {}), ('runtime_compatibility', {})]:
                     invalid = copy.deepcopy(report); invalid[key] = bad

@@ -29,6 +29,8 @@ qemu = Path(os.environ.get('CR3_QEMU') or (str(bundled_qemu) if bundled_qemu.is_
 runtime = firmware / 'runtime'
 out = build / 'arm-regressions'
 out.mkdir(exist_ok=True)
+from stardict_test_fixtures import create as create_stardict_fixtures
+create_stardict_fixtures(out)
 makeflags = (build / 'crengine/CMakeFiles/crengine.dir/flags.make').read_text()
 def flags(name, contents=makeflags):
     return shlex.split(re.search(r'^' + name + r' = (.*)$', contents, re.M).group(1))
@@ -189,7 +191,11 @@ for name, sources, engine, arguments in [
     ('reading-state-migration', ['tests/reading-state-migration.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', out / 'migration.fb2', out / 'migration.zip']),
     ('dependency-compatibility', ['tests/dependency-compatibility.cpp'], True, [out]),
     ('web-tls', ['tests/web-tls.cpp', 'cr3gui/src/web.cpp', 'cr3gui/src/web_transfer.cpp'], True, [tls_url, out / 'trusted.crt', out / 'untrusted.crt', out]),
+    ('dictionary-browser', ['tests/dictionary-browser.cpp'], True, []),
     ('dictionary-safety', ['tests/dictionary-safety.cpp'], True, []),
+    ('native-dictionary-api', ['tests/native-dictionary-api.cpp', 'cr3gui/src/pb_dictionary_engine.cpp', 'cr3gui/src/stardict.cpp'], True, []),
+    ('dictionary-download', ['tests/dictionary-download.cpp', 'cr3gui/src/stardict.cpp', 'cr3gui/src/stardict_install.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', build / 'cr3gui/pb631fw5.cr3skin', out]),
+    ('stardict', ['tests/stardict.cpp', 'cr3gui/src/stardict.cpp', 'cr3gui/src/stardict_install.cpp'], True, [out]),
     ('history-persistence', ['tests/history-persistence.cpp'], True, [out]),
     ('ota-ui', ['tests/ota-ui.cpp'], True, [out]),
     ('ota-package', ['tests/ota-package.cpp'], True, [out]),
@@ -198,6 +204,11 @@ for name, sources, engine, arguments in [
 ]:
     binary = out / name
     test_options = options
+    if name == 'native-dictionary-api':
+        fixture = out / 'native-dictionary-fixture.so'
+        subprocess.run([str(compiler).replace('-g++', '-gcc'), '-shared', '-fPIC',
+                        'tests/native-dictionary-api-library.c', '-o', str(fixture)], check=True)
+        test_options = options + ['-DCR3_NATIVE_DICTIONARY_LIBRARY="' + str(fixture) + '"']
     if name == 'settings-editor':
         # The real menu must exercise the application's OTA/touch feature flags.
         app_flags = (build / 'cr3gui/CMakeFiles/cr3-pb.app.dir/flags.make').read_text()
