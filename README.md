@@ -1,5 +1,10 @@
 # CoolReader for PocketBook
 
+CoolReader is an open-source EPUB and FB2 reader for PocketBook Linux e-readers,
+with adjustable fonts and page layouts, bookmarks, offline StarDict dictionaries
+and Wi-Fi updates. This fork supports compatible firmware on Touch HD 3, Verse
+Pro, Era and InkPad 4; see the compatibility and testing details below.
+
 [Downloads](https://readertools.eu/coolreader/downloads/) · [Installation](https://readertools.eu/coolreader/installation/) · [Manual](https://readertools.eu/coolreader/manual/) · [Release 1.0.7](https://github.com/dderugin/pocketbook-coolreader/releases/tag/v1.0.7)
 
 Release **1.0.7** adds free dictionary downloads for English, Russian, Ukrainian

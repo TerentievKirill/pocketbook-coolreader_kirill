@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Install CoolReader on PocketBook — guide moved to ReaderTools</title>
+  <meta name="description" content="The PocketBook CoolReader installation guide has moved. Check supported models, install over USB and open EPUB and FB2 books from Library.">
+  <meta name="robots" content="index,follow">
+  <link rel="canonical" href="https://readertools.eu/coolreader/installation/">
+  <script>(() => {
+  if (!location.search && !location.hash) return;
+  const destination = new URL("https://readertools.eu/coolreader/installation/");
+  const sections = {"wireless": "/coolreader/manual/#wireless", "project": "/coolreader/#project"};
+  const section = location.hash.slice(1);
+  const movedSection = sections[section];
+  const url = movedSection ? new URL(movedSection, destination.origin) : destination;
+  url.search = location.search;
+  if (!movedSection) url.hash = location.hash;
+  location.replace(url.href);
+})();</script>
+  <meta http-equiv="refresh" content="0; url=https://readertools.eu/coolreader/installation/">
+</head>
+<body>
+  <main>
+    <h1>The CoolReader installation guide has moved</h1>
+    <p>Continue to <a href="https://readertools.eu/coolreader/installation/">the current page on ReaderTools</a>.</p>
+    <nav aria-label="Current PocketBook tools and guides"><ul><li><a href="https://readertools.eu/coolreader/">CoolReader for PocketBook</a></li><li><a href="https://readertools.eu/coolreader/installation/">Install CoolReader</a></li><li><a href="https://readertools.eu/coolreader/manual/">CoolReader manual</a></li><li><a href="https://readertools.eu/coolreader/downloads/">CoolReader downloads</a></li><li><a href="https://readertools.eu/easy-connect/">Easy Connect: PocketBook FTP &amp; SSH server</a></li><li><a href="https://readertools.eu/easy-connect/installation/">Install Easy Connect</a></li><li><a href="https://readertools.eu/easy-connect/manual/">FTP &amp; SSH manual</a></li><li><a href="https://readertools.eu/easy-connect/downloads/">Easy Connect downloads</a></li></ul></nav>
+  </main>
+</body>
+</html>
