@@ -131,7 +131,7 @@ static int testFlibustaEpubFootnotes(const char *epubFile, const char *epubCss) 
     CRPropRef prefs = LVCreatePropsContainer();
     prefs->setBool(PROP_FOOTNOTES, true);
     view.propsApply(prefs);
-    CHECK(view.LoadDocument(lString32(Utf8ToUnicode(epubFile))));
+    CHECK(view.LoadDocument(epubFile));
     view.Render();
     int fragments = 0;
     LVRendPageList *pages = view.getPageList();
