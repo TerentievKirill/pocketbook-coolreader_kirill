@@ -224,6 +224,8 @@ static int checkRussianSettings(const char *skin,const char *ruMo) {
     CRI18NTranslator::setTranslator(translator);
     crCurrentLang=U"ru";
     CHECK(lString32(_("Settings")) == Utf8ToUnicode("Настройки"));
+    CHECK(CRI18NTranslator::translate(NULL)[0] == '\0');
+    fprintf(stderr, "Russian menu regression: translator loaded and null labels safe\n"); fflush(stderr);
     TouchScreen screen;
     Manager wm(&screen);
     CHECK(wm.loadSkin(lString32(skin)));
