@@ -132,6 +132,15 @@ with zipfile.ZipFile(tolstoy_notes, 'w', zipfile.ZIP_DEFLATED) as book:
     book.writestr('META-INF/container.xml', '<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>')
     manifest = '<item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/>'
     spine = '<itemref idref="chapter"/>'
+    # The actual Tolstoy EPUB has 86 XHTML spine entries and ~5.9 MB of
+    # XHTML source. Exercise the same scale without redistributing book text.
+    for i in range(82):
+        name = f'segment{i}.xhtml'
+        filler = 'synthetic hidden padding ' * 3100  # ~77 KB per chapter
+        body = '<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Padding</title></head><body><div style="display:none">' + filler + '</div></body></html>'
+        book.writestr('OPS/' + name, body)
+        manifest += f'<item id="segment{i}" href="{name}" media-type="application/xhtml+xml"/>'
+        spine += f'<itemref idref="segment{i}"/>'
     for i, (name, body) in enumerate(note_groups):
         manifest += f'<item id="notes{i}" href="{name}" media-type="application/xhtml+xml"/>'
         spine += f'<itemref idref="notes{i}"/>'
