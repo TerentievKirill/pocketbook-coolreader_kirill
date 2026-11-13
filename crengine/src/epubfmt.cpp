@@ -1656,8 +1656,14 @@ bool ImportEpubDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCall
     // Unlike EPUB3 noteref/footnote semantics, FB2-derived Flibusta EPUBs
     // contain plain anchor links. Resolve them now, before initial rendering.
     int flibustaFootnotes = markFlibustaFootnoteTargets(m_doc, m_doc->getRootNode());
-    if ( flibustaFootnotes > 0 )
-        CRLog::info("EPUB: %d Flibusta footnote targets marked", flibustaFootnotes);
+    if ( flibustaFootnotes > 0 ) {
+        // Styles (and render methods) were computed by ldomElementWriter while
+        // the EPUB fragments were parsed. Updating the style attribute here
+        // would otherwise leave cached styles unchanged, so footer hints would
+        // never reach the paginator.
+        m_doc->forceReinitStyles();
+        CRLog::info("EPUB: %d Flibusta footnote targets marked; styles invalidated", flibustaFootnotes);
+    }
     CRLog::debug("EPUB: %d documents merged", fragmentCount);
 
     if ( fontList.length() != fontList_nb_before_head_parsing ) {
