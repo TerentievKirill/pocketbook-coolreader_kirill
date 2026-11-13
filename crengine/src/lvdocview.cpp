@@ -2266,8 +2266,8 @@ void LVDocView::drawPageTo(LVDrawBuf * drawbuf, LVRendPageInfo & page,
                 cl = (cl & 0xFFFFFF) | (0x55000000);
 				// The line separator was using the full page width:
 				//   int x1 = pageRect->right - m_pageMargins.right;
-				// but 1/7 of page width looks like what we can see in some books
-				int sep_width = (pageRect->right - pageRect->left) / 7;
+				// use 2/5 of page width for a clearer separator on e-ink screens
+				int sep_width = (pageRect->right - pageRect->left) * 2 / 5;
 				int x0, x1;
 				if ( page.flags & RN_PAGE_FOOTNOTES_MOSTLY_RTL ) { // draw separator on the right
 					x1 = pageRect->right - m_pageMargins.right;
@@ -2277,7 +2277,7 @@ void LVDocView::drawPageTo(LVDrawBuf * drawbuf, LVRendPageInfo & page,
 					x0 = pageRect->left + m_pageMargins.left;
 					x1 = x0 + sep_width;
 				}
-				drawbuf->FillRect(x0, fny, x1, fny+1, cl);
+				drawbuf->FillRect(x0, fny, x1, fny+3, cl);
 			}
 		}
 	}

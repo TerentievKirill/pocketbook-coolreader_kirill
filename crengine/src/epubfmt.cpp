@@ -114,7 +114,7 @@ static bool isFlibustaFootnoteMarker( const lString32 & marker )
 // Mark only targets of verified Flibusta note references. The regular
 // -cr-hint: footnote-inpage renderer handles placement and page splitting.
 // Traversal happens once after merging the EPUB, before style initialization.
-static int markFlibustaFootnoteTargets( ldomDocument * doc, ldomNode * node )
+static int markFlibustaFootnoteTargets( ldomDocument * doc, ldomNode * node, int * recognized = NULL )
 {
     if ( !node || !node->isElement() )
         return 0;
@@ -136,6 +136,8 @@ static int markFlibustaFootnoteTargets( ldomDocument * doc, ldomNode * node )
                     lString32 noteText = target->getText(U' ', 32);
                     noteText.trim();
                     if ( !noteText.empty() ) {
+                        if ( recognized )
+                            (*recognized)++;
                         lString32 style = target->getAttributeValue("style");
                         if ( style.pos(U"footnote-inpage")<0 ) {
                             if ( !style.empty() && style[style.length()-1]!=U';' )
@@ -151,7 +153,7 @@ static int markFlibustaFootnoteTargets( ldomDocument * doc, ldomNode * node )
         }
     }
     for ( int i=0; i<node->getChildCount(); i++ )
-        marked += markFlibustaFootnoteTargets(doc, node->getChildNode(i));
+        marked += markFlibustaFootnoteTargets(doc, node->getChildNode(i), recognized);
     return marked;
 }
 
@@ -1144,6 +1146,22 @@ bool ImportEpubDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCall
             CRLog::debug("Trying loading from cache");
             if ( m_doc->openFromCache(formatCallback, progressCallback) ) {
                 CRLog::debug("Loaded from cache");
+                // Cached EPUB DOMs bypass the import path below. The earliest
+                // Flibusta patch also stored inline hints with STALE computed
+                // styles; count recognised hints even when no new ones are added.
+                // A DOM marker avoids repeating an expensive style reset later.
+                ldomNode * epubRoot = m_doc->getRootNode();
+                if ( epubRoot && epubRoot->getAttributeValue("data-cr-flibusta-v2") != U"1" ) {
+                    int recognized = 0;
+                    int changed = markFlibustaFootnoteTargets(m_doc, epubRoot, &recognized);
+                    if ( recognized > 0 ) {
+                        m_doc->forceReinitStyles();
+                        epubRoot->setAttributeValue(LXML_NS_NONE,
+                            m_doc->getAttrNameIndex(U"data-cr-flibusta-v2"), U"1");
+                        CRLog::info("EPUB: refreshed cached Flibusta notes (%d found, %d new)",
+                                    recognized, changed);
+                    }
+                }
                 if ( progressCallback ) {
                     progressCallback->OnLoadFileEnd( );
                 }
@@ -1662,6 +1680,8 @@ bool ImportEpubDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCall
         // would otherwise leave cached styles unchanged, so footer hints would
         // never reach the paginator.
         m_doc->forceReinitStyles();
+        m_doc->getRootNode()->setAttributeValue(LXML_NS_NONE,
+            m_doc->getAttrNameIndex(U"data-cr-flibusta-v2"), U"1");
         CRLog::info("EPUB: %d Flibusta footnote targets marked; styles invalidated", flibustaFootnotes);
     }
     CRLog::debug("EPUB: %d documents merged", fragmentCount);
