@@ -1144,6 +1144,14 @@ bool ImportEpubDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCall
             CRLog::debug("Trying loading from cache");
             if ( m_doc->openFromCache(formatCallback, progressCallback) ) {
                 CRLog::debug("Loaded from cache");
+                // EPUBs cached before Flibusta footnote support have no note
+                // hints. The ordinary import path below is bypassed on cache
+                // hits, so repair the cached DOM as well.
+                int cachedFootnotes = markFlibustaFootnoteTargets(m_doc, m_doc->getRootNode());
+                if ( cachedFootnotes > 0 ) {
+                    m_doc->forceReinitStyles();
+                    CRLog::info("EPUB: repaired %d Flibusta note targets in cached DOM", cachedFootnotes);
+                }
                 if ( progressCallback ) {
                     progressCallback->OnLoadFileEnd( );
                 }
