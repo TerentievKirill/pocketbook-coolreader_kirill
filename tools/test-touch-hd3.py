@@ -109,6 +109,35 @@ with zipfile.ZipFile(flibusta_epub, 'w', zipfile.ZIP_DEFLATED) as book:
     book.writestr('OPS/content.opf', '<package version="2.0" unique-identifier="id" xmlns="http://www.idpf.org/2007/opf"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Flibusta footnotes test</dc:title><dc:language>ru</dc:language><dc:identifier id="id">flibusta-test</dc:identifier></metadata><manifest><item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/><item id="notes" href="notes.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="chapter"/><itemref idref="notes"/></spine></package>')
     book.writestr('OPS/chapter.xhtml', '<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Test</title></head><body><p>Alpha <a class="a" href="notes.xhtml#n1">[279]</a> and beta <a class="a" href="notes.xhtml#n2">2</a>.</p><p><a class="a" href="notes.xhtml#chapter-comments">Комментарии</a> are a normal hyperlink, not an in-page note.</p></body></html>')
     book.writestr('OPS/notes.xhtml', '<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Notes</title></head><body><span id="n1"><div class="title6"><p>279</p></div><p>The first Flibusta-style footnote.</p></span><p id="n2">2. The second Flibusta-style footnote.</p><div id="chapter-comments"><p>Chapter comments, not an in-page footnote.</p></div></body></html>')
+# Synthetic Tolstoy-shaped EPUB (no copyrighted book text):
+# 999 references in one chapter, with 464/507/28 note siblings in three
+# oversized anonymous span containers. All notes are cross-file links.
+tolstoy_notes = out / 'large-grouped-footnotes.epub'
+chapter_refs = []
+note_groups = []
+next_number = 1
+for chapter_no, size in enumerate((464, 507, 28)):
+    note_file = f'notes{chapter_no}.xhtml'
+    notes_markup = []
+    for _ in range(size):
+        number = next_number
+        next_number += 1
+        marker = f'[{number}]' if chapter_no != 2 else f'{{{number}}}'
+        chapter_refs.append(f'<p class="p1">Test reference {number} <a class="a" href="{note_file}#id{number}">{marker}</a>.</p>')
+        notes_markup.append(f'<span id="id{number}"><div class="title6"><p class="p">{number}</p></div><p class="p1">Synthetic endnote {number}; this is not book text.</p></span>')
+    notes_body = '<span><div class="title6"><p class="p">Сноски</p></div>' + ''.join(notes_markup) + '</span>'
+    note_groups.append((note_file, f'<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Notes</title></head><body class="z">{notes_body}</body></html>'))
+with zipfile.ZipFile(tolstoy_notes, 'w', zipfile.ZIP_DEFLATED) as book:
+    book.writestr('mimetype', 'application/epub+zip', compress_type=zipfile.ZIP_STORED)
+    book.writestr('META-INF/container.xml', '<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>')
+    manifest = '<item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/>'
+    spine = '<itemref idref="chapter"/>'
+    for i, (name, body) in enumerate(note_groups):
+        manifest += f'<item id="notes{i}" href="{name}" media-type="application/xhtml+xml"/>'
+        spine += f'<itemref idref="notes{i}"/>'
+        book.writestr('OPS/' + name, body)
+    book.writestr('OPS/content.opf', f'<package version="2.0" unique-identifier="id" xmlns="http://www.idpf.org/2007/opf"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Grouped footnote test</dc:title><dc:language>ru</dc:language><dc:identifier id="id">grouped-test</dc:identifier></metadata><manifest>{manifest}</manifest><spine>{spine}</spine></package>')
+    book.writestr('OPS/chapter.xhtml', '<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Test</title></head><body class="z">' + ''.join(chapter_refs) + '</body></html>')
 # Keep a legacy DOM fixture in both ordinary and ZIP form.
 migration_xml = '<FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0"><description><title-info><book-title>Migration</book-title></title-info></description><body><section><p>First paragraph.</p><p>Saved reading position with <strong>inline text</strong> after it.</p></section></body></FictionBook>'
 (out / 'migration.fb2').write_text(migration_xml)
@@ -195,7 +224,7 @@ for name, sources, engine, arguments in [
     ('reader-checkpoint', ['tests/reader-checkpoint.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', firmware / 'ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', firmware / 'ebrmain/cramfs/fonts/DroidSans.ttf', out]),
     ('settings-editor', ['tests/settings-editor.cpp', 'cr3gui/src/settings.cpp', 'cr3gui/src/fsmenu.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', firmware / 'ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', build / 'cr3gui/pb631fw5.cr3skin', out]),
     ('skin-language-symbol', ['tests/skin-language-symbol.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', firmware / 'ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', build / 'cr3gui/pb631fw5.cr3skin', out]),
-    ('document-render', ['tests/document-render-startup.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', firmware / 'ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', firmware / 'ebrmain/cramfs/fonts/DroidSans.ttf', root / profile['package']['assets'] / 'cr3-defaults.ini', root / 'cr3gui/data/hyph/', epub, root / 'cr3gui/data/fb2.css', flibusta_epub, root / 'cr3gui/data/epub.css']),
+    ('document-render', ['tests/document-render-startup.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', firmware / 'ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', firmware / 'ebrmain/cramfs/fonts/DroidSans.ttf', root / profile['package']['assets'] / 'cr3-defaults.ini', root / 'cr3gui/data/hyph/', epub, root / 'cr3gui/data/fb2.css', flibusta_epub, root / 'cr3gui/data/epub.css', tolstoy_notes]),
     ('reading-state-migration', ['tests/reading-state-migration.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', out / 'migration.fb2', out / 'migration.zip']),
     ('dependency-compatibility', ['tests/dependency-compatibility.cpp'], True, [out]),
     ('web-tls', ['tests/web-tls.cpp', 'cr3gui/src/web.cpp', 'cr3gui/src/web_transfer.cpp'], True, [tls_url, out / 'trusted.crt', out / 'untrusted.crt', out]),
