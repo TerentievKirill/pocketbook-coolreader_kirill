@@ -49,6 +49,11 @@ void CRI18NTranslator::setTranslator( CRI18NTranslator * translator )
 
 const char * CRI18NTranslator::translate( const char * src )
 {
+    // Some callers use a nullable label when building PocketBook menus.
+    // Passing it into lString8::compare() in the loaded .mo translator
+    // dereferences NULL and crashes (SIGSEGV in lString8::compare).
+    if (!src || !src[0])
+        return "";
 	if (_translator) {
 		const char * s = _translator->getText( src );
 		if (s && s[0])
@@ -102,27 +107,25 @@ void CRMoFileTranslator::sort()
 
 const char * CRMoFileTranslator::getText( const char * src )
 {
-    int len = _list.length();
-	if ( len == 0 )
-		return src;
-	int a = 0;
-	int b = len;
-	// binary search
-	for ( ; ; ) {
-		if ( b <= a+1 ) {
-			if ( _list[a]->src == src )
-				return _list[a]->dst.c_str();
-			return src;
-		}
-		int c = (a + b) / 2;
-		int res = _list[c]->src.compare( src );
-		if ( res==0 )
-			return _list[c]->dst.c_str();
-		if ( res<0 )
-			a = c+1;
-		else
-			b = c;
-	}
+    if (!src || !src[0])
+        return "";
+    // Standard lower_bound: the previous search could set a == len when
+    // the requested key sorted after the last catalog entry and then read
+    // _list[len]. New untranslated menu strings trigger exactly this path.
+    const int len = _list.length();
+    int lo = 0;
+    int hi = len;
+    while (lo < hi) {
+        int mid = lo + (hi - lo) / 2;
+        int cmp = _list[mid]->src.compare(src);
+        if (cmp < 0)
+            lo = mid + 1;
+        else
+            hi = mid;
+    }
+    if (lo < len && _list[lo]->src == src)
+        return _list[lo]->dst.c_str();
+    return src;
 }
 
 static void reverse( lUInt32 & n )

@@ -1,6 +1,7 @@
 #include "../cr3gui/src/settings.h"
 #include "../cr3gui/src/reader_menu.h"
 #include "lvdocviewprops.h"
+#include "cri18n.h"
 #include "lvrend.h"
 #include "testutil.h"
 #include <inkview.h>
@@ -216,11 +217,56 @@ static int check(const char *skin,const char *out) {
     puts("PASS: actual grouped settings, portrait/landscape, staged values, pickers, Back, Cancel and Done; long-press reader menu, Settings touch route, retained tools, custom parameters and Read");
     return 0;
 }
+// Test the shipped ru.mo with the same menu path used on PB634.
+static int checkRussianSettings(const char *skin,const char *ruMo) {
+    CRMoFileTranslator *translator = new CRMoFileTranslator();
+    CHECK(translator->openMoFile(Utf8ToUnicode(ruMo)));
+    CRI18NTranslator::setTranslator(translator);
+    crCurrentLang=U"ru";
+    CHECK(lString32(_("Settings")) == Utf8ToUnicode("Настройки"));
+    CHECK(CRI18NTranslator::translate(NULL)[0] == '\0');
+    // Untranslated labels must never read past the end of a sorted .mo catalog.
+    CHECK(lString8(CRI18NTranslator::translate("zzzzzz-untranslated-menu-label")) == "zzzzzz-untranslated-menu-label");
+    CHECK(lString8(CRI18NTranslator::translate("")).empty());
+    {
+    TouchScreen screen;
+    Manager wm(&screen);
+    CHECK(wm.loadSkin(lString32(skin)));
+    CRPropRef props=LVCreatePropsContainer();
+    props->setString(PROP_FONT_FACE,"DejaVu Sans");
+    props->setInt(PROP_FONT_SIZE,42);
+    CRSettingsMenu *settings=makeMenu(wm,props);
+    CHECK(settings->getLabel()==Utf8ToUnicode("Настройки"));
+    CHECK(settings->getItems().length()==7);
+    wm.update(true,true);
+    CRMenu *fontMenu=child(settings,0);
+    wm.activateWindow(fontMenu);
+    wm.update(true,true);
+    CHECK(fontMenu->onCommand(DCMD_BUTTON_PRESSED, BTN_CLOSE));
+    CHECK(wm.getTopVisibleWindow()==settings);
+    CRMenu *advancedMenu=child(settings,3);
+    wm.activateWindow(advancedMenu);
+    wm.update(true,true);
+    CHECK(advancedMenu->onCommand(DCMD_BUTTON_PRESSED, BTN_CLOSE));
+    CHECK(wm.getTopVisibleWindow()==settings);
+    wm.reconfigure(1448,1072,CR_ROTATE_ANGLE_90);
+    settings->reconfigure(CRGUI_CONFIGURE_FLAG_SCREEN_ORIENTATION);
+    wm.update(true,true);
+    CHECK(settings->onCommand(DCMD_BUTTON_PRESSED, BTN_CLOSE));
+    wm.processPostedEvents();
+    CHECK(wm.getWindowCount()==0);
+    }
+    CRI18NTranslator::setTranslator(NULL);
+    puts("PASS: Russian ru.mo loads; localized Settings renders groups and rotates");
+    crCurrentLang=U"en";
+    return 0;
+}
 int main(int argc,char **argv) {
-    CHECK(argc==5);
+    CHECK(argc==6);
     InitFontManager(lString8()); crCurrentLang=lString32("en");
     CHECK(fontMan->RegisterFont(lString8(argv[1])));
     CHECK(fontMan->RegisterFont(lString8(argv[2])));
     int result=check(argv[3],argv[4]);
+    if (result==0) result=checkRussianSettings(argv[3],argv[5]);
     ShutdownFontManager(); return result;
 }
