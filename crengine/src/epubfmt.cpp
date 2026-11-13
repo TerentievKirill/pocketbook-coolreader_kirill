@@ -90,6 +90,71 @@ public:
 //    }
 //}
 
+// Flibusta's FB2->EPUB converter exports references as <a class="a" href="...">[1]</a>
+// or <a class="a" href="...">*</a>, while note bodies are <span id="..."> or
+// <p id="...">. The EPUB fragment writer has already rewritten cross-file hrefs
+// and ids by the time this runs. Do not guess at other EPUB hyperlinks.
+static bool isFlibustaFootnoteMarker( const lString32 & marker )
+{
+    if ( marker.empty() || marker.length() > 16 )
+        return false;
+    bool hasNoteNumberOrStar = false;
+    for ( int i=0; i<marker.length(); i++ ) {
+        lChar32 c = marker[i];
+        if ( (c>=U'0' && c<=U'9') || c==U'*' )
+            hasNoteNumberOrStar = true;
+        else if ( c!=U'[' && c!=U']' && c!=U'(' && c!=U')' &&
+                  c!=U'{' && c!=U'}' && c!=U'.' && c!=U' ' &&
+                  c!=U'\t' && c!=U'\n' && c!=U'\r' )
+            return false;
+    }
+    return hasNoteNumberOrStar;
+}
+
+// Mark only targets of verified Flibusta note references. The regular
+// -cr-hint: footnote-inpage renderer handles placement and page splitting.
+// Traversal happens once after merging the EPUB, before style initialization.
+static int markFlibustaFootnoteTargets( ldomDocument * doc, ldomNode * node )
+{
+    if ( !node || !node->isElement() )
+        return 0;
+
+    int marked = 0;
+    if ( node->getNodeId()==el_a &&
+         node->getAttributeValue(attr_class)==U"a" ) {
+        lString32 href = node->getAttributeValue(attr_href);
+        lString32 label = node->getText(U' ', 24);
+        label.trim();
+        if ( href.length()>1 && href[0]==U'#' &&
+             isFlibustaFootnoteMarker(label) ) {
+            lString32 id = href.substr(1);
+            lUInt32 valueIndex = doc->findAttrValueIndex(id.c_str());
+            if ( valueIndex!=(lUInt32)-1 ) {
+                ldomNode * target = doc->getNodeById(valueIndex);
+                if ( target && (target->getNodeId()==el_span ||
+                                target->getNodeId()==el_p) ) {
+                    lString32 noteText = target->getText(U' ', 32);
+                    noteText.trim();
+                    if ( !noteText.empty() ) {
+                        lString32 style = target->getAttributeValue(attr_style);
+                        if ( style.pos(U"footnote-inpage")<0 ) {
+                            if ( !style.empty() && style[style.length()-1]!=U';' )
+                                style << U";";
+                            style << U" display: block; -cr-hint: footnote-inpage;";
+                            target->setAttributeValue(LXML_NS_NONE, attr_style,
+                                                       style.c_str());
+                            marked++;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    for ( int i=0; i<node->getChildCount(); i++ )
+        marked += markFlibustaFootnoteTargets(doc, node->getChildNode(i));
+    return marked;
+}
+
 bool DetectEpubFormat( LVStreamRef stream )
 {
 
@@ -1588,6 +1653,11 @@ bool ImportEpubDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCall
 
     writer.OnTagClose(U"", U"body");
     writer.OnStop();
+    // Unlike EPUB3 noteref/footnote semantics, FB2-derived Flibusta EPUBs
+    // contain plain anchor links. Resolve them now, before initial rendering.
+    int flibustaFootnotes = markFlibustaFootnoteTargets(m_doc, m_doc->getRootNode());
+    if ( flibustaFootnotes > 0 )
+        CRLog::info("EPUB: %d Flibusta footnote targets marked", flibustaFootnotes);
     CRLog::debug("EPUB: %d documents merged", fragmentCount);
 
     if ( fontList.length() != fontList_nb_before_head_parsing ) {
