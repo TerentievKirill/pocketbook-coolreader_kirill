@@ -225,6 +225,9 @@ static int checkRussianSettings(const char *skin,const char *ruMo) {
     crCurrentLang=U"ru";
     CHECK(lString32(_("Settings")) == Utf8ToUnicode("Настройки"));
     CHECK(CRI18NTranslator::translate(NULL)[0] == '\0');
+    // Untranslated labels must never read past the end of a sorted .mo catalog.
+    CHECK(lString8(CRI18NTranslator::translate("zzzzzz-untranslated-menu-label")) == "zzzzzz-untranslated-menu-label");
+    CHECK(lString8(CRI18NTranslator::translate("")).empty());
     fprintf(stderr, "Russian menu regression: translator loaded and null labels safe\n"); fflush(stderr);
     TouchScreen screen;
     Manager wm(&screen);
