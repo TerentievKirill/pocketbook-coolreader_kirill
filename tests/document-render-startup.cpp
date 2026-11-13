@@ -123,7 +123,27 @@ static int testFontWeight() {
     puts("PASS: quarter-step font weights paint distinct text, survive reloads and preserve Normal/Bold toggles");
     return 0;
 }
-static int testRendering(const char *defaultsFile, const char *epubFile, const char *fb2Css) {
+static int testFlibustaEpubFootnotes(const char *epubFile, const char *epubCss) {
+    LVDocView view(8);
+    view.setDefaultFontFace(lString8("DejaVu Sans"));
+    view.Resize(1072, 1448);
+    view.setStyleSheet(UnicodeToUtf8(LVReadTextFile(lString32(epubCss))));
+    CRPropRef prefs = LVCreatePropsContainer();
+    prefs->setBool(PROP_FOOTNOTES, true);
+    view.propsApply(prefs);
+    CHECK(view.LoadDocument(lString32(Utf8ToUnicode(epubFile))));
+    view.Render();
+    int fragments = 0;
+    LVRendPageList *pages = view.getPageList();
+    for (int i = 0; i < pages->length(); ++i)
+        fragments += (*pages)[i]->footnotes.length();
+    printf("Flibusta EPUB regression: %d page-footnote fragments\n", fragments);
+    CHECK(fragments >= 2); // separate span and p notes, not chapter comments
+    puts("PASS: Flibusta-style EPUB span/p notes render in page footers");
+    return 0;
+}
+
+static int testRendering(const char *defaultsFile, const char *epubFile, const char *fb2Css, const char *flibustaFile, const char *epubCss) {
     LVDocView view(8);
     view.setDefaultFontFace(lString8("DejaVu Sans"));
     view.Resize(1072, 1448);
@@ -285,6 +305,7 @@ static int testRendering(const char *defaultsFile, const char *epubFile, const c
     LVDocImageRef painted = epub.getPageImage(0);
     CHECK(!painted.isNull() && painted->getDrawBuf()->GetWidth() > 0);
     puts("PASS: UTF-32 supplementary characters and EPUB CSS/image page painting");
+    CHECK(testFlibustaEpubFootnotes(flibustaFile, epubCss) == 0);
     return 0;
 }
 int main(int argc, char **argv) {
@@ -298,12 +319,12 @@ int main(int argc, char **argv) {
         }
         CHECK(pbGray2Changed(a, b) == expected);
     }
-    if (argc < 8) return 1;
+    if (argc < 10) return 1;
     InitFontManager(lString8::empty_str);
     if (!fontMan->RegisterFont(lString8(argv[1])) || !fontMan->RegisterFont(lString8(argv[2]))) return 2;
     if (!fontMan->RegisterFont(lString8(argv[3]))) return 2;
     HyphMan::initDictionaries(lString32(argv[5]));
-    int result = testRendering(argv[4], argv[6], argv[7]);
+    int result = testRendering(argv[4], argv[6], argv[7], argv[8], argv[9]);
     HyphMan::uninit();
     ShutdownFontManager();
     return result;
