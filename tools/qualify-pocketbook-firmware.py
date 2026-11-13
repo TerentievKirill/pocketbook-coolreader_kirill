@@ -171,7 +171,8 @@ def probe_regressions(build, runtime, tree, output, qemu, profile):
         ('reading-state-migration', [regular, scratch / 'migration.fb2', scratch / 'migration.zip']),
         ('document-render', [regular, bold, fonts / 'DroidSans.ttf',
                              source / profile['package']['assets'] / 'cr3-defaults.ini', source / 'cr3gui/data/hyph',
-                             scratch / 'regression-章节.epub', source / 'cr3gui/data/fb2.css']),
+                             scratch / 'regression-章节.epub', source / 'cr3gui/data/fb2.css',
+                              scratch / 'flibusta-footnotes-regression.epub', source / 'cr3gui/data/epub.css']),
         ('skin-language-symbol', [regular, bold, build / 'cr3gui/pb631fw5.cr3skin', scratch]),
         ('frontlight-status', [regular, scratch]), ('standby-frontlight', []),
     ]
