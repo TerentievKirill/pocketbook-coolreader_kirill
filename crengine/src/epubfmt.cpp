@@ -120,9 +120,9 @@ static int markFlibustaFootnoteTargets( ldomDocument * doc, ldomNode * node )
         return 0;
 
     int marked = 0;
-    if ( node->getNodeId()==el_a &&
-         node->getAttributeValue(attr_class)==U"a" ) {
-        lString32 href = node->getAttributeValue(attr_href);
+    if ( node->isNodeName("a") &&
+         node->getAttributeValue("class")==U"a" ) {
+        lString32 href = node->getAttributeValue("href");
         lString32 label = node->getText(U' ', 24);
         label.trim();
         if ( href.length()>1 && href[0]==U'#' &&
@@ -131,17 +131,17 @@ static int markFlibustaFootnoteTargets( ldomDocument * doc, ldomNode * node )
             lUInt32 valueIndex = doc->findAttrValueIndex(id.c_str());
             if ( valueIndex!=(lUInt32)-1 ) {
                 ldomNode * target = doc->getNodeById(valueIndex);
-                if ( target && (target->getNodeId()==el_span ||
-                                target->getNodeId()==el_p) ) {
+                if ( target && (target->isNodeName("span") ||
+                                target->isNodeName("p")) ) {
                     lString32 noteText = target->getText(U' ', 32);
                     noteText.trim();
                     if ( !noteText.empty() ) {
-                        lString32 style = target->getAttributeValue(attr_style);
+                        lString32 style = target->getAttributeValue("style");
                         if ( style.pos(U"footnote-inpage")<0 ) {
                             if ( !style.empty() && style[style.length()-1]!=U';' )
                                 style << U";";
                             style << U" display: block; -cr-hint: footnote-inpage;";
-                            target->setAttributeValue(LXML_NS_NONE, attr_style,
+                            target->setAttributeValue(LXML_NS_NONE, doc->getAttrNameIndex(U"style"),
                                                        style.c_str());
                             marked++;
                         }
