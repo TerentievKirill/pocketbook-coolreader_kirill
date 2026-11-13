@@ -230,6 +230,7 @@ static int checkRussianSettings(const char *skin,const char *ruMo) {
     CHECK(lString8(CRI18NTranslator::translate("")).empty());
     fprintf(stderr, "Russian menu regression: translator loaded and null labels safe\n"); fflush(stderr);
     fprintf(stderr,"RU 1: create screen\n"); fflush(stderr);
+    {
     TouchScreen screen;
     Manager wm(&screen);
     fprintf(stderr,"RU 2: load skin\n"); fflush(stderr);
@@ -265,8 +266,11 @@ static int checkRussianSettings(const char *skin,const char *ruMo) {
     fprintf(stderr,"RU rendering menu\n"); fflush(stderr);
     wm.update(true,true);
     fprintf(stderr,"RU menu rendered\n"); fflush(stderr);
-    puts("PASS: Russian ru.mo loads; localized Settings renders groups and rotates");
+    }
+    fprintf(stderr,"RU 6: UI manager destroyed\n"); fflush(stderr);
     CRI18NTranslator::setTranslator(NULL);
+    fprintf(stderr,"RU 7: translator cleared\n"); fflush(stderr);
+    puts("PASS: Russian ru.mo loads; localized Settings renders groups and rotates");
     crCurrentLang=U"en";
     return 0;
 }
