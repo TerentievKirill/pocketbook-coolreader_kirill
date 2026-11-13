@@ -52,7 +52,7 @@ const char * CRI18NTranslator::translate( const char * src )
     // Some callers use a nullable label when building PocketBook menus.
     // Passing it into lString8::compare() in the loaded .mo translator
     // dereferences NULL and crashes (SIGSEGV in lString8::compare).
-    if (!src)
+    if (!src || !src[0])
         return "";
 	if (_translator) {
 		const char * s = _translator->getText( src );
@@ -107,7 +107,7 @@ void CRMoFileTranslator::sort()
 
 const char * CRMoFileTranslator::getText( const char * src )
 {
-    if (!src)
+    if (!src || !src[0])
         return "";
     // Standard lower_bound: the previous search could set a == len when
     // the requested key sorted after the last catalog entry and then read
