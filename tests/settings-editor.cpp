@@ -269,6 +269,10 @@ static int checkRussianSettings(const char *skin,const char *ruMo) {
     fprintf(stderr,"RU rendering menu\n"); fflush(stderr);
     wm.update(true,true);
     fprintf(stderr,"RU menu rendered\n"); fflush(stderr);
+    CHECK(settings->onCommand(DCMD_BUTTON_PRESSED, BTN_CLOSE));
+    wm.processPostedEvents();
+    fprintf(stderr,"RU closing root: %d windows remain\n",wm.getWindowCount()); fflush(stderr);
+    CHECK(wm.getWindowCount()==0);
     }
     fprintf(stderr,"RU 6: UI manager destroyed\n"); fflush(stderr);
     CRI18NTranslator::setTranslator(NULL);
