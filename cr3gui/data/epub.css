@@ -115,3 +115,13 @@ nobr { display: inline; hyphenate: none; white-space: nowrap; }
 dl { margin-left: 0em; } 
 dt { display: block; margin-left: 0em; margin-top:0.3em; font-weight: bold; } 
 dd { display: block; margin-left: 1.3em; } 
+
+/* Display explicitly marked EPUB notes at the bottom of the referring page.
+ * CREngine gathers local note links and lays out the marked targets as footnotes.
+ * Keep selectors narrow: ordinary links and editorial asides stay in the book.
+ */
+aside[role="doc-footnote"], section[role="doc-footnote"],
+aside.footnote, section.footnote, div.footnote,
+aside.endnote, section.endnote, div.endnote {
+    -cr-hint: footnote-inpage;
+}
