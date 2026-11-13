@@ -2211,28 +2211,29 @@ private:
 
                 ldomXPointer p = _docview->getNodeByPoint( pt );
                 if ( !p.isNull() ) {
+                    // A real hyperlink always wins over a SHORT tap-zone
+                    // action. Otherwise users who assign "Menu" to the centre
+                    // of the screen cannot open EPUB footnote references.
+                    // Long taps still retain the original link/action menu.
+                    m_link = p.getHRef();
+                    if ( !m_link.empty() ) {
+                        if (CRTOUCH_DOWN_LONG == evType &&
+                            command != 0 && command != MCMD_GO_LINK) {
+                            if (NULL == link_contextMenu[0].text)
+                                link_contextMenu[0].text = const_cast<char *>(getCommandName(MCMD_GO_LINK, 0));
+                            link_contextMenu[1].index = command;
+                            link_altParm = param;
+                            link_contextMenu[1].text = const_cast<char *>(getCommandName(command, param));
+                            OpenMenu(link_contextMenu, MCMD_GO_LINK, pt.x, pt.y, handle_LinksContextMenu );
+                            return true;
+                        }
+                        _docview->goLink( m_link );
+                        return showLinksDialog(true);
+                    }
                     if (command == MCMD_DICT) {
                         lvPoint wordPoint = p.toPoint();
                         showDictDialog(wordPoint);
                         return true;
-                    }
-                    if (CRTOUCH_DOWN_LONG == evType || command == MCMD_GO_LINK) {
-                        m_link = p.getHRef();
-
-                        if ( !m_link.empty() ) {
-                            if (command != 0 && command != MCMD_GO_LINK) {
-                                if (NULL == link_contextMenu[0].text)
-                                    link_contextMenu[0].text = const_cast<char *>(getCommandName(MCMD_GO_LINK, 0));
-                                link_contextMenu[1].index = command;
-                                link_altParm = param;
-                                link_contextMenu[1].text = const_cast<char *>(getCommandName(command, param));
-                                OpenMenu(link_contextMenu, MCMD_GO_LINK, pt.x, pt.y, handle_LinksContextMenu );
-                                return true;
-                            } else {
-                                _docview->goLink( m_link );
-                                return showLinksDialog(true);
-                            }
-                        }
                     }
                 }
                 if (command != 0) {
