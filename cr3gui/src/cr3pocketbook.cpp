@@ -2857,7 +2857,7 @@ public:
         }
         else {
             CRLog::trace("showFrontLight(): Front light isn't supported! You shouldn't be able to get here.");
-            Message(ICON_WARNING,  const_cast<char*>("CoolReader"), "Couldn't find the front light binary  @ "PB_FRONT_LIGHT_BIN, 2000);
+            Message(ICON_WARNING,  const_cast<char*>("CoolReader"), (lString8(_("Couldn't find the front light binary  @")) + " " + PB_FRONT_LIGHT_BIN).c_str(), 2000);
         }
     }
 
@@ -4551,11 +4551,27 @@ void launchBrowser(lString32 url) {
     }
     else {
         CRLog::trace("launchBrowser(): The browser binary is not present @ %s", PB_BROWSER_BINARY);
-        Message(ICON_WARNING,  const_cast<char*>("CoolReader"), "Couldn't find the browser binary @ "PB_BROWSER_BINARY, 2000);
+        Message(ICON_WARNING,  const_cast<char*>("CoolReader"), (lString8(_("Couldn't find the browser binary @")) + " " + PB_BROWSER_BINARY).c_str(), 2000);
     }
 #endif
 }
 
+
+static void loadPocketBookTranslation(const char *lang) {
+    if (!lang || !lang[0]) return;
+    // set translator
+    CRLog::info("Current language is %s, looking for translation file", lang);
+    lString32 mofilename = USERDATA"/share/cr3/i18n/" + lString32(lang) + ".mo";
+    lString32 mofilename2 = USERDATA2"/share/cr3/i18n/" + lString32(lang) + ".mo";
+    CRMoFileTranslator * t = new CRMoFileTranslator();
+    if ( t->openMoFile( mofilename2 ) || t->openMoFile( mofilename ) ) {
+        CRLog::info("translation file %s.mo found", lang);
+        CRI18NTranslator::setTranslator( t );
+    } else {
+        CRLog::info("translation file %s.mo not found", lang);
+        delete t;
+    }
+}
 
 int InitDoc(const char *exename, char *fileName)
 {
@@ -4585,18 +4601,7 @@ int InitDoc(const char *exename, char *fileName)
         const char *lang = pbGlobals->getLang();
 
         if ( lang && lang[0] ) {
-            // set translator
-            CRLog::info("Current language is %s, looking for translation file", lang);
-            lString32 mofilename = USERDATA"/share/cr3/i18n/" + lString32(lang) + ".mo";
-            lString32 mofilename2 = USERDATA2"/share/cr3/i18n/" + lString32(lang) + ".mo";
-            CRMoFileTranslator * t = new CRMoFileTranslator();
-            if ( t->openMoFile( mofilename2 ) || t->openMoFile( mofilename ) ) {
-                CRLog::info("translation file %s.mo found", lang);
-                CRI18NTranslator::setTranslator( t );
-            } else {
-                CRLog::info("translation file %s.mo not found", lang);
-                delete t;
-            }
+            loadPocketBookTranslation(lang);
             sprintf( manual_file, USERDATA"/share/cr3/manual/cr3-manual-%s.fb2", lang );
             if ( !LVFileExists( lString32(manual_file).c_str() ) )
                 sprintf( manual_file, USERDATA2"/share/cr3/manual/cr3-manual-%s.fb2", lang );
@@ -5184,7 +5189,7 @@ bool pbNetwork(const char *action) {
     }
     else {
         CRLog::error("pbNetwork(): Network isn't supported! You shouldn't be able to get here.");
-        Message(ICON_WARNING,  const_cast<char*>("CoolReader"), "Couldn't find the network binary  @ "PB_NETWORK_BIN, 2000);
+        Message(ICON_WARNING,  const_cast<char*>("CoolReader"), (lString8(_("Couldn't find the network binary  @")) + " " + PB_NETWORK_BIN).c_str(), 2000);
     }
 
     bool connected = pbNetworkConnected();
@@ -5509,7 +5514,7 @@ int main_handler(int type, int par1, int par2)
         fprintf(stderr, "[cr3] Unsupported model/firmware: model=%s firmware=%s\n",
                 GetDeviceModel() ? GetDeviceModel() : "(unknown)",
                 GetSoftwareVersion() ? GetSoftwareVersion() : "(unknown)");
-        Message(ICON_WARNING, "CoolReader", "Unknown model or unsupported firmware API. See the included guide.", 3000);
+        Message(ICON_WARNING, "CoolReader", _("Unknown model or unsupported firmware API. See the included guide."), 3000);
         CloseApp();
         return 0;
     }
@@ -6136,7 +6141,9 @@ int main(int argc, char **argv)
     fprintf(stderr, "[cr3] selected firmware API=%u\n", pbfirmware::apiLevel(GetSoftwareVersion()));
 #endif
     if (argc < 2 || strlen(argv[1]) == 0 ) {
-        Message(ICON_WARNING,  const_cast<char*>("CoolReader"), const_cast<char*>("No book to open!"), 2000);
+        CRPocketBookGlobals startupGlobals(argv[0]);
+        loadPocketBookTranslation(startupGlobals.getLang());
+        Message(ICON_WARNING,  const_cast<char*>("CoolReader"), const_cast<char*>(_("No book to open!")), 2000);
         printf("No book to open!\n");
         return 1;
     }

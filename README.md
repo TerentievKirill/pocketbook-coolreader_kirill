@@ -2,30 +2,27 @@
 
 CoolReader is an open-source EPUB and FB2 reader for PocketBook Linux e-readers,
 with adjustable fonts and page layouts, bookmarks, offline StarDict dictionaries
-and Wi-Fi updates. This fork supports compatible firmware on Touch HD 3, Verse
+and Wi-Fi updates. This fork supports compatible firmware on Touch HD 3, Verse, Verse
 Pro, Era and InkPad 4; see the compatibility and testing details below.
 
-[Downloads](https://readertools.eu/coolreader/downloads/) · [Installation](https://readertools.eu/coolreader/installation/) · [Manual](https://readertools.eu/coolreader/manual/) · [Release 1.0.7](https://github.com/dderugin/pocketbook-coolreader/releases/tag/v1.0.7)
+[Downloads](https://readertools.eu/coolreader/downloads/) · [Installation](https://readertools.eu/coolreader/installation/) · [Manual](https://readertools.eu/coolreader/manual/) · [Release 1.0.8](https://github.com/dderugin/pocketbook-coolreader/releases/tag/v1.0.8)
 
-Release **1.0.7** adds free dictionary downloads for English, Russian, Ukrainian
-and Czech, original StarDict support, and a clearer dictionary window with labeled
-controls and readable entry previews. Hold the centre of the page for the new
-Reader menu, with Settings first and additional tools under More tools.
+Release **1.0.8** fixes the crash when opening Settings with Russian localization,
+completes the current Russian UI catalog, and adds the Verse PB629 profile for
+firmware U629.6.11.2020. Book info, bookmarks, notes, recent books, contents,
+Help, shortcuts and tap-zone settings now share the current reader design.
+Book info uses readable stacked values and preserves special characters.
 
-It fixes native dictionary browsing crashes, HTML appearing in suggestion rows,
-and Google/Wikipedia lookups. Downloaded dictionaries work offline; web lookups
-use PocketBook's browser over Wi-Fi. Factory-protected dictionaries may remain
-unavailable to third-party apps; free downloads provide an alternative.
-
-It retains the grouped settings, quarter-step font weights, faster page/font
-caches and more reliable saved reading state introduced in 1.0.6.
+It retains the offline dictionary downloads, StarDict support, grouped settings,
+font controls and reading-state improvements from earlier releases.
 
 It provides one shared ARMv7 Linux executable and install ZIP for
-the four models below. Firmware snapshots used for verification:
+the five models below. Firmware snapshots used for verification:
 
 | Device | Firmware tested |
 | --- | --- |
 | Touch HD 3 / PB632 | U632.6.11.2001 |
+| Verse / PB629 | U629.6.11.2020 |
 | Verse Pro / PB634 | U634.6.10.3425 |
 | Era / PB700 | U700.6.10.3209 |
 | InkPad 4 / PB743G | U743g.6.11.1683 |

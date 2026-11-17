@@ -34,7 +34,7 @@ class SharedPackage(TestCase):
         expected = {candidate['software_version'] for candidate in candidates}
         expected.add(profile['firmware']['version'])
         self.assertEqual({device['firmware'] for device in registry['devices']}, expected)
-        self.assertEqual(len(registry['devices']), 4)
+        self.assertEqual(len(registry['devices']), 5)
         text = generator.generate(registry)
         for version in expected:
             self.assertIn(version, text)

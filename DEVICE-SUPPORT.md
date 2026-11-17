@@ -2,7 +2,7 @@
 
 There are two build families: the existing `pb632-fw6` configuration and the
 experimental `pocketbook-armv7-softfp` shared package. The shared package uses
-one executable on four known models, with exact firmware snapshots for validation. Runtime profiles live
+one executable on five known models, with exact firmware snapshots for validation. Runtime profiles live
 in `config/pocketbook-devices.json`; they are not separate per-model binaries.
 Earlier PB632 builds have physical-reader evidence; every new package records
 its own device validation as not performed. A successful cross-build or firmware
@@ -16,7 +16,8 @@ compatibility check does not establish hardware support.
 | Verse Pro | PB634 | Experimental shared package; U634.6.10.3425 | Physical touch, buttons, frontlight, sleep testing |
 | Era | PB700 | Experimental shared package; U700.6.10.3209 | Physical buttons, rotation after wake and sleep testing |
 | InkPad 4 | PB743G | Experimental shared package; U743g.6.11.1683 | Physical large-screen, rotation and sleep testing |
-| Verse / Era Lite | PB629 / PB710 | Future candidates | Firmware qualification and device profiles |
+| Verse | PB629 | Experimental shared package; U629.6.11.2020 | Physical touch, buttons, frontlight, sleep testing |
+| Era Lite | PB710 | Future candidate | Firmware qualification and device profile |
 | InkPad 3 / 3 Pro | PB740 / PB740-2 | Future candidates | Firmware qualification and device profiles |
 | Verse Pro Color / Era Color | PB634K3 / PB700K3 | Candidate; no downloadable build | Firmware inventory and grayscale rendering on color framebuffer |
 | InkPad Color / Color 2 / Color 3 | PB741 / PB743C / PB743K3 | Candidate; no downloadable build | Firmware inventory, framebuffer geometry, grayscale rendering |
@@ -205,3 +206,25 @@ models require at least API 6.10 and select the highest known compatible level
 The original pinned firmware checks remain mandatory before packaging. A newer
 firmware build may still change its libraries, hardware behavior or ABI and needs
 independent validation before being added to the evidence matrix.
+
+## Verse PB629 startup rejection (2026-11-17)
+
+The v1.0.7 shared registry omitted PB629, so its known-model check closed the
+application on U629.6.11.2020 even though the version selects firmware API 6.11.
+PB629 now has a Verse profile with a 758 × 1024 display at 212 DPI, using the
+existing shared skin and DPI-based defaults. The display specifications are
+listed in the [official Verse manual](https://support.pocketbook-int.com/fw/629/u/6.8.2659/manual/User_Manual_Verse_EN.pdf).
+
+The exact U629.6.11.2020 archive is pinned in `config/firmware-candidates.json`.
+The official support API lists releases out of order; the reported version was
+selected explicitly. Its extracted runtime uses ARM ELF32, soft-float calling
+conventions and glibc 2.41. The existing firmware compatibility checks found no
+missing required InkView symbols, resolved the application libraries, reached
+the startup entry point and passed twelve software regression probes. These
+checks do not establish physical touch, buttons, frontlight or sleep behavior.
+
+The shared profile regression additionally covers PB629 admission, rejection of
+old API levels and unknown model suffixes, scaled defaults, saved preferences,
+and portrait/landscape document rendering. OTA tests include PB629 in the
+shared update descriptor. A new shared package requires a matching PB629 firmware
+qualification report in addition to the other registered firmware reports.

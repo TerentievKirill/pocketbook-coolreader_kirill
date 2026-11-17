@@ -28,8 +28,7 @@ if(NOT "${GETTEXT_XGETTEXT_EXECUTABLE}" STREQUAL "")
     OUTPUT_VARIABLE xgettext_output
     ARGS --output="-" ${options} ${keywords} --msgid-bugs-address="${msgid_bugs_address}" --copyright-holder="${copyright_holder}" --files-from="${files_from}")
   if(xgettext_return)
-    message("${xgettext_output}")
-    set(SUCCESS 0)
+    message(FATAL_ERROR "${xgettext_output}")
   else(xgettext_return)
 
     set(xgettext_output "${xgettext_output}\n")

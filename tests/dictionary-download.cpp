@@ -1,5 +1,6 @@
 #include "crengine.h"
 #include "crgui.h"
+#include "cri18n.h"
 #include "testutil.h"
 #include <string>
 #include <fstream>
@@ -8,12 +9,14 @@
 #include <unistd.h>
 #include <openssl/sha.h>
 #define FLASHDIR "/tmp/cr3-dictionary-download-test"
-#define _(s) (s)
+#undef _
+#define _(s) CRI18NTranslator::translate(s)
 #define ICON_INFORMATION 1
 #define ICON_ERROR 2
 #undef CHECK
 #define CHECK(x) do { if (!(x)) { fprintf(stderr,"%s:%d: %s\n",__FILE__,__LINE__,#x);exit(1); } } while(0)
 lString32 pbSkinFileName, openedCacheFile, currentCacheDir, crCurrentLang;
+static const char *russianCatalog;
 static bool online = true, failDownload = false, failStart = false;
 static int wifi = 0, progress = 0, dialogs = 0, restores = 0;
 static std::string payload, result, url, button;
@@ -196,6 +199,23 @@ static int check(const char *font, const char *skin, const char *out) {
     auto found=stardict::discover(std::string(dictui::directory)+"/ui.stardict");CHECK(found.size()==1);
     stardict::Dictionary installed;std::string word,html;
     CHECK(installed.open(found[0].path)&&installed.lookup("houses",true,word,html)&&word=="house");
+    auto *russian = new CRMoFileTranslator();
+    CHECK(russian->openMoFile(Utf8ToUnicode(lString8(russianCatalog))));
+    CRI18NTranslator::setTranslator(russian);
+    auto *russianDownloads = new CRDictionaryDownloadsMenu(parent, 3);
+    parent->addItem(russianDownloads);
+    CHECK(russianDownloads->getLabel() == lString32("Словари"));
+    auto *russianListing = static_cast<CRMenu *>(russianDownloads->getItems()[0]);
+    CHECK(russianListing->getLabel() == lString32("Словари английского языка"));
+    CHECK(russianListing->getItems()[0]->getLabel() == lString32("Толковый словарь английского языка"));
+    CHECK(!strcmp(dictionaryLabel(cr3dict::catalog[0]), "Толковый словарь чешского языка"));
+    dictionarySchedule(cr3dict::catalog[0]); tick();
+    CHECK(button == "Загрузить" && result.find("Толковый словарь чешского языка") != std::string::npos);
+    answer(2);
+    std::string localizedError;
+    CHECK(!cr3dict::prepare("/nonexistent/cr3-dictionary", entry, localizedError));
+    CHECK(localizedError.find("Не удалось") != std::string::npos);
+    CRI18NTranslator::setTranslator(NULL);
     // The parent owns the submenu, and the window manager owns active windows.
     // Detach before asking the manager to destroy the active child.
     parent->destroyMenu();
@@ -203,7 +223,7 @@ static int check(const char *font, const char *skin, const char *out) {
     return 0;
 }
 int main(int argc,char **argv) {
-    CHECK(argc==4); InitFontManager(lString8()); crCurrentLang=lString32("en");
+    CHECK(argc==5); russianCatalog=argv[4]; InitFontManager(lString8()); crCurrentLang=lString32("en");
     CHECK(fontMan->RegisterFont(lString8(argv[1])));
     int result=check(argv[1],argv[2],argv[3]); ShutdownFontManager(); return result;
 }

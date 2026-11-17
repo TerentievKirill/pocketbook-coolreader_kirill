@@ -1,3 +1,4 @@
+#include "reader_ui.h"
 
 // C++ Implementation: settings
 //
@@ -306,9 +307,12 @@ public:
         CRFullScreenMenu( parentMenu->getWindowManager(), id,  label, 1, rc ),
         _propertyName(propName), _props(props)
     {
-        setSkinName(lString32("#tapSettings"));
+        _menu = parentMenu;
+        CRMenu::_props = props;
+        setSkinName(lString32("#settings"));
         setAccelerators(parentMenu->getAccelerators());
         _actionsMenu = new CRActionsMenu(this, _props, rc);
+        addItem(_actionsMenu);
         for ( int i=0; availableActions[i].action_id; i++ ) {
 
             #ifdef CR_POCKETBOOK
@@ -379,9 +383,9 @@ public:
     }
     int onSelect()
     {
-        CRTapZoneSettings *menu = new CRTapZoneSettings(_menu, mm_touchScreenZones, getLabel(), _props,
-                                                        _propName, _rect );
-        _wm->activateWindow(menu);
+        if (_items.empty())
+            addItem(new CRTapZoneSettings(_menu, mm_touchScreenZones, getLabel(), _props, _propName, _rect));
+        _wm->activateWindow(static_cast<CRMenu *>(_items[0]));
         return 1;
     }
 };
@@ -453,29 +457,37 @@ void CRTapZoneSettings::drawClient()
     if ( !clientSkin.isNull() ) {
         clientSkin->draw( buf, rc );
         cl = clientSkin->getTextColor();
+        if (isSettingsEditor()) {
+            CRRectSkinRef textSkin(new CRRectSkin());
+            textSkin->setFontFace(clientSkin->getFontFace());
+            textSkin->setFontSize(settingsFont(true)->getHeight());
+            textSkin->setTextColor(cl);
+            textSkin->setTextAlign(SKIN_HALIGN_CENTER | SKIN_VALIGN_CENTER);
+            clientSkin = textSkin;
+        }
         x0 = rc.left;
         x1 = x0 + rc.width() * _props->getIntDef(PROP_TAP_ZONE_WIDTH_1, 33) / 100;
         x2 = x1 + rc.width() * _props->getIntDef(PROP_TAP_ZONE_WIDTH_2, 33) / 100;
-        x3 = rc.width();
+        x3 = rc.right;
         int y = rc.top;
         int y1 = y + rc.height() * _props->getIntDef(PROP_TAP_ZONE_HEIGHT_1, 33) / 100;
         int y2 = y1 + rc.height() * _props->getIntDef(PROP_TAP_ZONE_HEIGHT_2, 33) / 100;
-        if ( x1 > x0 && x1 < rc.width() )
+        if ( x1 > x0 && x1 < rc.right )
             buf.FillRect(x1, rc.top, x1+1, rc.bottom, cl);
-        if ( x2 > x1 && x2 < rc.width() )
+        if ( x2 > x1 && x2 < rc.right )
             buf.FillRect(x2, rc.top, x2+1, rc.bottom, cl);
         if ( y1 > y ) {
-            if ( y1 < rc.height() )
+            if ( y1 < rc.bottom )
                 buf.FillRect(rc.left, y1, rc.right, y1+1, cl);
             drawTapZonesRow(buf, clientSkin, 0, y, y1);
         }
         if ( y2 > y1 ) {
-            if ( y2 < rc.height())
+            if ( y2 < rc.bottom)
                 buf.FillRect(rc.left, y2, rc.right, y2+1, cl);
             drawTapZonesRow(buf, clientSkin, 1, y1, y2);
         }
-        if (y2 < rc.height()) {
-            drawTapZonesRow(buf, clientSkin, 2, y2, rc.height());
+        if (y2 < rc.bottom) {
+            drawTapZonesRow(buf, clientSkin, 2, y2, rc.bottom);
         }
     } else {
         buf.FillRect(rc, 0xFFFFFF);
@@ -533,6 +545,10 @@ CRControlsMenuItem::CRControlsMenuItem( CRControlsMenu * menu, int id, int key, 
 
 void CRControlsMenuItem::Draw( LVDrawBuf & buf, lvRect & rc, CRRectSkinRef skin, CRRectSkinRef valueSkin, bool selected )
 {
+    if (_menu && _menu->isSettingsEditor()) {
+        CRMenuItem::Draw(buf, rc, skin, valueSkin, selected);
+        return;
+    }
     // lvRect itemBorders = skin->getBorderWidths();
     skin->draw( buf, rc );
     buf.SetTextColor( skin->getTextColor() );
@@ -1145,7 +1161,7 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
 
     _fullscreen = true;
 #ifdef POCKETBOOK_FW6
-    enableSettingsEditor(props, scope.empty() ? lString32(_("Reader defaults")) : scope);
+    enableSettingsEditor(props, scope.empty() ? lString32(_("Reader defaults")) : scope, readerUiDpi());
 #endif
 
     item_def_t antialiasing_modes[] = {

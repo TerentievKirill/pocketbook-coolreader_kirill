@@ -102,27 +102,21 @@ void CRMoFileTranslator::sort()
 
 const char * CRMoFileTranslator::getText( const char * src )
 {
-    int len = _list.length();
-	if ( len == 0 )
-		return src;
-	int a = 0;
-	int b = len;
-	// binary search
-	for ( ; ; ) {
-		if ( b <= a+1 ) {
-			if ( _list[a]->src == src )
-				return _list[a]->dst.c_str();
-			return src;
-		}
-		int c = (a + b) / 2;
-		int res = _list[c]->src.compare( src );
-		if ( res==0 )
-			return _list[c]->dst.c_str();
-		if ( res<0 )
-			a = c+1;
-		else
-			b = c;
-	}
+    // Search the half-open range [a, b). A missing key may advance a to
+    // length(), so only dereference a midpoint while the range is nonempty.
+    int a = 0;
+    int b = _list.length();
+    while (a < b) {
+        int c = a + (b - a) / 2;
+        int res = _list[c]->src.compare(src);
+        if (res == 0)
+            return _list[c]->dst.c_str();
+        if (res < 0)
+            a = c + 1;
+        else
+            b = c;
+    }
+    return src;
 }
 
 static void reverse( lUInt32 & n )

@@ -1,12 +1,13 @@
 CoolReader for PocketBook - shared ARMv7 Linux package
 =================================================================
 
-One application executable is used on all four models below. Runtime device
+One application executable is used on all five models below. Runtime device
 profiles select display defaults. This package is a laboratory-tested candidate;
 its current binary has NOT been tested on a physical reader.
 
 Models and firmware snapshots used for verification:
   Touch HD 3 / PB632   U632.6.11.2001
+  Verse / PB629       U629.6.11.2020
   Verse Pro / PB634    U634.6.10.3425
   Era / PB700         U700.6.10.3209
   InkPad 4 / PB743G   U743g.6.11.1683
@@ -19,6 +20,16 @@ are allowed; compatible system libraries remain necessary. This package requires
 modern ARM Linux soft-float userland; it is not an Android, ARM64 or hard-float
 build. Older PocketBook firmware may not supply its required system libraries.
 The compiled CPU baseline is ARMv7-A, NEON/VFPv3, softfp calling convention.
+
+New in 1.0.8
+------------
+Settings no longer reads past the translation catalog when a key is missing,
+fixing the Russian-language Settings crash. The Russian catalog covers all
+current UI keys, including dictionary downloads, update dialogs and errors.
+Verse PB629 with U629.6.11.2020 now has a device profile with 212 DPI defaults.
+Book info, bookmarks, notes, recent books, contents, Help, shortcuts and tap-zone
+settings use the current navigation and typography. Book metadata is shown as
+stacked labels and values; long values wrap and special characters are preserved.
 
 Reader menu
 -----------
@@ -139,7 +150,7 @@ model, exact firmware and logs:
   system/cr3-pb.crash.log
 
 system/share/cr3/metadata/build-info.json binds this package to its source, exact executable, primary ARM
-regressions and the three additional firmware qualification reports. Automated
+regressions and the four additional firmware qualification reports. Automated
 checks exercise software interfaces and rendering, not actual hardware behavior.
 
 Source and license: GPL version 2; see system/share/cr3/licenses/COPYING and

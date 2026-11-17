@@ -2,7 +2,7 @@
 """Run ARM regressions using the configured build and extracted firmware runtime."""
 from pathlib import Path
 import argparse, datetime, io, json, os, re, shlex, subprocess, zipfile
-import struct, zlib, shutil
+import struct, zlib, shutil, sys
 import http.server, ssl, threading
 from build_metadata import sha256, source_metadata
 from targets import DEFAULT_TARGET, load_target, firmware_path, tool, target_evidence, verify_build_target
@@ -15,6 +15,7 @@ parser.add_argument('--target', default=DEFAULT_TARGET)
 parser.add_argument('--build', type=Path)
 parser.add_argument('--application', type=Path)
 args = parser.parse_args()
+subprocess.run([sys.executable, str(root / 'tools/test-translations.py')], check=True)
 profile = load_target(args.target)
 build = (args.build or root / profile['build']['directory']).resolve()
 firmware = firmware_path(profile)
@@ -66,13 +67,13 @@ bad = (out / 'utf8-stored.zip').read_bytes().replace('Т'.encode(), b'\xc0\x80')
 (out / 'invalid-utf8.zip').write_bytes(bad)
 # OTA fixtures cover verified extraction, corruption, traversal and release identity.
 shared_ota = profile['build']['cmake'].get('CR3_SHARED_PACKAGE') == 'ON'
-compatibility = '632 U632.6.11.2001\n634 U634.6.10.3425\n700 U700.6.10.3209\n743G U743g.6.11.1683\n'
+compatibility = '629 U629.6.11.2020\n632 U632.6.11.2001\n634 U634.6.10.3425\n700 U700.6.10.3209\n743G U743g.6.11.1683\n'
 def add_shared_identity(entries, api=False):
     if shared_ota:
         entries['package-family.txt'] = 'pocketbook-armv7-softfp\n'
         entries['firmware-compatibility.txt'] = compatibility
         if api:
-            entries['firmware-api-compatibility.txt'] = '632 610\n634 610\n700 610\n743G 610\n'
+            entries['firmware-api-compatibility.txt'] = '629 610\n632 610\n634 610\n700 610\n743G 610\n'
     return entries
 for name in ('good', 'wrong-version', 'traversal', 'missing-binary', 'wrong-family', 'wrong-firmware', 'good-api', 'wrong-api'):
     with zipfile.ZipFile(out / ('ota-' + name + '.zip'), 'w', zipfile.ZIP_DEFLATED) as archive:
@@ -186,6 +187,8 @@ for name, sources, engine, arguments in [
     ('performance-caches', ['tests/performance-caches.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', out]),
     ('reader-checkpoint', ['tests/reader-checkpoint.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', firmware / 'ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', firmware / 'ebrmain/cramfs/fonts/DroidSans.ttf', out]),
     ('settings-editor', ['tests/settings-editor.cpp', 'cr3gui/src/settings.cpp', 'cr3gui/src/fsmenu.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', firmware / 'ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', build / 'cr3gui/pb631fw5.cr3skin', out]),
+    ('reader-screens', ['tests/reader-screens.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', firmware / 'ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', build / 'cr3gui/pb631fw5.cr3skin', build / 'i18n/ru/LC_MESSAGES/cr3.mo', out]),
+    ('translation-lookup', ['tests/translation-lookup.cpp'], True, [build / 'i18n/ru/LC_MESSAGES/cr3.mo']),
     ('skin-language-symbol', ['tests/skin-language-symbol.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', firmware / 'ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', build / 'cr3gui/pb631fw5.cr3skin', out]),
     ('document-render', ['tests/document-render-startup.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', firmware / 'ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', firmware / 'ebrmain/cramfs/fonts/DroidSans.ttf', root / profile['package']['assets'] / 'cr3-defaults.ini', root / 'cr3gui/data/hyph/', epub, root / 'cr3gui/data/fb2.css']),
     ('reading-state-migration', ['tests/reading-state-migration.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', out / 'migration.fb2', out / 'migration.zip']),
@@ -194,10 +197,10 @@ for name, sources, engine, arguments in [
     ('dictionary-browser', ['tests/dictionary-browser.cpp'], True, []),
     ('dictionary-safety', ['tests/dictionary-safety.cpp'], True, []),
     ('native-dictionary-api', ['tests/native-dictionary-api.cpp', 'cr3gui/src/pb_dictionary_engine.cpp', 'cr3gui/src/stardict.cpp'], True, []),
-    ('dictionary-download', ['tests/dictionary-download.cpp', 'cr3gui/src/stardict.cpp', 'cr3gui/src/stardict_install.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', build / 'cr3gui/pb631fw5.cr3skin', out]),
+    ('dictionary-download', ['tests/dictionary-download.cpp', 'cr3gui/src/stardict.cpp', 'cr3gui/src/stardict_install.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', build / 'cr3gui/pb631fw5.cr3skin', out, build / 'i18n/ru/LC_MESSAGES/cr3.mo']),
     ('stardict', ['tests/stardict.cpp', 'cr3gui/src/stardict.cpp', 'cr3gui/src/stardict_install.cpp'], True, [out]),
     ('history-persistence', ['tests/history-persistence.cpp'], True, [out]),
-    ('ota-ui', ['tests/ota-ui.cpp'], True, [out]),
+    ('ota-ui', ['tests/ota-ui.cpp'], True, [out, build / 'i18n/ru/LC_MESSAGES/cr3.mo']),
     ('ota-package', ['tests/ota-package.cpp'], True, [out]),
     ('archive-boundaries', ['tests/archive-boundaries.cpp'], True, [out]),
     ('atomic-faults', ['tests/atomic-faults.cpp'], True, [out]),
@@ -209,11 +212,19 @@ for name, sources, engine, arguments in [
         subprocess.run([str(compiler).replace('-g++', '-gcc'), '-shared', '-fPIC',
                         'tests/native-dictionary-api-library.c', '-o', str(fixture)], check=True)
         test_options = options + ['-DCR3_NATIVE_DICTIONARY_LIBRARY="' + str(fixture) + '"']
-    if name == 'settings-editor':
+    if name in ('settings-editor', 'reader-screens'):
         # The real menu must exercise the application's OTA/touch feature flags.
         app_flags = (build / 'cr3gui/CMakeFiles/cr3-pb.app.dir/flags.make').read_text()
         test_options = flags('CXX_DEFINES', app_flags) + flags('CXX_INCLUDES', app_flags) + flags('CXX_FLAGS', app_flags)
     command = [compiler] + test_options + sources
+    if name == 'reader-screens':
+        # Exercise the actual frontend screens without entering InkViewMain.
+        objects = sorted((build / 'cr3gui/CMakeFiles/cr3-pb.app.dir').rglob('*.o'))
+        entry = next(p for p in objects if p.name == 'cr3pocketbook.cpp.o')
+        renamed = out / 'reader-screens-app.o'
+        subprocess.run([str(compiler).replace('-g++', '-objcopy'), '--redefine-sym',
+                        'main=cr3_application_main', str(entry), str(renamed)], check=True)
+        command += [renamed if p == entry else p for p in objects]
     if engine:
         command += ['-Wl,--exclude-libs,ALL', '-Wl,--start-group'] + libraries + ['-Wl,--end-group', '-linkview'] + ['-l' + name for name in dependencies['runtime']]
     subprocess.run([str(x) for x in command + ['-o', binary]], check=True)

@@ -27,6 +27,10 @@ protected:
     bool _showScroll;
     bool _showFrame;
     int _lastNavigationDirection;
+    LVFontRef _readerTitleFont, _readerButtonFont;
+    bool readerChrome() const { return _showFrame && _fullscreen && _wm->getScreen()->isTouchSupported(); }
+    virtual bool hasTouchSettingsNavigation() const { return readerChrome(); }
+    virtual void drawTitleBar();
     lString32 _searchPattern;
 	static LVRef<CRDictionary> _dict;
     virtual void draw( int pageOffset );
@@ -72,6 +76,9 @@ public:
     /// adds XML and FictionBook tags for utf8 fb2 document
     static lString8 makeFb2Xml( const lString8 & body );
     virtual void setRect( const lvRect & rc );
+    virtual bool getTitleRect(lvRect &rc);
+    virtual bool getStatusRect(lvRect &rc);
+    virtual bool getScrollRect(lvRect &rc);
     CRViewDialog(CRGUIWindowManager * wm, lString32 title, lString8 text, lvRect rect, bool showScroll, bool showFrame );
 
     virtual bool onCommand( int command, int params = 0 );

@@ -1,3 +1,4 @@
+#include "reader_ui.h"
 //
 // C++ Implementation: bookmarks dialog
 //
@@ -25,7 +26,16 @@ void CRBookmarkMenuItem::Draw( LVDrawBuf & buf, lvRect & rc, CRRectSkinRef skin,
 {
     _itemDirty = false;
     if ( !_bookmark ) {
+        _label = (_menu && _menu->isSettingsEditor() ? lString32::itoa(_id) + U" · " : lString32()) + lString32(_("Empty slot"));
         CRMenuItem::Draw( buf, rc, skin, valueSkin, selected );
+        return;
+    }
+    if (_menu && _menu->isSettingsEditor()) {
+        _label = lString32(_("Page $1 ($2%)"));
+        _label.replaceIntParam(1, _page + 1);
+        _label.replaceParam(2, lString32::itoa(_bookmark->getPercent()/100));
+        _label << "  " << _bookmark->getTitleText();
+        _menu->drawSettingsItem(*this, buf, rc, selected);
         return;
     }
     lvRect itemBorders = skin->getBorderWidths();
@@ -188,6 +198,7 @@ CRBookmarkMenu::CRBookmarkMenu(CRGUIWindowManager * wm, LVDocView * docview, int
         acc = _wm->getAccTables().get("menu");
     setAccelerators( acc );
     setSkinName(lString32("#bookmarks"));
+    styleReaderMenu(this);
     int mc = getSkin()->getMinItemCount();
     if ( _pageItems < mc )
         _pageItems = mc;
@@ -337,6 +348,7 @@ CRCitesMenu::CRCitesMenu(CRGUIWindowManager * wm, LVDocView * docview, int numIt
         acc = _wm->getAccTables().get("menu");
     setAccelerators( acc );
     setSkinName(lString32("#cites-list"), lString32("#bookmarks"));
+    styleReaderMenu(this);
     int mc = getSkin()->getMinItemCount();
     if ( _pageItems < mc )
         _pageItems = mc;

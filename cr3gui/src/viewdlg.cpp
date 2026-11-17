@@ -11,6 +11,7 @@
 // viewdlg.cpp
 
 #include "viewdlg.h"
+#include "reader_ui.h"
 #include "mainwnd.h"
 #include <cri18n.h>
 
@@ -113,10 +114,11 @@ CRViewDialog::CRViewDialog(CRGUIWindowManager * wm, lString32 title, lString8 te
     _fullscreen = false;
     if ( rect.isEmpty() ) {
         rect = fsRect;
-        _fullscreen = false;
+        _fullscreen = _showFrame && wm->getScreen()->isTouchSupported();
     } else {
         _fullscreen = (rect == fsRect);
     }
+    if (readerChrome()) setSkinName(lString32("#settings"));
     getDocView()->setDrawBufferBits(_wm->getScreen()->getCanvas()->GetBitsPerPixel());
     getDocView()->setStyleSheet( lString8(def_view_css) );
     getDocView()->setBackgroundColor(0xFFFFFF);
@@ -133,6 +135,26 @@ CRViewDialog::CRViewDialog(CRGUIWindowManager * wm, lString32 title, lString8 te
             getDocView()->setDefaultFontFace(UnicodeToUtf8(clientSkin->getFontFace()));
             getDocView()->setPageMargins( clientSkin->getBorderWidths() );
         }
+    }
+    if (readerChrome()) {
+        int dpi = readerUiDpi();
+        lString8 face = UnicodeToUtf8(getSkin()->getClientSkin()->getFontFace());
+        _readerTitleFont = fontMan->GetFont((42*dpi+150)/300,400,false,css_ff_sans_serif,face);
+        _readerButtonFont = fontMan->GetFont((32*dpi+150)/300,400,false,css_ff_sans_serif,face);
+        LVArray<int> sizes;
+        for (int size = 12; size <= 96; ++size) sizes.add(size);
+        getDocView()->setFontSizes(sizes, false);
+        getDocView()->setFontSize((36*dpi+150)/300);
+        int pad = (24*dpi+150)/300;
+        getDocView()->setPageMargins(lvRect(pad,pad,pad,pad));
+        getDocView()->setVisiblePageCount(1);
+        getDocView()->setStyleSheet(lString8(def_view_css) +
+            "p { text-align: left; text-indent: 0; margin-bottom: 0.6em } "
+            "subtitle { text-align: left; font-style: normal; font-weight: bold; font-size: 120%; margin-top: 1em; margin-bottom: 0.5em } "
+            "subtitle p { text-align: left; font-style: normal } "
+            "p.info-label { font-size: 85%; margin-bottom: 0.1em; font-weight: bold } "
+            "p.info-value { margin-bottom: 0.8em; overflow-wrap: anywhere } "
+            "td, th { padding: 0.4em; text-indent: 0 } ");
     }
     getDocView()->setShowCover( false );
     getDocView()->setPageHeaderInfo( 0 ); // hide title bar
@@ -398,7 +420,7 @@ bool CRViewDialog::onCommand( int command, int params )
                 params = (command == DCMD_BUTTON_PRESSED_LONG);
                 _lastNavigationDirection = -1;
                 break;
-            } else if (params != BTN_CLOSE) {
+            } else if (params != BTN_CLOSE && params != BTN_SETTINGS_DONE) {
                 // unknown button pressed
                 return false;
             }
@@ -675,6 +697,28 @@ void CRViewDialog::showKeymapDialog()
     //TODO:
 }
 
+bool CRViewDialog::getTitleRect(lvRect &rc) {
+    if (!readerChrome()) return CRDocViewWindow::getTitleRect(rc);
+    rc = _rect;
+    rc.bottom = rc.top + _readerTitleFont->getHeight()*2 + 24;
+    return true;
+}
+bool CRViewDialog::getStatusRect(lvRect &rc) {
+    if (!readerChrome()) return CRDocViewWindow::getStatusRect(rc);
+    rc = _rect;
+    rc.top = rc.bottom - _readerButtonFont->getHeight()*2 - 12;
+    return true;
+}
+bool CRViewDialog::getScrollRect(lvRect &rc) {
+    if (readerChrome()) return getStatusRect(rc);
+    return CRDocViewWindow::getScrollRect(rc);
+}
+void CRViewDialog::drawTitleBar() {
+    if (!readerChrome()) { CRDocViewWindow::drawTitleBar(); return; }
+    drawReaderHeader(_caption, lString32("CoolReader"), _readerTitleFont, _readerButtonFont,
+                     lString32(_("Back")), lString32(_("Read")), BTN_SETTINGS_DONE);
+}
+
 void CRViewDialog::draw()
 {
     draw(0);
@@ -699,7 +743,7 @@ void CRViewDialog::draw( int pageOffset )
         getClientRect( clientRect );
         if ( !clientSkin.isNull() )
             clientSkin->draw( *drawbuf, clientRect );
-        skin->draw( *drawbuf, _rect );
+        if (!readerChrome()) skin->draw( *drawbuf, _rect );
     }
     if ( _showFrame ) {
         drawTitleBar();

@@ -42,6 +42,16 @@
       "skin": "pb631fw5",
       "firmware": "U743g.6.11.1683",
       "minimum_api": 610
+    },
+    {
+      "model": "629",
+      "name": "Verse",
+      "dpi": 212,
+      "width": 758,
+      "height": 1024,
+      "skin": "pb631fw5",
+      "firmware": "U629.6.11.2020",
+      "minimum_api": 610
     }
   ],
   "firmware_policy": "known-model-compatible-api"

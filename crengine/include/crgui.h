@@ -721,6 +721,9 @@ class CRGUIWindowBase : public CRGUIWindow
         virtual void drawStatusText( LVDrawBuf & buf, const lvRect & rc, CRRectSkinRef skin );
         /// draw title bar using current skin, with optional scroll/tab/page indicator
         virtual void drawTitleBar();
+        void drawReaderHeader(const lString32 &title, const lString32 &context,
+                              LVFontRef titleFont, LVFontRef buttonFont,
+                              const lString32 &left, const lString32 &right, int rightButton);
         /// draw input box, if any
         virtual void drawInputBox();
         /// draw title bar using current skin, with optional scroll/tab/page indicator

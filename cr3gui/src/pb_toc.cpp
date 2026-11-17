@@ -1,3 +1,4 @@
+#include "reader_ui.h"
 //
 // C++ Implementation: pb_toc
 //
@@ -30,6 +31,7 @@ CRTocMenu::CRTocMenu( CRGUIWindowManager * wm, CRPropRef newProps, int id,
     }
 
     setSkinName(U"#touch-toc");
+    styleReaderMenu(this);
 
     _fullscreen = true;
 
@@ -87,7 +89,7 @@ CRTocMenu::CRTocMenu( CRGUIWindowManager * wm, CRPropRef newProps, int id,
         mainMenu->addItem( new CRMenuItem(
             mainMenu,
             PB_TOC_SAFE_CMD_RANGE + 1,
-            "Empty TOC",
+            _("Empty TOC"),
             LVImageSourceRef(),
             LVFontRef()
             ) );

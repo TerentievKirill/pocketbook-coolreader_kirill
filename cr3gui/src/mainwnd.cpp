@@ -811,8 +811,8 @@ void V3DocViewWin::showHelpDialog()
 	//lString8 help = UnicodeToUtf8( LVReadTextFile( _helpFile ) );
 	if ( !help.empty() ) {
 		CRViewDialog * dlg = new CRViewDialog( _wm, lString32(_("Help")), help, lvRect(), true, true );
-                int fs = _props->getIntDef( PROP_FONT_SIZE, 22 );
-                dlg->getDocView()->setFontSize(fs);
+                if (!_wm->getScreen()->isTouchSupported())
+                    dlg->getDocView()->setFontSize(_props->getIntDef(PROP_FONT_SIZE, 22));
 		_wm->activateWindow( dlg );
 	}
 }
@@ -952,10 +952,22 @@ VIEWER_MENU_4ABOUT=About...
 #endif
 }
 
+static lString8 infoXmlText(lString8 text) {
+    lString8 result;
+    for (int i = 0; i < text.length(); ++i) {
+        if (text[i] == '&') result << "&amp;";
+        else if (text[i] == '<') result << "&lt;";
+        else if (text[i] == '>') result << "&gt;";
+        else result << text[i];
+    }
+    return result;
+}
+
 void addPropLine( lString8 & buf, const char * description, const lString32 & value )
 {
     if ( !value.empty() ) {
-        buf << "<tr><td>" << description << "</td><td>" << UnicodeToUtf8(value).c_str() << "</td></tr>\n";
+        buf << "<p class=\"info-label\">" << infoXmlText(lString8(description))
+            << "</p><p class=\"info-value\">" << infoXmlText(UnicodeToUtf8(value)) << "</p>\n";
     }
 }
 
@@ -1026,7 +1038,7 @@ lString32 getDocAuthors( ldomDocument * doc, const char * path, const char * del
 static void addInfoSection( lString8 & buf, lString8 data, const char * caption )
 {
     if ( !data.empty() )
-        buf << "<tr><td colspan=\"2\" style=\"font-weight: bold; text-align: center\">" << caption << "</td></tr>" << data;
+        buf << "<subtitle><p>" << infoXmlText(lString8(caption)) << "</p></subtitle>" << data;
 }
 
 lString32 V3DocViewWin::getBookLanguage() {
@@ -1037,21 +1049,18 @@ void V3DocViewWin::showAboutDialog()
 {
 	_docview->savePosition();
 	CRFileHistRecord * hist = _docview->getCurrentFileHistRecord();
-    lString32 title("Cool Reader ");
-#ifndef PACKAGE_VERSION
-#define PACKAGE_VERSION CR_ENGINE_VERSION
-#endif
-    title << Utf8ToUnicode(lString8(PACKAGE_VERSION));
+    lString32 title(_("Book info"));
 
     lString8 txt;
     //=========================================================
-    txt << "<table><col width=\"30%\"/><col width=\"70%\"/>\n";
+
     CRPropRef props = _docview->getDocProps();
 
     lString8 statusInfo;
 	addPropLine( statusInfo, _("Current page"), lString32::itoa(_docview->getCurPage()+1) );
 	addPropLine( statusInfo, _("Total pages"), lString32::itoa(_docview->getPageCount()) );
-    addPropLine( statusInfo, _("Battery state"), _docview->getBatteryState()==-1 ? lString32(_("charging...")) : lString32::itoa(_docview->getBatteryState()) + "%" );
+    if (_docview->getBatteryState() >= -1)
+        addPropLine( statusInfo, _("Battery state"), _docview->getBatteryState()==-1 ? lString32(_("charging...")) : lString32::itoa(_docview->getBatteryState()) + "%" );
 	addPropLine( statusInfo, _("Current Time"), _docview->getTimeString() );
 	// TODO:
 	if ( hist ) {
@@ -1060,7 +1069,6 @@ void V3DocViewWin::showAboutDialog()
 			addPropLine( statusInfo, _("Current chapter"), lastpos->getTitleText() );
 		}
 	}
-    addInfoSection( txt, statusInfo, _("Status") );
 
     lString8 fileInfo;
     addPropLine( fileInfo, _("Archive name"), props->getStringDef(DOC_PROP_ARC_NAME) );
@@ -1070,7 +1078,6 @@ void V3DocViewWin::showAboutDialog()
     addPropLine( fileInfo, _("File path"), props->getStringDef(DOC_PROP_FILE_PATH) );
     addPropLine( fileInfo, _("File size"), props->getStringDef(DOC_PROP_FILE_SIZE) );
     addPropLine( fileInfo, _("File format"), props->getStringDef(DOC_PROP_FILE_FORMAT) );
-    addInfoSection( txt, fileInfo, _("File info") );
 
     lString8 bookInfo;
     addPropLine( bookInfo, C_("Book", "Title"), props->getStringDef(DOC_PROP_TITLE) );
@@ -1083,6 +1090,8 @@ void V3DocViewWin::showAboutDialog()
     addPropLine( bookInfo, _("Translator"), getDocText( getDocView()->getDocument(), "/FictionBook/description/title-info/translator", ", " ) );
     addPropLine( bookInfo, _("Source language"), getDocText( getDocView()->getDocument(), "/FictionBook/description/title-info/src-lang", ", " ) );
     addInfoSection( txt, bookInfo, _("Book info") );
+    addInfoSection( txt, statusInfo, _("Status") );
+    addInfoSection( txt, fileInfo, _("File info") );
 
     lString8 docInfo;
     addPropLine( docInfo, _("Document author"), getDocAuthors( getDocView()->getDocument(), "/FictionBook/description/document-info/author", " " ) );
@@ -1122,15 +1131,15 @@ void V3DocViewWin::showAboutDialog()
     addPropLine( debugInfo, _("Skin file"), _wm->getSkinFilePath());
     addInfoSection( txt, debugInfo, _("Debug information") );
 #endif
-    txt << "</table>\n";
+
 
     //CRLog::trace(txt.c_str());
     //=========================================================
     txt = CRViewDialog::makeFb2Xml(txt);
     CRViewDialog * dlg = new CRViewDialog( _wm, title, txt, lvRect(), true, true );
     dlg->getDocView()->setVisiblePageCount(1);
-    int fs = _props->getIntDef( PROP_FILE_PROPS_FONT_SIZE, 22 );
-    dlg->getDocView()->setFontSize(fs);
+    if (!_wm->getScreen()->isTouchSupported())
+        dlg->getDocView()->setFontSize(_props->getIntDef(PROP_FILE_PROPS_FONT_SIZE, 22));
     _wm->activateWindow( dlg );
 }
 
