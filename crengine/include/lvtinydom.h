@@ -44,7 +44,10 @@
 #ifndef __LV_TINYDOM_H_INCLUDED__
 #define __LV_TINYDOM_H_INCLUDED__
 
+#include <atomic>
 #include <functional>
+#include <memory>
+#include <mutex>
 
 #include "lvmemman.h"
 #include "lvstring.h"
@@ -838,6 +841,8 @@ private:
     void setParentNode( ldomNode * newParent );
     /// add child
     void addChild( lInt32 childNodeIndex );
+
+    void invalidateDecodedBinarySize();
 
     /// call to invalidate cache if persistent node content is modified
     void modified();
@@ -2385,6 +2390,7 @@ typedef LVRef<ListNumberingProps> ListNumberingPropsRef;
 
 class ldomDocument : public lxmlDocBase
 {
+    friend struct ldomNode;
     friend class ldomDocumentWriter;
     friend class ldomDocumentWriterFilter;
 private:
@@ -2408,6 +2414,14 @@ private:
     lString32 _docStylesheetFileName;
 
     LVContainerRef _container;
+
+    // Transient sizes of embedded binaries, keyed by node index within this document.
+#if CR_USE_THREADS==1
+    std::mutex _decodedBinarySizeMutex;
+#endif
+    std::unique_ptr<LVHashTable<lUInt32, lvsize_t>> _decodedBinarySizes;
+    std::atomic<bool> _hasDecodedBinarySizes{false};
+    void clearDecodedBinarySizes();
 
     LVHashTable<lUInt32, ListNumberingPropsRef> lists;
 

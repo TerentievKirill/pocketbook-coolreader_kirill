@@ -8548,11 +8548,14 @@ private:
 
 public:
     virtual ~LVBase64NodeStream() { }
-    LVBase64NodeStream( ldomNode * element )
-        : m_elem(element), m_curr_node(element), m_text_pos(0), m_size(0), m_pos(0)
+    LVBase64NodeStream( ldomNode * element, lvsize_t decodedSize )
+        : m_elem(element), m_curr_node(element), m_text_pos(0), m_size(decodedSize), m_pos(0)
     {
-        // calculate size
         rewind();
+        if (decodedSize)
+            return;
+
+        // Calculate the size using the same decoder that will read the stream.
         m_size = bytesAvailable();
         for (;;) {
             int bytesRead = readNextBytes();
@@ -15082,8 +15085,18 @@ int tinyNodeCollection::getPersistenceFlags()
     return flag;
 }
 
+void ldomDocument::clearDecodedBinarySizes()
+{
+#if CR_USE_THREADS==1
+    std::lock_guard<std::mutex> lock(_decodedBinarySizeMutex);
+#endif
+    _decodedBinarySizes.reset();
+    _hasDecodedBinarySizes.store(false, std::memory_order_relaxed);
+}
+
 void ldomDocument::clear()
 {
+    clearDecodedBinarySizes();
 #if BUILD_LITE!=1
     clearRendBlockCache();
     _rendered = false;
@@ -15130,7 +15143,7 @@ bool ldomDocument::openFromCache( CacheLoadingCallback * formatCallback, LVDocVi
 /// load document cache file content, @see saveChanges()
 bool ldomDocument::loadCacheFileContent(CacheLoadingCallback * formatCallback, LVDocViewCallback * progressCallback)
 {
-
+    clearDecodedBinarySizes();
     CRLog::trace("ldomDocument::loadCacheFileContent()");
     {
         if (progressCallback) progressCallback->OnLoadFileProgress(5);
@@ -16609,6 +16622,7 @@ void ldomNode::destroy()
 {
     if ( isNull() )
         return;
+    invalidateDecodedBinarySize();
     //CRLog::trace("ldomNode::destroy(%d) type=%d", this->_handle._dataIndex, TNTYPE);
     switch ( TNTYPE ) {
     case NT_TEXT:
@@ -17232,6 +17246,7 @@ void ldomNode::setNodeId( lUInt16 id )
     ASSERT_NODE_NOT_NULL;
     if ( !isElement() )
         return;
+    invalidateDecodedBinarySize();
 #if BUILD_LITE!=1
     if ( !isPersistent() ) {
         // element
@@ -17390,6 +17405,7 @@ lString8 ldomNode::getText8( lChar8 blockDelimiter, int maxSize ) const
 void ldomNode::setText( lString32 str )
 {
     ASSERT_NODE_NOT_NULL;
+    invalidateDecodedBinarySize();
     switch ( TNTYPE ) {
     case NT_ELEMENT:
         readOnlyError();
@@ -17421,6 +17437,7 @@ void ldomNode::setText( lString32 str )
 void ldomNode::setText8( lString8 utf8 )
 {
     ASSERT_NODE_NOT_NULL;
+    invalidateDecodedBinarySize();
     switch ( TNTYPE ) {
     case NT_ELEMENT:
         readOnlyError();
@@ -18556,12 +18573,31 @@ void ldomNode::removeLastChild()
     }
 }
 
+void ldomNode::invalidateDecodedBinarySize()
+{
+    ldomDocument *doc = getDocument();
+    if (!doc->_hasDecodedBinarySizes.load(std::memory_order_relaxed))
+        return;
+
+    ldomNode *binary = isText() ? getParentNode() : this;
+    if (!binary || binary->isNull() || binary->getNodeId() != el_binary)
+        return;
+#if CR_USE_THREADS==1
+    std::lock_guard<std::mutex> lock(doc->_decodedBinarySizeMutex);
+#endif
+    if (doc->_decodedBinarySizes) {
+        doc->_decodedBinarySizes->remove(binary->getDataIndex());
+        doc->_hasDecodedBinarySizes.store(doc->_decodedBinarySizes->length() != 0, std::memory_order_relaxed);
+    }
+}
+
 /// add child
 void ldomNode::addChild( lInt32 childNodeIndex )
 {
     ASSERT_NODE_NOT_NULL;
     if ( !isElement() )
         return;
+    invalidateDecodedBinarySize();
     if ( isPersistent() )
         modify(); // convert to mutable element
     tinyElement * me = NPELEM;
@@ -18574,6 +18610,7 @@ void ldomNode::moveItemsTo( ldomNode * destination, int startChildIndex, int end
     ASSERT_NODE_NOT_NULL;
     if ( !isElement() )
         return;
+    invalidateDecodedBinarySize();
     if ( isPersistent() )
         modify();
 
@@ -18655,6 +18692,7 @@ ldomNode * ldomNode::insertChildElement( lUInt32 index, lUInt16 nsid, lUInt16 id
 {
     ASSERT_NODE_NOT_NULL;
     if  ( isElement() ) {
+        invalidateDecodedBinarySize();
         if ( isPersistent() )
             modify();
         tinyElement * me = NPELEM;
@@ -18673,6 +18711,7 @@ ldomNode * ldomNode::insertChildElement( lUInt16 id )
 {
     ASSERT_NODE_NOT_NULL;
     if  ( isElement() ) {
+        invalidateDecodedBinarySize();
         if ( isPersistent() )
             modify();
         ldomNode * node = getDocument()->allocTinyElement( this, LXML_NS_NONE, id );
@@ -18688,6 +18727,7 @@ ldomNode * ldomNode::insertChildText( lUInt32 index, const lString32 & value )
 {
     ASSERT_NODE_NOT_NULL;
     if  ( isElement() ) {
+        invalidateDecodedBinarySize();
         if ( isPersistent() )
             modify();
         tinyElement * me = NPELEM;
@@ -18715,6 +18755,7 @@ ldomNode * ldomNode::insertChildText( const lString32 & value )
 {
     ASSERT_NODE_NOT_NULL;
     if  ( isElement() ) {
+        invalidateDecodedBinarySize();
         if ( isPersistent() )
             modify();
         tinyElement * me = NPELEM;
@@ -18739,6 +18780,7 @@ ldomNode * ldomNode::insertChildText(const lString8 & s8, bool before_last_child
 {
     ASSERT_NODE_NOT_NULL;
     if  ( isElement() ) {
+        invalidateDecodedBinarySize();
         if ( isPersistent() )
             modify();
         tinyElement * me = NPELEM;
@@ -18764,6 +18806,7 @@ ldomNode * ldomNode::removeChild( lUInt32 index )
 {
     ASSERT_NODE_NOT_NULL;
     if  ( isElement() ) {
+        invalidateDecodedBinarySize();
         if ( isPersistent() )
             modify();
         lUInt32 removedIndex = NPELEM->_children.remove(index);
@@ -18787,8 +18830,42 @@ LVStreamRef ldomNode::createBase64Stream()
     LVStreamRef ostream = LVOpenFileStream( fname.empty() ? U"image.png" : fname.c_str(), LVOM_WRITE );
     printf("createBase64Stream(%s)\n", fname8.c_str());
 #endif
-    LVStream * stream = new LVBase64NodeStream( this );
-    if ( stream->GetSize()==0 )
+    ldomDocument *doc = getDocument();
+    const bool binary = getNodeId() == el_binary;
+#if CR_USE_THREADS==1
+    std::unique_lock<std::mutex> lock(doc->_decodedBinarySizeMutex, std::defer_lock);
+#endif
+    lvsize_t size = 0;
+    bool hasSize = false;
+    if (binary) {
+#if CR_USE_THREADS==1
+        lock.lock();
+#endif
+        hasSize = doc->_decodedBinarySizes && doc->_decodedBinarySizes->get(getDataIndex(), size);
+        if (hasSize && !size)
+            return LVStreamRef();
+    }
+
+    LVStream *stream = new LVBase64NodeStream(this, size);
+    size = stream->GetSize();
+    if (binary && !hasSize) {
+        // An FB2 binary contains text only. Preserve decoding of nested content
+        // without caching it, so edits to deeper descendants need no tracking.
+        const int childCount = getChildCount();
+        int child = 0;
+        for (; child < childCount; ++child) {
+            ldomNode *node = getChildNode(child);
+            if (!node || !node->isText())
+                break;
+        }
+        if (child == childCount) {
+            if (!doc->_decodedBinarySizes)
+                doc->_decodedBinarySizes.reset(new LVHashTable<lUInt32, lvsize_t>(16));
+            doc->_decodedBinarySizes->set(getDataIndex(), size);
+            doc->_hasDecodedBinarySizes.store(true, std::memory_order_relaxed);
+        }
+    }
+    if ( !size )
     {
 #if DEBUG_BASE64_IMAGE==1
         printf("    cannot create base64 decoder stream!!!\n");
