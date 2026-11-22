@@ -775,6 +775,7 @@ static void scheduleCoverPreparation();
 static void coverPreparationTimer();
 static void scheduleReaderCheckpoint();
 static void schedulePagePrefetch();
+static unsigned long long startupPerfStart;
 #endif
 
 static int link_altParm = 0;
@@ -843,9 +844,20 @@ void CRPocketBookScreen::flush( bool full )
         if (!_front.isNull())
             _canvas->DrawTo( _front.get(), 0, 0, 0, NULL );
     }
+#ifdef POCKETBOOK_FW6
+    const bool firstBookPaint = startupPerfStart && main_win &&
+        main_win == CRPocketBookWindowManager::instance->getTopVisibleWindow() &&
+        main_win->getDocView()->IsDrawed();
+    if (firstBookPaint)
+        LVPerfScope::logElapsed("startup.first-paint", startupPerfStart);
+#endif
     update( _updateRect, full );
     _updateRect.clear();
 #ifdef POCKETBOOK_FW6
+    if (firstBookPaint) {
+        LVPerfScope::logElapsed("startup.first-refresh", startupPerfStart);
+        startupPerfStart = 0;
+    }
     scheduleReaderCheckpoint();
     schedulePagePrefetch();
 #endif
@@ -871,12 +883,17 @@ void CRPocketBookScreen::update( const lvRect & rc2, bool full )
     else if (!_forceSoft)
         full = false;
 
-    if ( full || forceFullUpdates ) {
+    const bool refreshFull = full || forceFullUpdates;
+    if (refreshFull)
         draw(0, 0, _front->GetWidth(), _front->GetHeight());
+    else
+        draw(rc.left, rc.top, rc.width(), rc.height());
+
+    LVPerfScope refreshTiming("screen.refresh-submit");
+    if (refreshFull) {
         FullUpdate();
         resetFullUpdateCounter();
     } else {
-        draw(rc.left, rc.top, rc.width(), rc.height());
         if (!isDocWnd && rc.height() < 300) {
             if (_update_gray && !forcePartialBwUpdates) {
                 PartialUpdate(rc.left, rc.top, rc.width(), rc.height());
@@ -4575,6 +4592,7 @@ static void loadPocketBookTranslation(const char *lang) {
 
 int InitDoc(const char *exename, char *fileName)
 {
+    LVPerfScope initTiming("startup.init-document");
 #ifdef POCKETBOOK_FW6
     fprintf(stderr, "[cr3-fw6-r5] InitDoc: logging\n");
 #endif
@@ -6110,6 +6128,7 @@ static void installStartupFaultHandler() {
 int main(int argc, char **argv)
 {
 #ifdef POCKETBOOK_FW6
+    startupPerfStart = LVPerfScope::timestamp();
     fprintf(stderr, "[cr3-fw6-r5] main entered, argc=%d\n", argc);
     fprintf(stderr, "[cr3] CREngine %s (%s)\n", CR_ENGINE_VERSION, CR_ENGINE_BUILD_DATE);
 #endif

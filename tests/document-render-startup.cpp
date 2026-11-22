@@ -1,5 +1,6 @@
 #include "lvxmlutils.h"
 #include "crengine.h"
+#include "fb2def.h"
 #include "lvdocview.h"
 #include "lvrend.h"
 #include "testutil.h"
@@ -285,6 +286,17 @@ static int testRendering(const char *defaultsFile, const char *epubFile, const c
     LVDocImageRef painted = epub.getPageImage(0);
     CHECK(!painted.isNull() && painted->getDrawBuf()->GetWidth() > 0);
     puts("PASS: UTF-32 supplementary characters and EPUB CSS/image page painting");
+
+    ldomDocument *doc = epub.getDocument();
+    ldomNode *first = doc->getElementById(U"_doc_fragment_0");
+    ldomNode *second = doc->getElementById(U"_doc_fragment_1");
+    CHECK(first && first->getText().pos(U"Проверка EPUB") >= 0 && !first->hasAttribute(attr_NonLinear));
+    CHECK(second && second->getText().pos(U"Nonlinear appendix.") >= 0 && second->hasAttribute(attr_NonLinear));
+    CHECK(doc->getRootNode()->getText().pos(U"Excluded chapter.") < 0);
+    CHECK(!doc->getElementById(U"_doc_fragment_2"));
+    LVTocItem *toc = epub.getToc();
+    CHECK(toc->getChildCount() == 1 && toc->getChild(0)->getName() == U"Chapter");
+    puts("PASS: EPUB spine order, first duplicate ID, skipped entries, nonlinear appendix and NCX lookup");
     return 0;
 }
 int main(int argc, char **argv) {

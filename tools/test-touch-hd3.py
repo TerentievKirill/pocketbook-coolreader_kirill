@@ -98,9 +98,28 @@ epub = out / 'regression-章节.epub'
 with zipfile.ZipFile(epub, 'w', zipfile.ZIP_DEFLATED) as book:
     book.writestr('mimetype', 'application/epub+zip', compress_type=zipfile.ZIP_STORED)
     book.writestr('META-INF/container.xml', '<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>')
-    book.writestr('OPS/content.opf', '<package version="2.0" unique-identifier="id" xmlns="http://www.idpf.org/2007/opf"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>EPUB regression</dc:title><dc:language>ru</dc:language><dc:identifier id="id">regression</dc:identifier></metadata><manifest><item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/><item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/><item id="image" href="pixel.png" media-type="image/png"/></manifest><spine toc="ncx"><itemref idref="chapter"/></spine></package>')
+    book.writestr('OPS/content.opf', '''<package version="2.0" unique-identifier="id" xmlns="http://www.idpf.org/2007/opf" xmlns:extra="urn:regression">
+        <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>EPUB regression</dc:title><dc:language>ru</dc:language><dc:identifier id="id">regression</dc:identifier></metadata>
+        <manifest>
+            <item id="tail" href="tail.xhtml" media-type="application/xhtml+xml"/>
+            <extra:ignored id="ignored" href="excluded.xhtml" media-type="application/xhtml+xml"/>
+            <item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/>
+            <item id="chapter" href="excluded.xhtml" media-type="application/xhtml+xml"/>
+            <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
+            <item id="image" href="pixel.png" media-type="image/png"/>
+        </manifest>
+        <spine toc="ncx">
+            <extra:ignored idref="tail"/>
+            <itemref idref="missing"/>
+            <itemref idref="chapter"/>
+            <itemref idref="ignored"/>
+            <itemref idref="tail" linear="no"/>
+        </spine>
+    </package>''')
     book.writestr('OPS/toc.ncx', '<ncx version="2005-1" xmlns="http://www.daisy.org/z3986/2005/ncx/"><head/><docTitle><text>EPUB regression</text></docTitle><navMap><navPoint id="chapter" playOrder="1"><navLabel><text>Chapter</text></navLabel><content src="chapter.xhtml"/></navPoint></navMap></ncx>')
     book.writestr('OPS/chapter.xhtml', '<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter</title><style>p { text-indent: 1em; color: #111; }</style></head><body><h1>Проверка EPUB</h1><p>Привет! Unicode 😀.</p><img src="pixel.png" width="16" height="16"/>' + '<p>Paragraph layout and page rendering.</p>' * 40 + '</body></html>')
+    book.writestr('OPS/tail.xhtml', '<html xmlns="http://www.w3.org/1999/xhtml"><body><p>Nonlinear appendix.</p></body></html>')
+    book.writestr('OPS/excluded.xhtml', '<html xmlns="http://www.w3.org/1999/xhtml"><body><p>Excluded chapter.</p></body></html>')
     book.writestr('OPS/pixel.png', pixel)
 # Keep a legacy DOM fixture in both ordinary and ZIP form.
 migration_xml = '<FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0"><description><title-info><book-title>Migration</book-title></title-info></description><body><section><p>First paragraph.</p><p>Saved reading position with <strong>inline text</strong> after it.</p></section></body></FictionBook>'

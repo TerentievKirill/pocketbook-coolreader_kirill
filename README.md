@@ -250,8 +250,12 @@ recovery backup with a damaged primary. Sudden power loss before a checkpoint ca
 still lose the most recent page turn.
 
 For on-device timing, launch the application with `CR3_PERF=1`. Standard-error
-logs record microseconds for font initialization, document parsing/layout, page
-images, screen flushes, prefetch, cover preparation and reading-state checkpoints.
+logs record microseconds for font initialization, file open and checksum, EPUB
+detection, OPF parsing, cache hits and misses, manifest and spine processing,
+layout, page images, screen flushes, prefetch, cover preparation and reading-state
+checkpoints. `startup.first-paint` measures from application entry to the first
+book image ready for display. `startup.first-refresh` ends when InkView returns
+from submitting that refresh. Visible e-ink completion requires a device measurement.
 Timing is off by default. `CR3_DISABLE_PAGE_PREFETCH=1` and
 `CR3_DISABLE_FONT_METADATA_CACHE=1` allow controlled comparisons with the same
 executable. Record median and slowest page turns, cold/warm opening, and input

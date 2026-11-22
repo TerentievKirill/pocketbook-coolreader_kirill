@@ -4227,7 +4227,9 @@ bool LVDocView::LoadDocument(const lChar32 * fname, bool metadataOnly) {
 	if (!fname || !fname[0])
 		return false;
 
+	LVPerfScope openTiming("document.open");
 	Clear();
+	LVPerfScope sourceTiming("document.source.open");
 
     CRLog::debug("LoadDocument(%s) textMode=%s", LCSTR(lString32(fname)), getTextFormatOptions()==txt_format_pre ? "pre" : "autoformat");
 
@@ -4257,6 +4259,7 @@ bool LVDocView::LoadDocument(const lChar32 * fname, bool metadataOnly) {
 			return false;
 		}
 		stream = m_container->OpenStream(arcItemPathName.c_str(), LVOM_READ);
+		sourceTiming.finish();
 		if (stream.isNull()) {
 			CRLog::error("Cannot open archive file item stream %s", LCSTR(
 					filename32));
@@ -4272,7 +4275,10 @@ bool LVDocView::LoadDocument(const lChar32 * fname, bool metadataOnly) {
 		m_doc_props->setString(DOC_PROP_FILE_SIZE, lString32::itoa(
 				(int) stream->GetSize()));
 		m_doc_props->setString(DOC_PROP_FILE_NAME, arcItemPathName);
-		m_doc_props->setHex(DOC_PROP_FILE_CRC32, stream->getcrc32());
+		{
+			LVPerfScope checksumTiming("document.source.checksum");
+			m_doc_props->setHex(DOC_PROP_FILE_CRC32, stream->getcrc32());
+		}
 		CRFileHistRecord* record = m_hist.getRecord( filename32, stream->GetSize() );
         if (loadDocumentWithHistory(stream, record, metadataOnly)) {
             m_filename = lString32(fname);
@@ -4313,12 +4319,16 @@ bool LVDocView::LoadDocument(const lChar32 * fname, bool metadataOnly) {
 	if (m_container.isNull())
 		return false;
 	LVStreamRef stream = m_container->OpenStream(fn.c_str(), LVOM_READ);
+	sourceTiming.finish();
 	if (!stream)
 		return false;
 	m_doc_props->setString(DOC_PROP_FILE_NAME, fn);
 	m_doc_props->setString(DOC_PROP_FILE_SIZE, lString32::itoa(
 			(int) stream->GetSize()));
-	m_doc_props->setHex(DOC_PROP_FILE_CRC32, stream->getcrc32());
+	{
+		LVPerfScope checksumTiming("document.source.checksum");
+		m_doc_props->setHex(DOC_PROP_FILE_CRC32, stream->getcrc32());
+	}
 
 	CRFileHistRecord* record = m_hist.getRecord( filename32, stream->GetSize() );
     if (loadDocumentWithHistory(stream, record, metadataOnly)) {
