@@ -4686,7 +4686,8 @@ bool LVDocView::loadDocumentInt(LVStreamRef stream, bool metadataOnly) {
         }
 
 
-		if ( DetectEpubFormat( m_stream ) ) {
+		LVContainerRef epubArchive = OpenEpubArchive(m_stream);
+		if ( !epubArchive.isNull() ) {
 			// EPUB
 			CRLog::info("EPUB format detected");
 			createEmptyDocument();
@@ -4696,7 +4697,7 @@ bool LVDocView::loadDocumentInt(LVStreamRef stream, bool metadataOnly) {
 			if ( m_callback )
                 m_callback->OnLoadFileFormatDetected(doc_format_epub);
             updateDocStyleSheet();
-            bool res = ImportEpubDocument( m_stream, m_doc, m_callback, this, metadataOnly );
+            bool res = ImportEpubDocument(m_stream, m_doc, m_callback, this, metadataOnly, epubArchive);
 			if ( !res ) {
 				setDocFormat( doc_format_none );
                 createDefaultDocument( cs32("ERROR: Error reading EPUB format"), cs32("Cannot open document") );

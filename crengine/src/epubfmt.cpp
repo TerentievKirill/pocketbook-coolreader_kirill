@@ -80,12 +80,12 @@ public:
 //    }
 //}
 
-bool DetectEpubFormat( LVStreamRef stream )
+LVContainerRef OpenEpubArchive( LVStreamRef stream )
 {
     LVPerfScope detectTiming("epub.detect");
     LVContainerRef m_arc = LVOpenArchieve( stream );
     if ( m_arc.isNull() )
-        return false; // not a ZIP archive
+        return LVContainerRef();
 
     //dumpZip( m_arc );
 
@@ -110,8 +110,13 @@ bool DetectEpubFormat( LVStreamRef stream )
     }
 
     if ( mimeType != U"application/epub+zip" )
-        return false;
-    return true;
+        return LVContainerRef();
+    return m_arc;
+}
+
+bool DetectEpubFormat( LVStreamRef stream )
+{
+    return !OpenEpubArchive(stream).isNull();
 }
 
 void ReadEpubNcxToc( ldomDocument * doc, ldomNode * mapRoot, LVTocItem * baseToc, ldomDocumentFragmentWriter & appender ) {
@@ -918,8 +923,15 @@ public:
 
 bool ImportEpubDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCallback * progressCallback, CacheLoadingCallback * formatCallback, bool metadataOnly )
 {
+    return ImportEpubDocument(stream, m_doc, progressCallback, formatCallback, metadataOnly, LVContainerRef());
+}
+
+bool ImportEpubDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCallback * progressCallback,
+                         CacheLoadingCallback * formatCallback, bool metadataOnly, LVContainerRef arc )
+{
     LVPerfScope importTiming("epub.import");
-    LVContainerRef arc = LVOpenArchieve( stream );
+    if ( arc.isNull() )
+        arc = LVOpenArchieve(stream);
     if ( arc.isNull() )
         return false; // not a ZIP archive
 
