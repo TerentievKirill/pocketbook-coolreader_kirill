@@ -19,7 +19,7 @@
     <section>
       <title><p>Open a book</p></title>
       <p>In the PocketBook Library, long-press an EPUB, FB2 or another supported book. Choose Open with, then CoolReader (it may be listed as cr3-pb.app).</p>
-      <p>If CoolReader is missing from Open with, follow README-touch-hd3.txt to add it to system/config/extensions.cfg.</p>
+      <p>In Settings &gt; Default reader, choose all supported formats or a group such as FictionBook or EPUB to open those books in CoolReader from the Library.</p>
       <p>The CoolReader entry in Apps reopens the last book you opened through the launcher. If that file is missing, this welcome document opens instead.</p>
       <p>Your previous CoolReader books are also available from its Recent books menu.</p>
     </section>

@@ -29,6 +29,9 @@
 #include "dictionary_download.h"
 #endif
 #endif
+#ifdef POCKETBOOK_FW6
+#include "pb_file_associations.h"
+#endif
 
 #include <cri18n.h>
 
@@ -1097,6 +1100,58 @@ public:
     virtual int onSelect() { getWindowManager()->activateWindow(this); return 1; }
 };
 
+#ifdef POCKETBOOK_FW6
+class CRDefaultReaderItem : public CRMenuItem {
+    lString32 _formats;
+public:
+    CRDefaultReaderItem(CRMenu *menu, pbassoc::Group group, const char *label, const char *formats)
+        : CRMenuItem(menu, static_cast<int>(group), label, LVImageSourceRef(), LVFontRef()),
+          _formats(formats) {}
+    lString32 getSubmenuValue() override { return _formats; }
+};
+
+class CRDefaultReaderMenu : public CRSettingsGroupMenu {
+    bool onItemSelect(int item, int) override
+    {
+        if (item < 0 || item >= getItems().length())
+            return false;
+        const auto group = static_cast<pbassoc::Group>(getItems()[item]->getId());
+        const auto result = pbassoc::makeDefault(group,
+            lString32(U"/mnt/ext1/system/config/extensions.cfg"),
+            lString32(U"/ebrmain/config/extensions.cfg"));
+        switch (result) {
+        case pbassoc::Result::Updated:
+            Message(ICON_INFORMATION, "CoolReader", _("CoolReader is now the default for the selected formats."), 2500);
+            break;
+        case pbassoc::Result::AlreadyDefault:
+            Message(ICON_INFORMATION, "CoolReader", _("CoolReader is already the default for the selected formats."), 2500);
+            break;
+        case pbassoc::Result::Error:
+            Message(ICON_WARNING, "CoolReader", _("Could not save file associations."), 3000);
+            break;
+        }
+        setDirty();
+        return true;
+    }
+public:
+    CRDefaultReaderMenu(CRMenu *parent, int id, LVFontRef valueFont)
+        : CRSettingsGroupMenu(parent->getWindowManager(), parent, id,
+            _("Default reader"), _("Choose which formats open in CoolReader"), valueFont)
+    {
+        using pbassoc::Group;
+        setSkinName(lString32("#settings"));
+        setAccelerators(parent->getAccelerators());
+        addItem(new CRDefaultReaderItem(this, Group::All, _("All supported formats"), ""));
+        addItem(new CRDefaultReaderItem(this, Group::FictionBook, _("FictionBook"), "FB2, FB3, FB2.ZIP, FBZ"));
+        addItem(new CRDefaultReaderItem(this, Group::Epub, _("EPUB"), ""));
+        addItem(new CRDefaultReaderItem(this, Group::Documents, _("Office documents"), "DOC, DOCX, ODT, RTF"));
+        addItem(new CRDefaultReaderItem(this, Group::Web, _("Web and help"), "HTM, HTML, XHTML, CHM"));
+        addItem(new CRDefaultReaderItem(this, Group::Palm, _("Mobipocket and Palm"), "MOBI, PRC, PDB"));
+        addItem(new CRDefaultReaderItem(this, Group::Text, _("Plain text"), "TXT, TCR, PML"));
+    }
+};
+#endif
+
 class CRSettingsFontSample : public CRMenuItem {
     CRPropRef _preferences;
 public:
@@ -2020,6 +2075,7 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
     if (controlSettingsMenu) mainMenu->addItem(controlSettingsMenu);
     mainMenu->addItem(advancedMenu);
 #ifdef POCKETBOOK_FW6
+    mainMenu->addItem(new CRDefaultReaderMenu(mainMenu, _menuItemId++, valueFont));
     mainMenu->addItem(pbCreateDictionaryDownloadsMenu(mainMenu, _menuItemId++));
 #endif
     mainMenu->addItem(aboutMenu);

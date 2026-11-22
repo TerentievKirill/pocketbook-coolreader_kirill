@@ -48,18 +48,12 @@ Install
 3. Extract this ZIP. Copy/merge both its system and applications directories
    into the root of the PocketBook USB storage. Keep all additional existing
    files and directories. applications/CoolReader.app adds the Apps entry.
-4. Register CoolReader in system/config/extensions.cfg:
-   - If no custom file exists, copy system/share/cr3/doc/extensions.cfg.example there.
-   - If one exists, add cr3-pb.app to the comma-separated application list for
-     desired supported formats, following system/share/cr3/doc/extensions.cfg.example. Preserve
-     existing readers and all other entries. For example:
-     epub:@EPUB_file:1:eink-reader_with_blink.app,eink-reader_with_epub2.app,cr3-pb.app:ICON_EPUB
-     fb2:@FB2_file:1:eink-reader.app,cr3-pb.app:ICON_FB2
-   The example comes from firmware 6.11.2001, with CoolReader appended for its
-   supported formats. Stock readers remain the default. PDF is left to the
-   stock PDF readers. No device configuration is overwritten by this ZIP.
-5. Safely eject the reader. In Library, long-press a supported book and choose
-   Open with > CoolReader (the entry may appear as cr3-pb.app).
+4. Safely eject the reader and open Applications > CoolReader.
+5. To set the default app in Library, choose Settings > Default reader, then
+   select All supported formats or a group such as FictionBook or EPUB.
+   Other readers remain available under Open with. If a custom extensions.cfg
+   already exists, CoolReader saves its previous contents as extensions.cfg.bak.
+   Reopen the Library if it still uses the previous reader.
 6. Test an EPUB and FB2, page buttons, menus/TOC, dictionary, rotation, swipes,
    pinch zoom, frontlight, sleep/wake, then close and reopen the book to check
    reading position. Touch HD 3's 1072x1448 screen selects the pb631fw5 skin.

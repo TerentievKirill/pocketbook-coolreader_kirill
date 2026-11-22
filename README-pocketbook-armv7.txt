@@ -79,11 +79,11 @@ Install and return to a previous installation
    welcome book; subsequent launches reopen the last existing book.
 5. To return to the previous build, close CoolReader and restore your backups.
 
-Library file associations are optional and differ across firmware. Preserve the
-existing system/config/extensions.cfg. For a supported text format such as EPUB
-or FB2, append ,cr3-pb.app to its comma-separated application list, keeping the
-existing stock readers. Do not replace the configuration with the comment-only
-system/share/cr3/doc/extensions.cfg.example. PDFs remain with the existing PDF readers.
+To make CoolReader the default in PocketBook Library, open Settings > Default
+reader and choose All supported formats or a group such as FictionBook or EPUB.
+Other readers remain available through Open with. When an existing
+system/config/extensions.cfg is changed, the previous file is backed up as
+extensions.cfg.bak. Reopen the Library if it still uses the previous reader.
 
 Defaults and runtime device selection
 ------------------------------------

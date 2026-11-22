@@ -2713,3 +2713,39 @@ msgstr "[Переносы по мягким дефисам]"
 #, c-format
 msgid "%.1f MB"
 msgstr "%.1f МБ"
+
+msgid "CoolReader is now the default for the selected formats."
+msgstr "CoolReader назначен приложением по умолчанию для выбранных форматов."
+
+msgid "CoolReader is already the default for the selected formats."
+msgstr "CoolReader уже используется по умолчанию для выбранных форматов."
+
+msgid "Could not save file associations."
+msgstr "Не удалось сохранить ассоциации файлов."
+
+msgid "Default reader"
+msgstr "Читалка по умолчанию"
+
+msgid "Choose which formats open in CoolReader"
+msgstr "Выберите форматы для открытия в CoolReader"
+
+msgid "All supported formats"
+msgstr "Все поддерживаемые форматы"
+
+msgid "FictionBook"
+msgstr "FictionBook"
+
+msgid "EPUB"
+msgstr "EPUB"
+
+msgid "Office documents"
+msgstr "Офисные документы"
+
+msgid "Web and help"
+msgstr "Веб-страницы и справка"
+
+msgid "Mobipocket and Palm"
+msgstr "Mobipocket и Palm"
+
+msgid "Plain text"
+msgstr "Обычный текст"

@@ -72,8 +72,10 @@ its existing downloads and update channel remain separate.
 
 Extract the release ZIP and merge its **system** and **applications** folders
 into the reader’s USB storage, preserving existing settings. Safely eject it,
-then open **Applications → CoolReader**. For Library’s **Open with** menu,
-follow the [file-association instructions](https://readertools.eu/coolreader/installation/#file-associations).
+then open **Applications → CoolReader**. In **Settings → Default reader**, choose
+**All supported formats** or a group such as **FictionBook** or **EPUB**.
+PocketBook Library uses CoolReader for those formats and keeps the previous apps
+available under **Open with**.
 
 See [the shared guide](README-pocketbook-armv7.txt) for backups and troubleshooting.
 
