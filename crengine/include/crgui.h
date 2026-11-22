@@ -1155,6 +1155,8 @@ class CRMenuItem
         virtual ~CRMenuItem() { }
         /// submenu for options dialog support
         virtual lString32 getSubmenuValue() { return lString32::empty_str; }
+        enum class CheckState { None, Unchecked, Checked, Mixed };
+        virtual CheckState getCheckState() const { return CheckState::None; }
         /// property value, for options editor support
         virtual lString32 getPropValue() { return _propValue; }
         virtual bool isItemDirty() { return _itemDirty; }

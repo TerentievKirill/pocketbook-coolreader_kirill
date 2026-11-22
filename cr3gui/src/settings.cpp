@@ -1102,21 +1102,47 @@ public:
 
 #ifdef POCKETBOOK_FW6
 class CRDefaultReaderItem : public CRMenuItem {
+    const unsigned &_selection;
     lString32 _formats;
 public:
-    CRDefaultReaderItem(CRMenu *menu, pbassoc::Group group, const char *label, const char *formats)
+    CRDefaultReaderItem(CRMenu *menu, const unsigned &selection, pbassoc::Group group,
+                        const char *label, const char *formats)
         : CRMenuItem(menu, static_cast<int>(group), label, LVImageSourceRef(), LVFontRef()),
-          _formats(formats) {}
+          _selection(selection), _formats(formats) {}
     lString32 getSubmenuValue() override { return _formats; }
+    CheckState getCheckState() const override
+    {
+        const auto group = static_cast<unsigned>(_id);
+        const unsigned selected = _selection & group;
+        if (selected == group)
+            return CheckState::Checked;
+        return selected ? CheckState::Mixed : CheckState::Unchecked;
+    }
 };
 
 class CRDefaultReaderMenu : public CRSettingsGroupMenu {
+    unsigned _selection = 0;
+
     bool onItemSelect(int item, int) override
     {
         if (item < 0 || item >= getItems().length())
             return false;
-        const auto group = static_cast<pbassoc::Group>(getItems()[item]->getId());
-        const auto result = pbassoc::makeDefault(group,
+        const auto group = static_cast<unsigned>(getItems()[item]->getId());
+        if (group == pbassoc::Group::All)
+            _selection = _selection == group ? 0u : group;
+        else
+            _selection ^= group;
+        requestFullRedraw();
+        return true;
+    }
+
+    void applySelection()
+    {
+        if (!_selection) {
+            closeMenu(0);
+            return;
+        }
+        const auto result = pbassoc::makeDefault(_selection,
             lString32(U"/mnt/ext1/system/config/extensions.cfg"),
             lString32(U"/ebrmain/config/extensions.cfg"));
         switch (result) {
@@ -1128,12 +1154,28 @@ class CRDefaultReaderMenu : public CRSettingsGroupMenu {
             break;
         case pbassoc::Result::Error:
             Message(ICON_WARNING, "CoolReader", _("Could not save file associations."), 3000);
-            break;
+            requestFullRedraw();
+            return;
         }
-        setDirty();
-        return true;
+        closeMenu(0);
     }
 public:
+    int onSelect() override
+    {
+        _selection = 0;
+        return CRSettingsGroupMenu::onSelect();
+    }
+    bool onCommand(int command, int params) override
+    {
+        if (command == MCMD_OK ||
+            ((command == DCMD_BUTTON_PRESSED || command == DCMD_BUTTON_PRESSED_LONG) &&
+             params == BTN_SETTINGS_DONE)) {
+            applySelection();
+            return true;
+        }
+        return CRMenu::onCommand(command, params);
+    }
+
     CRDefaultReaderMenu(CRMenu *parent, int id, LVFontRef valueFont)
         : CRSettingsGroupMenu(parent->getWindowManager(), parent, id,
             _("Default reader"), _("Choose which formats open in CoolReader"), valueFont)
@@ -1141,13 +1183,13 @@ public:
         using pbassoc::Group;
         setSkinName(lString32("#settings"));
         setAccelerators(parent->getAccelerators());
-        addItem(new CRDefaultReaderItem(this, Group::All, _("All supported formats"), ""));
-        addItem(new CRDefaultReaderItem(this, Group::FictionBook, _("FictionBook"), "FB2, FB3, FB2.ZIP, FBZ"));
-        addItem(new CRDefaultReaderItem(this, Group::Epub, _("EPUB"), ""));
-        addItem(new CRDefaultReaderItem(this, Group::Documents, _("Office documents"), "DOC, DOCX, ODT, RTF"));
-        addItem(new CRDefaultReaderItem(this, Group::Web, _("Web and help"), "HTM, HTML, XHTML, CHM"));
-        addItem(new CRDefaultReaderItem(this, Group::Palm, _("Mobipocket and Palm"), "MOBI, PRC, PDB"));
-        addItem(new CRDefaultReaderItem(this, Group::Text, _("Plain text"), "TXT, TCR, PML"));
+        addItem(new CRDefaultReaderItem(this, _selection, Group::All, _("All supported formats"), ""));
+        addItem(new CRDefaultReaderItem(this, _selection, Group::FictionBook, _("FictionBook"), "FB2, FB3, FB2.ZIP, FBZ"));
+        addItem(new CRDefaultReaderItem(this, _selection, Group::Epub, _("EPUB"), ""));
+        addItem(new CRDefaultReaderItem(this, _selection, Group::Documents, _("Office documents"), "DOC, DOCX, ODT, RTF"));
+        addItem(new CRDefaultReaderItem(this, _selection, Group::Web, _("Web and help"), "HTM, HTML, XHTML, CHM"));
+        addItem(new CRDefaultReaderItem(this, _selection, Group::Palm, _("Mobipocket and Palm"), "MOBI, PRC, PDB"));
+        addItem(new CRDefaultReaderItem(this, _selection, Group::Text, _("Plain text"), "TXT, TCR, PML"));
     }
 };
 #endif

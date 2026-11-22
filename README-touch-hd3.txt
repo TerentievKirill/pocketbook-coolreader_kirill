@@ -49,8 +49,9 @@ Install
    into the root of the PocketBook USB storage. Keep all additional existing
    files and directories. applications/CoolReader.app adds the Apps entry.
 4. Safely eject the reader and open Applications > CoolReader.
-5. To set the default app in Library, choose Settings > Default reader, then
-   select All supported formats or a group such as FictionBook or EPUB.
+5. To set the default app in Library, choose Settings > Default reader.
+   Select one or more groups, such as FictionBook and EPUB, or select All
+   supported formats, then tap Done.
    Other readers remain available under Open with. If a custom extensions.cfg
    already exists, CoolReader saves its previous contents as extensions.cfg.bak.
    Reopen the Library if it still uses the previous reader.

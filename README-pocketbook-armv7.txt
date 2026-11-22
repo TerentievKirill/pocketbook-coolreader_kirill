@@ -80,10 +80,11 @@ Install and return to a previous installation
 5. To return to the previous build, close CoolReader and restore your backups.
 
 To make CoolReader the default in PocketBook Library, open Settings > Default
-reader and choose All supported formats or a group such as FictionBook or EPUB.
-Other readers remain available through Open with. When an existing
-system/config/extensions.cfg is changed, the previous file is backed up as
-extensions.cfg.bak. Reopen the Library if it still uses the previous reader.
+reader. Select one or more groups, such as FictionBook and EPUB, or select
+All supported formats. Tap Done to apply the selection. Other readers remain
+available through Open with. CoolReader backs up an existing
+system/config/extensions.cfg to extensions.cfg.bak when it changes the file.
+Reopen the Library if it still uses the previous reader.
 
 Defaults and runtime device selection
 ------------------------------------

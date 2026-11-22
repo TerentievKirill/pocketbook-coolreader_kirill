@@ -148,8 +148,11 @@ size_t lineEnd(const std::string &text, size_t start)
 
 }
 
-Result makeDefault(Group group, const lString32 &userConfig, const lString32 &systemConfig)
+Result makeDefault(unsigned groups, const lString32 &userConfig, const lString32 &systemConfig)
 {
+    if (!(groups & Group::All))
+        return Result::AlreadyDefault;
+
     // Lock the directory so a rename of the config cannot invalidate the lock.
     ConfigDirectoryLock lock(userConfig);
     if (!lock.lock())
@@ -157,7 +160,7 @@ Result makeDefault(Group group, const lString32 &userConfig, const lString32 &sy
 
     std::map<std::string, const Format *> selected;
     for (const auto &format : formats)
-        if (group == Group::All || group == format.group)
+        if (groups & format.group)
             selected.emplace(format.extension, &format);
 
     std::string current;

@@ -89,6 +89,15 @@ int main(int argc, char **argv)
     CHECK(makeDefault(Group::All, Utf8ToUnicode(temp.data()), stockPath) == Result::Error);
     CHECK(read(custom) == all);
 
+    const std::string batch = std::string(temp.data()) + "/batch.cfg";
+    const lString32 batchPath = Utf8ToUnicode(batch.c_str());
+    CHECK(write(batch, original));
+    CHECK(makeDefault(Group::FictionBook | Group::Epub, batchPath, stockPath) == Result::Updated);
+    CHECK(read(batch) == fictionBook && read(batch + ".bak") == original);
+    CHECK(makeDefault(Group::FictionBook | Group::Epub, batchPath, stockPath) == Result::AlreadyDefault);
+    CHECK(makeDefault(0, batchPath, stockPath) == Result::AlreadyDefault);
+    CHECK(read(batch) == fictionBook && read(batch + ".bak") == original);
+
     const std::string shared = std::string(temp.data()) + "/shared.cfg";
     const lString32 sharedPath = Utf8ToUnicode(shared.c_str());
     const pid_t child = fork();

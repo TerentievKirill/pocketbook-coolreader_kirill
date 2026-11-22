@@ -96,8 +96,37 @@ static int check(const char *skin,const char *out) {
         CHECK(defaults->getItems()[0]->getLabel() == "All supported formats");
         CHECK(defaults->getItems()[1]->getLabel() == "FictionBook");
         CHECK(defaults->getItems()[2]->getLabel() == "EPUB");
+        using Check = CRMenuItem::CheckState;
+        auto checkState = [&](int item) { return defaults->getItems()[item]->getCheckState(); };
+        CHECK(checkState(0) == Check::Unchecked && checkState(1) == Check::Unchecked);
+        lvRect formats;
+        CHECK(defaults->getClientRect(formats));
+        int epubY = formats.top + 2 * defaults->getItemHeight() + defaults->getItemHeight() / 2;
+        defaults->onTouchEvent(formats.left + 70, epubY, CRTOUCH_DOWN);
+        defaults->onTouchEvent(formats.left + 70, epubY, CRTOUCH_UP);
+        wm.processPostedEvents();
+        CHECK(defaults->onCommand(MCMD_SELECT_2));
+        CHECK(wm.getTopVisibleWindow() == defaults);
+        CHECK(checkState(0) == Check::Mixed && checkState(1) == Check::Checked &&
+              checkState(2) == Check::Checked && checkState(3) == Check::Unchecked);
+        wm.update(true, true);
+        preview(screen, std::string(out) + (rotated ? "/default-reader-landscape.pgm" : "/default-reader-portrait.pgm"));
+        CHECK(defaults->onCommand(MCMD_SELECT_1));
+        for (int item = 0; item < defaults->getItems().length(); ++item)
+            CHECK(checkState(item) == Check::Checked);
+        CHECK(defaults->onCommand(MCMD_SELECT_3));
+        CHECK(checkState(0) == Check::Mixed && checkState(2) == Check::Unchecked);
+        CHECK(defaults->onCommand(MCMD_SELECT_1));
+        CHECK(checkState(0) == Check::Checked && checkState(2) == Check::Checked);
+        CHECK(defaults->onCommand(MCMD_SELECT_1));
+        for (int item = 0; item < defaults->getItems().length(); ++item)
+            CHECK(checkState(item) == Check::Unchecked);
+        CHECK(defaults->onCommand(MCMD_SELECT_2));
         CHECK(defaults->onCommand(DCMD_BUTTON_PRESSED, BTN_CLOSE));
         CHECK(wm.getTopVisibleWindow() == root && !root->settingsChanged() && wm.applied == 0);
+        CHECK(defaults->onSelect() == 1 && checkState(1) == Check::Unchecked);
+        CHECK(defaults->onCommand(DCMD_BUTTON_PRESSED, BTN_SETTINGS_DONE));
+        CHECK(wm.getTopVisibleWindow() == root && wm.applied == 0);
         CRMenu *fonts=child(root,0);
         CHECK(fonts->getItems().length()==6);
         wm.activateWindow(fonts); wm.update(true,true);

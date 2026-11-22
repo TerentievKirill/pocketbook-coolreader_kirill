@@ -72,8 +72,9 @@ its existing downloads and update channel remain separate.
 
 Extract the release ZIP and merge its **system** and **applications** folders
 into the reader’s USB storage, preserving existing settings. Safely eject it,
-then open **Applications → CoolReader**. In **Settings → Default reader**, choose
-**All supported formats** or a group such as **FictionBook** or **EPUB**.
+then open **Applications → CoolReader**. In **Settings → Default reader**, select
+one or more groups such as **FictionBook** and **EPUB**, or choose **All supported
+formats**, then tap **Done**.
 PocketBook Library uses CoolReader for those formats and keeps the previous apps
 available under **Open with**.
 

@@ -1183,12 +1183,22 @@ void CRMenu::drawSettingsItem(CRMenuItem &item, LVDrawBuf &buf, lvRect rc, bool 
     rc.shrinkBy(lvRect(pad,6,pad,6));
     if (selected) buf.FillRect(rc.left-pad,rc.top+8,rc.left-pad+4,rc.bottom-8,ink);
     bool choices = !_propName.empty() && !item.isSubmenu();
-    if (choices) {
+    const auto check = item.getCheckState();
+    if (choices || check != CRMenuItem::CheckState::None) {
         int size = settingsFont(true)->getHeight();
         lvRect mark(rc.left,rc.top+(rc.height()-size)/2,rc.left+size,rc.top+(rc.height()+size)/2);
         buf.DrawFrame(mark,ink,2);
-        if (_props->getStringDef(UnicodeToUtf8(_propName).c_str()) == item.getPropValue()) {
+        if (choices && _props->getStringDef(UnicodeToUtf8(_propName).c_str()) == item.getPropValue()) {
             mark.shrinkBy(lvRect(7,7,7,7)); buf.FillRect(mark,ink);
+        } else if (check == CRMenuItem::CheckState::Checked) {
+            const int start = size/4, bend = size*7/16, stroke = std::max(2, size/10);
+            for (int x = start; x < size-start; ++x) {
+                const int y = size*9/16 + (x < bend ? x-start : bend-start - (x-bend)*2);
+                buf.FillRect(mark.left+x, mark.top+y, mark.left+x+stroke, mark.top+y+stroke, ink);
+            }
+        } else if (check == CRMenuItem::CheckState::Mixed) {
+            const int y = mark.top + size/2;
+            buf.FillRect(mark.left+size/4, y-1, mark.right-size/4, y+2, ink);
         }
         rc.left += size+pad;
     }

@@ -5,10 +5,18 @@
 
 namespace pbassoc {
 
-enum class Group { All, FictionBook, Epub, Documents, Web, Palm, Text };
+enum Group : unsigned {
+    FictionBook = 1u << 0,
+    Epub = 1u << 1,
+    Documents = 1u << 2,
+    Web = 1u << 3,
+    Palm = 1u << 4,
+    Text = 1u << 5,
+    All = FictionBook | Epub | Documents | Web | Palm | Text,
+};
 enum class Result { Updated, AlreadyDefault, Error };
 
-Result makeDefault(Group group, const lString32 &userConfig, const lString32 &systemConfig);
+Result makeDefault(unsigned groups, const lString32 &userConfig, const lString32 &systemConfig);
 
 }
 
