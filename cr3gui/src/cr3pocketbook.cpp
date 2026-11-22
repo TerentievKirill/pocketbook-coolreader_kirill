@@ -3,6 +3,8 @@
  */
 #include <ctime>
 #include <cmath>
+#include <cstdlib>
+#include <cstring>
 #include <crengine.h>
 #include <crgui.h>
 #include "viewdlg.h"
@@ -4600,7 +4602,9 @@ int InitDoc(const char *exename, char *fileName)
 
 #if defined(POCKETBOOK_FW6)
     CRLog::setStderrLogger();
-    CRLog::setLogLevel(CRLog::LL_TRACE);
+    const char *startupTrace = std::getenv("CR3_STARTUP_TRACE");
+    CRLog::setLogLevel(startupTrace && std::strcmp(startupTrace, "1") == 0
+                           ? CRLog::LL_TRACE : CRLog::LL_WARN);
 #elif defined(__i386__)
     CRLog::setStdoutLogger();
     CRLog::setLogLevel(CRLog::LL_TRACE);
@@ -6177,7 +6181,8 @@ int main(int argc, char **argv)
     fprintf(stderr, "[cr3-fw6-r5] document ready, header_font=%p\n", (void *)header_font);
     if (header_font)
         header_font->color = WHITE;
-    CRLog::setLogLevel(CRLog::LL_WARN);
+    if (CRLog::getLogLevel() != CRLog::LL_WARN)
+        CRLog::setLogLevel(CRLog::LL_WARN);
     fprintf(stderr, "[cr3-fw6-r5] entering InkView event loop\n");
 #else
     header_font->color = WHITE;

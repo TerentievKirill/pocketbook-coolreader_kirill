@@ -249,7 +249,10 @@ retry, and valid `.bak` files recover unreadable state files without overwriting
 recovery backup with a damaged primary. Sudden power loss before a checkpoint can
 still lose the most recent page turn.
 
-For on-device timing, launch the application with `CR3_PERF=1`. Standard-error
+PocketBook FW6 starts with WARN-level logging. Set `CR3_STARTUP_TRACE=1` to
+enable TRACE during startup. Logging returns to WARN when the book opens.
+
+Set `CR3_PERF=1` to collect on-device timings with either log level. Standard-error
 logs record microseconds for font initialization, file open and checksum, EPUB
 detection, OPF parsing, cache hits and misses, manifest and spine processing,
 layout, page images, screen flushes, prefetch, cover preparation and reading-state
