@@ -204,6 +204,7 @@ for name, sources, engine, arguments in [
     ('css-null-ancestor', ['tests/css-selector-null-ancestor.cpp'], True, []),
     ('gray-buffer-copy', ['tests/gray-buffer-copy.cpp'], True, []),
     ('performance-caches', ['tests/performance-caches.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', out]),
+    ('in-book-search', ['tests/in-book-search.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf']),
     ('reader-checkpoint', ['tests/reader-checkpoint.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', firmware / 'ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', firmware / 'ebrmain/cramfs/fonts/DroidSans.ttf', out]),
     ('settings-editor', ['tests/settings-editor.cpp', 'cr3gui/src/settings.cpp', 'cr3gui/src/fsmenu.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', firmware / 'ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', build / 'cr3gui/pb631fw5.cr3skin', out]),
     ('reader-screens', ['tests/reader-screens.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', firmware / 'ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', build / 'cr3gui/pb631fw5.cr3skin', build / 'i18n/ru/LC_MESSAGES/cr3.mo', out]),

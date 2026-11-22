@@ -2540,7 +2540,7 @@ public:
                 if (pageIndex == -1)
                     pageIndex = findPagesText( _searchPattern, -1, 1 );
                 if ( pageIndex != -1 ) {
-                    CRSelNavigationDialog * dlg = new CRSelNavigationDialog( _wm, this, _searchPattern );
+                    CRSelNavigationDialog * dlg = new CRSelNavigationDialog(_wm, this, _searchPattern, pageIndex);
                     _wm->activateWindow( dlg );
                 } else
                     Message(ICON_INFORMATION, const_cast<char*>("@Search"), const_cast<char*>("@No_more_matches"), 2000);

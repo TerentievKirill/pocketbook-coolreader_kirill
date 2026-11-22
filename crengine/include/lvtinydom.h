@@ -44,6 +44,8 @@
 #ifndef __LV_TINYDOM_H_INCLUDED__
 #define __LV_TINYDOM_H_INCLUDED__
 
+#include <functional>
+
 #include "lvmemman.h"
 #include "lvstring.h"
 #include "lstridmap.h"
@@ -1866,6 +1868,8 @@ public:
     }
 };
 
+using ldomWordFilter = std::function<bool(const ldomWord &)>;
+
 /// DOM range
 class ldomXRange {
     ldomXPointerEx _start;
@@ -1985,7 +1989,7 @@ public:
     };
 
     /// searches for specified text inside range
-    bool findText( lString32 pattern, bool caseInsensitive, bool reverse, LVArray<ldomWord> & words, int maxCount, int maxHeight, int maxHeightCheckStartY = -1, bool checkMaxFromStart = false );
+    bool findText( lString32 pattern, bool caseInsensitive, bool reverse, LVArray<ldomWord> & words, int maxCount, int maxHeight, int maxHeightCheckStartY = -1, bool checkMaxFromStart = false, const ldomWordFilter &accept = {} );
 };
 
 class ldomMarkedText
@@ -2580,7 +2584,7 @@ public:
     /// get rendered block cache object
     CVRendBlockCache & getRendBlockCache() { return _renderedBlockCache; }
 
-    bool findText( lString32 pattern, bool caseInsensitive, bool reverse, int minY, int maxY, LVArray<ldomWord> & words, int maxCount, int maxHeight, int maxHeightCheckStartY = -1 );
+    bool findText( lString32 pattern, bool caseInsensitive, bool reverse, int minY, int maxY, LVArray<ldomWord> & words, int maxCount, int maxHeight, int maxHeightCheckStartY = -1, const ldomWordFilter &accept = {} );
 #endif
 };
 

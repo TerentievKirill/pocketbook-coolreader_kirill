@@ -320,48 +320,9 @@ bool CRViewDialog::findText( lString32 pattern, int origin, int direction )
     return false;
 }
 
-int CRViewDialog::findPagesText( lString32 pattern, int origin, int direction )
+int CRViewDialog::findPagesText(const lString32 &pattern, int origin, int direction, int fromPage)
 {
-    if ( pattern.empty() )
-        return -1;
-	if (!(origin == 0 || origin == -1 || origin == 1 || direction == 1 || direction == -1))
-		return -1;
-    showWaitIcon();
-	int start, end;
-	if (direction < 0) {
-		//reverse search
-		if (origin >= 0) {
-			start = _docview->getCurPage() -origin;
-			end = -1;
-		} else {
-			start = _docview->getPageCount() -1;
-			end = _docview->getCurPage();
-		}
-	} else {
-		// direct search
-		if (origin >= 0) {
-			start = _docview->getCurPage() + origin;
-			end = _docview->getPageCount();
-		} else {
-			start = 0;
-			end = _docview->getCurPage();
-		}
-	}
-	LVArray<ldomWord> words;
-	for (int i = start; i != end; i += direction) {
-		LVRef<ldomXRange> range = _docview->getPageDocumentRange( i );
-		if (!range.isNull()) {
-			if (range->findText(pattern, true, false, words, 200, _docview->getPageHeight(i), true)) {
-				CRLog::debug("CRViewDialog::findPagesText: pattern found");
-				_docview->clearSelection();
-				_docview->goToPage(i);
-				_docview->selectWords( words );
-				return i;
-			}
-		}
-	}
-    CRLog::debug("CRViewDialog::findPagesText: pattern not found");
-	return -1;
+    return _docview->searchPages(pattern, origin, direction, fromPage);
 }
 
 void CRViewDialog::showDictWithVKeyboard()

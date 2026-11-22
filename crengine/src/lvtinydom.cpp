@@ -10876,7 +10876,7 @@ void ldomXRangeList::split( ldomXRange * r )
 
 #if BUILD_LITE!=1
 
-bool ldomDocument::findText( lString32 pattern, bool caseInsensitive, bool reverse, int minY, int maxY, LVArray<ldomWord> & words, int maxCount, int maxHeight, int maxHeightCheckStartY )
+bool ldomDocument::findText( lString32 pattern, bool caseInsensitive, bool reverse, int minY, int maxY, LVArray<ldomWord> & words, int maxCount, int maxHeight, int maxHeightCheckStartY, const ldomWordFilter &accept )
 {
     if ( minY<0 )
         minY = 0;
@@ -10944,73 +10944,67 @@ bool ldomDocument::findText( lString32 pattern, bool caseInsensitive, bool rever
         CRLog::debug("No text found: Range is empty");
         return false;
     }
-    return range.findText( pattern, caseInsensitive, reverse, words, maxCount, maxHeight, maxHeightCheckStartY );
+    return range.findText( pattern, caseInsensitive, reverse, words, maxCount, maxHeight, maxHeightCheckStartY, false, accept );
 }
 
-static bool findText( const lString32 & str, int & pos, int & endpos, const lString32 & pattern )
+// Both directions use the same match boundaries. Soft hyphens inside a word
+// are optional in the query, but still count toward the source end offset.
+static int matchTextAt(const lChar32 *text, const lChar32 *end,
+                       const lChar32 *pattern, int length)
 {
-    int len = pattern.length();
-    if ( pos < 0 || pos + len > (int)str.length() )
+    if (*text != pattern[0])
+        return 0;
+    const lChar32 *current = text + 1;
+    for (int i = 1; i < length; ++i) {
+        while (current < end && *current == UNICODE_SOFT_HYPHEN_CODE && *current != pattern[i])
+            ++current;
+        if (current == end || *current != pattern[i])
+            return 0;
+        ++current;
+    }
+    return current - text;
+}
+
+static bool findText( const lString32 & str, int & pos, int & endpos, const lString32 & pattern, int lastStart )
+{
+    if (pos < 0)
         return false;
-    const lChar32 * s1 = str.c_str() + pos;
-    const lChar32 * s2 = pattern.c_str();
-    int nlen = str.length() - pos - len;
-    for ( int j=0; j<=nlen; j++ ) {
-        bool matched = true;
-        int nsofthyphens = 0; // There can be soft-hyphen in str, but not in pattern
-        for ( int i=0; i<len; i++ ) {
-            while ( i+nsofthyphens < nlen && s1[i+nsofthyphens] == UNICODE_SOFT_HYPHEN_CODE ) {
-                nsofthyphens += 1;
-            }
-            if ( s1[i+nsofthyphens] != s2[i] ) {
-                matched = false;
-                break;
-            }
-        }
-        if ( matched ) {
-            endpos = pos + len + nsofthyphens;
+    const int length = pattern.length();
+    const int last = std::min(lastStart, str.length() - length);
+    const lChar32 *text = str.c_str();
+    const lChar32 *end = text + str.length();
+    const lChar32 *needle = pattern.c_str();
+    for (; pos <= last; ++pos) {
+        const int matched = matchTextAt(text + pos, end, needle, length);
+        if (matched) {
+            endpos = pos + matched;
             return true;
         }
-        s1++;
-        pos++;
     }
     return false;
 }
 
-static bool findTextRev( const lString32 & str, int & pos, int & endpos, const lString32 & pattern )
+static bool findTextRev( const lString32 & str, int & pos, int & endpos, const lString32 & pattern, int firstStart )
 {
-    int len = pattern.length();
-    if ( pos+len>(int)str.length() )
-        pos = str.length()-len;
-    if ( pos < 0 )
-        return false;
-    const lChar32 * s1 = str.c_str() + pos;
-    const lChar32 * s2 = pattern.c_str();
-    int nlen = pos;
-    for ( int j=nlen; j>=0; j-- ) {
-        bool matched = true;
-        int nsofthyphens = 0; // There can be soft-hyphen in str, but not in pattern
-        for ( int i=0; i<len; i++ ) {
-            while ( i+nsofthyphens < nlen && s1[i+nsofthyphens] == UNICODE_SOFT_HYPHEN_CODE ) {
-                nsofthyphens += 1;
-            }
-            if ( s1[i+nsofthyphens] != s2[i] ) {
-                matched = false;
-                break;
-            }
-        }
-        if ( matched ) {
-            endpos = pos + len + nsofthyphens;
+    const int length = pattern.length();
+    const int last = str.length() - length;
+    if (pos > last)
+        pos = last;
+    const lChar32 *text = str.c_str();
+    const lChar32 *end = text + str.length();
+    const lChar32 *needle = pattern.c_str();
+    for (; pos >= firstStart; --pos) {
+        const int matched = matchTextAt(text + pos, end, needle, length);
+        if (matched) {
+            endpos = pos + matched;
             return true;
         }
-        s1--;
-        pos--;
     }
     return false;
 }
 
 /// searches for specified text inside range
-bool ldomXRange::findText( lString32 pattern, bool caseInsensitive, bool reverse, LVArray<ldomWord> & words, int maxCount, int maxHeight, int maxHeightCheckStartY, bool checkMaxFromStart )
+bool ldomXRange::findText( lString32 pattern, bool caseInsensitive, bool reverse, LVArray<ldomWord> & words, int maxCount, int maxHeight, int maxHeightCheckStartY, bool checkMaxFromStart, const ldomWordFilter &accept )
 {
     if ( caseInsensitive )
         pattern.lowercase();
@@ -11020,7 +11014,8 @@ bool ldomXRange::findText( lString32 pattern, bool caseInsensitive, bool reverse
     if ( reverse ) {
         // reverse search
         if ( !_end.isText() ) {
-            _end.prevVisibleText();
+            if (!_end.prevVisibleText())
+                return false;
             lString32 txt = _end.getNode()->getText();
             _end.setOffset(txt.length());
         }
@@ -11041,15 +11036,21 @@ bool ldomXRange::findText( lString32 pattern, bool caseInsensitive, bool reverse
             if ( caseInsensitive )
                 txt.lowercase();
 
-            while ( ::findTextRev( txt, offs, endpos, pattern ) ) {
+            const int firstStart = accept && _end.getNode() == _start.getNode()
+                ? std::max(0, _start.getOffset()) : 0;
+            while ( ::findTextRev( txt, offs, endpos, pattern, firstStart ) ) {
+                const ldomWord match(_end.getNode(), offs--, endpos);
+                if (accept && !accept(match))
+                    continue;
                 if ( firstFoundTextY==-1 && maxHeight>0 ) {
-                    ldomXPointer p( _end.getNode(), offs );
+                    ldomXPointer p = match.getStartXPointer();
                     int currentTextY = p.toPoint().y;
                     if (maxHeightCheckStartY == -1 || currentTextY <= maxHeightCheckStartY)
                         firstFoundTextY = currentTextY;
                 }
-                words.add( ldomWord(_end.getNode(), offs, endpos ) );
-                offs--;
+                words.add(match);
+                if (accept && words.length() >= maxCount)
+                    return true;
             }
             if ( !_end.prevVisibleText() )
                 break;
@@ -11060,8 +11061,8 @@ bool ldomXRange::findText( lString32 pattern, bool caseInsensitive, bool reverse
         }
     } else {
         // direct search
-        if ( !_start.isText() )
-            _start.nextVisibleText();
+        if (!_start.isText() && !_start.nextVisibleText())
+            return false;
         int firstFoundTextY = -1;
         if (checkMaxFromStart) {
 			ldomXPointer p( _start.getNode(), _start.getOffset() );
@@ -11083,9 +11084,15 @@ bool ldomXRange::findText( lString32 pattern, bool caseInsensitive, bool reverse
             if ( caseInsensitive )
                 txt.lowercase();
 
-            while ( ::findText( txt, offs, endpos, pattern ) ) {
+            // Bound candidate starts without truncating a match that crosses the range end.
+            const int lastStart = accept && _start.getNode() == _end.getNode() && _end.getOffset() >= 0
+                ? _end.getOffset() : txt.length();
+            while ( ::findText( txt, offs, endpos, pattern, lastStart ) ) {
+                const ldomWord match(_start.getNode(), offs++, endpos);
+                if (accept && !accept(match))
+                    continue;
                 if ( firstFoundTextY==-1 && maxHeight>0 ) {
-                    ldomXPointer p( _start.getNode(), offs );
+                    ldomXPointer p = match.getStartXPointer();
                     int currentTextY = p.toPoint().y;
                     if (checkMaxFromStart) {
                         if ( currentTextY>=firstFoundTextY+maxHeight )
@@ -11095,8 +11102,9 @@ bool ldomXRange::findText( lString32 pattern, bool caseInsensitive, bool reverse
                             firstFoundTextY = currentTextY;
                     }
                 }
-                words.add( ldomWord(_start.getNode(), offs, endpos ) );
-                offs++;
+                words.add(match);
+                if (accept && words.length() >= maxCount)
+                    return true;
             }
             if ( !_start.nextVisibleText() )
                 break;

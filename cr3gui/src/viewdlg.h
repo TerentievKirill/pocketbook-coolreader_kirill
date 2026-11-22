@@ -66,7 +66,7 @@ public:
 
     bool findText( lString32 pattern, int origin, int direction );
 
-    int findPagesText( lString32 pattern, int origin, int direction );
+    int findPagesText(const lString32 &pattern, int origin, int direction, int fromPage = -1);
 
 	bool findInDictionary( lString32 pattern );
 

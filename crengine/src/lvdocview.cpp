@@ -2960,6 +2960,74 @@ LVRef<ldomXRange> LVDocView::getPageDocumentRange(int pageIndex) {
     return res;
 }
 
+int LVDocView::searchPages(const lString32 &pattern, int origin, int direction, int fromPage)
+{
+    if (pattern.empty() || origin < -1 || origin > 1 || (direction != -1 && direction != 1))
+        return -1;
+    LVLock lock(getMutex());
+    if (!m_doc)
+        return -1;
+    checkRender();
+    if (m_pages.empty())
+        return -1;
+
+    const int visiblePage = getCurPage();
+    const int current = fromPage >= visiblePage && fromPage < visiblePage + getVisiblePageCount() &&
+                        fromPage < m_pages.length() ? fromPage : visiblePage;
+    const bool reverse = direction < 0;
+    int first = 0;
+    int last = m_pages.length() - 1;
+    if (origin == -1) {
+        if (reverse)
+            first = current + 1;
+        else
+            last = current - 1;
+    } else if (reverse) {
+        last = current - origin;
+    } else {
+        first = current + origin;
+    }
+    if (first > last)
+        return -1;
+
+    const int top = m_pages[first]->start;
+    const int bottom = m_pages[last]->start + m_pages[last]->height;
+    if (top >= bottom)
+        return -1;
+    const auto startsOnPage = [](int y, const LVRendPageInfo &page) {
+        return (page.flags & RN_PAGE_TYPE_NORMAL) && y >= page.start && y < page.start + page.height;
+    };
+    int foundPage = -1;
+    LVArray<ldomWord> words;
+    if (!m_doc->findText(pattern, true, reverse, top, bottom, words, 1, 0, -1,
+            [&](const ldomWord &word) {
+                const int y = word.getStartXPointer().toPoint().y;
+                if (y < top || y >= bottom)
+                    return false;
+                const int page = m_pages.FindNearestPage(y, 0);
+                if (page < first || page > last || !startsOnPage(y, *m_pages[page]))
+                    return false;
+                foundPage = page;
+                return true;
+            }))
+        return -1;
+
+    // Collect highlights in reading order even when navigation is backward.
+    // A match may span a page boundary, but belongs to the page where it starts.
+    const ldomWord firstMatch = words[0];
+    const LVRendPageInfo &page = *m_pages[foundPage];
+    words.clear();
+    if (!m_doc->findText(pattern, true, false, page.start, page.start + page.height,
+            words, 200, 0, -1, [&](const ldomWord &word) {
+                return startsOnPage(word.getStartXPointer().toPoint().y, page);
+            }))
+        words.add(firstMatch);
+
+    goToPage(foundPage);
+    selectWords(words);
+    return foundPage;
+}
+
 /// returns number of non-space characters on current page
 int LVDocView::getCurrentPageCharCount()
 {
