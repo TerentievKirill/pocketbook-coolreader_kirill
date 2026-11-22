@@ -523,6 +523,7 @@ class CRPocketBookWindowManager : public CRGUIWindowManager
 {
 private:
     bool m_incommand;
+    bool _startLogoPending = false;
 protected:
     LVHashTable<lString8, int> _pbTable;
 
@@ -596,14 +597,27 @@ public:
     {
         if (_orientation != storedOrientation)
             reconfigure(ScreenWidth(), ScreenHeight(), (cr_rotate_angle_t)storedOrientation);
-        const lChar32 * imgname =
-                ( _orientation &1 ) ? U"cr3_logo_screen_landscape.png" : U"cr3_logo_screen.png";
-        LVImageSourceRef img = getSkin()->getImage(imgname);
-        if ( !img.isNull() ) {
-            _screen->getCanvas()->Draw(img, 0, 0, _screen->getWidth(), _screen->getHeight());
-        } else {
-            _screen->getCanvas()->Clear(0xFFFFFF);
+        _startLogoPending = true;
+    }
+
+    void finishStartup()
+    {
+        _startLogoPending = false;
+    }
+
+    void showWaitIcon(lString32 filename, int progressPercent) override
+    {
+        if (_startLogoPending && !getSkin()->getImage(filename).isNull()) {
+            _startLogoPending = false;
+            LVPerfScope timing("startup.progress-background");
+            const lChar32 *imgname = (_orientation & 1) ? U"cr3_logo_screen_landscape.png" : U"cr3_logo_screen.png";
+            LVImageSourceRef img = getSkin()->getImage(imgname);
+            if (!img.isNull())
+                _screen->getCanvas()->Draw(img, 0, 0, _screen->getWidth(), _screen->getHeight());
+            else
+                _screen->getCanvas()->Clear(0xFFFFFF);
         }
+        CRGUIWindowManager::showWaitIcon(filename, progressPercent);
     }
 
     // runs event loop
@@ -4781,7 +4795,11 @@ int InitDoc(const char *exename, char *fileName)
             return 0;
         }
         loadPocketBookKeyMaps(*wm);
-        HyphMan::initDictionaries(lString32(USERDATA"/share/cr3/hyph/"));
+        {
+            LVPerfScope timing("startup.hyphenation");
+            HyphMan::initDictionaries(lString32(USERDATA"/share/cr3/hyph/"), true,
+                                      lString32(STATEPATH"/cr3/hyphenation-metadata.bin"));
+        }
 
         bool skinSet = false;
         CRSkinList &skins = wm->getSkinList();
@@ -5586,6 +5604,7 @@ int main_handler(int type, int par1, int par2)
 #endif
 
         CRPocketBookWindowManager::instance->update(true);
+        CRPocketBookWindowManager::instance->finishStartup();
         pbGlobals->BookReady();
 
         // CRLog::trace("COVER_OFF_SAVE");

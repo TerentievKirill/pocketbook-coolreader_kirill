@@ -206,11 +206,20 @@ LVDirectoryContainer *LVDirectoryContainer::OpenDirectory(const char32_t *path, 
     const char * p8s = p8.c_str();
     DIR * d = opendir(p8s);
     if ( d ) {
-        struct dirent * pde;
-        while ( (pde = readdir(d))!=NULL ) {
+#if defined(__linux__) && defined(_LARGEFILE64_SOURCE)
+        // On 32-bit builds, readdir() can reject a directory's inode or offset.
+        while (struct dirent64 *pde = readdir64(d)) {
+            lString8 fpath = p8 + "/" + pde->d_name;
+            struct stat64 st;
+            if (stat64(fpath.c_str(), &st))
+                continue;
+#else
+        while (struct dirent *pde = readdir(d)) {
             lString8 fpath = p8 + "/" + pde->d_name;
             struct stat st;
-            stat( fpath.c_str(), &st );
+            if (stat(fpath.c_str(), &st))
+                continue;
+#endif
             if ( S_ISDIR(st.st_mode) ) {
                 // dir
                 if ( strcmp(pde->d_name, ".") && strcmp(pde->d_name, "..") ) {

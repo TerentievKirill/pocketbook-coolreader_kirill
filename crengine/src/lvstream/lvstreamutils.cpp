@@ -54,6 +54,34 @@ extern "C" {
 
 static LVAssetContainerFactory * _assetContainerFactory = NULL;
 
+lString8 LVFileMetadataFingerprint(const lString8 &pathname)
+{
+#if defined(__linux__) || defined(__APPLE__)
+#if defined(__linux__) && defined(_LARGEFILE64_SOURCE)
+    struct stat64 info;
+    if (stat64(pathname.c_str(), &info) || !S_ISREG(info.st_mode))
+        return lString8();
+#else
+    struct stat info;
+    if (stat(pathname.c_str(), &info) || !S_ISREG(info.st_mode))
+        return lString8();
+#endif
+#ifdef __APPLE__
+    long mns = info.st_mtimespec.tv_nsec, cns = info.st_ctimespec.tv_nsec;
+#else
+    long mns = info.st_mtim.tv_nsec, cns = info.st_ctim.tv_nsec;
+#endif
+    char stamp[256];
+    snprintf(stamp, sizeof(stamp), "%llu:%llu:%lld:%lld:%ld:%lld:%ld",
+             (unsigned long long)info.st_dev, (unsigned long long)info.st_ino,
+             (long long)info.st_size, (long long)info.st_mtime, mns,
+             (long long)info.st_ctime, cns);
+    return lString8(stamp);
+#else
+    return lString8();
+#endif
+}
+
 lString32 LVExtractAssetPath(lString32 fn) {
 	if (fn.length() < 2 || fn[0] != ASSET_PATH_PREFIX)
 		return lString32();

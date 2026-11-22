@@ -150,10 +150,10 @@ static int metadata(const char *font, const char *directory) {
         CHECK(fontMan->GetFontCount() == count && fontMan->GetFontListHash(-1) == hash);
         auto face = fontMan->GetFont(32, 400, false, css_ff_sans_serif, lString8("DejaVu Sans"));
         CHECK(!face.isNull() && face->getGlyph('A'));
-        lString8 before = LVFontMetadataCache::fingerprint(UnicodeToUtf8(registry));
+        lString8 before = LVFileMetadataFingerprint(UnicodeToUtf8(registry));
         CHECK(fontMan->SaveFontMetadataCache());
         if (pass == 1 || pass == 4)
-            CHECK(before == LVFontMetadataCache::fingerprint(UnicodeToUtf8(registry)));
+            CHECK(before == LVFileMetadataFingerprint(UnicodeToUtf8(registry)));
         face.Clear(); ShutdownFontManager();
     }
     CHECK(LVDeleteFile(path));

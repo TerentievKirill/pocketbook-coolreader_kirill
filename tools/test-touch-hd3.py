@@ -203,6 +203,8 @@ for name, sources, engine, arguments in [
     ('standby-frontlight', ['tests/standby-frontlight.cpp'], False, []),
     ('css-null-ancestor', ['tests/css-selector-null-ancestor.cpp'], True, []),
     ('gray-buffer-copy', ['tests/gray-buffer-copy.cpp'], True, []),
+    ('image-scaling', ['tests/image-scaling.cpp'], True, []),
+    ('hyphenation-metadata', ['tests/hyphenation-metadata.cpp'], True, [out]),
     ('fb2-embedded-binaries', ['tests/fb2-embedded-binaries.cpp'], True, []),
     ('performance-caches', ['tests/performance-caches.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', out]),
     ('in-book-search', ['tests/in-book-search.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf']),
