@@ -1,5 +1,8 @@
 # CoolReader for PocketBook
 
+[![Latest release](https://img.shields.io/github/v/release/dderugin/pocketbook-coolreader)](https://github.com/dderugin/pocketbook-coolreader/releases/latest)
+[![License: GPL v2](https://img.shields.io/badge/license-GPL%20v2-blue.svg)](LICENSE)
+
 CoolReader is an open-source EPUB and FB2 reader for PocketBook Linux e-readers,
 with adjustable fonts and page layouts, bookmarks, offline StarDict dictionaries
 and Wi-Fi updates. This fork supports compatible firmware on Touch HD 3, Verse, Verse
