@@ -240,6 +240,7 @@ enum CacheFileBlockType {
 };
 
 
+#include <vector>
 #include <stdlib.h>
 #include <string.h>
 #include "../include/crsetup.h"
@@ -4161,7 +4162,6 @@ ldomDocument::ldomDocument()
 , _warnings_seen_bitmap(0)
 , _doc_rendering_hash(0)
 #endif
-, lists(100)
 {
     _docIndex = ldomNode::registerDocument(this);
     ldomNode* node = allocTinyElement(NULL, 0, 0);
@@ -4205,7 +4205,6 @@ ldomDocument::ldomDocument( ldomDocument & doc )
 , _page_width(doc._page_width)
 #endif
 , _container(doc._container)
-, lists(100)
 {
     _docIndex = ldomNode::registerDocument(this);
 }
@@ -15099,6 +15098,7 @@ void ldomDocument::clear()
     clearDecodedBinarySizes();
 #if BUILD_LITE!=1
     clearRendBlockCache();
+    resetNodeNumberingProps();
     _rendered = false;
     _urlImageMap.clear();
     _fontList.clear();
@@ -18320,16 +18320,13 @@ ldomNode * ldomNode::getUnboxedPrevSibling( bool skip_text_nodes, lUInt16 except
     return NULL;
 }
 
-/// for display:list-item node, get marker
-bool ldomNode::getNodeListMarker( int & counterValue, lString32 & marker, int & markerWidth )
-{
 #if BUILD_LITE!=1
-    css_style_ref_t s = getStyle();
-    marker.clear();
-    markerWidth = 0;
-    if ( s.isNull() )
-        return false;
-    css_list_style_type_t st = s->list_style_type;
+namespace {
+
+lString32 formatListMarker(const css_style_rec_t &style, lInt64 counterValue)
+{
+    lString32 marker;
+    css_list_style_type_t st = style.list_style_type;
     switch ( st ) {
     default:
         // treat default as disc
@@ -18344,7 +18341,7 @@ bool ldomNode::getNodeListMarker( int & counterValue, lString32 & marker, int & 
         break;
     case css_lst_none:
         // When css_lsp_inside, no space is used by the invisible marker
-        if ( s->list_style_position != css_lsp_inside ) {
+        if ( style.list_style_position != css_lsp_inside ) {
             marker = U"\x0020";
         }
         break;
@@ -18353,104 +18350,6 @@ bool ldomNode::getNodeListMarker( int & counterValue, lString32 & marker, int & 
     case css_lst_upper_roman:
     case css_lst_lower_alpha:
     case css_lst_upper_alpha:
-        do {
-            // If this element has a valid value then use it avoiding a walk.
-            lString32 el_value = getAttributeValue(attr_value);
-            if ( !el_value.empty() ) {
-                int el_ivalue;
-                if ( el_value.atoi(el_ivalue) ) {
-                    counterValue = el_ivalue;
-                    break;
-                }
-            }
-
-            // The UL > LI parent-child chain may have had some of our Boxing elements inserted
-            ldomNode * parent = getUnboxedParent();
-
-            // See if parent has a 'reversed' attribute.
-            int increment = parent->hasAttribute(attr_reversed) ? -1 : +1;
-
-            // If the caller passes in a non-zero counter then it is assumed
-            // have been already calculated and have the value of the prior
-            // element of a walk. There may be a redundant recalculation in
-            // the case of zero.
-            if ( counterValue != 0 ) {
-                counterValue += increment;
-                break;
-            }
-
-            // See if parent has a valid 'start' attribute.
-            // https://www.w3.org/TR/html5/grouping-content.html#the-ol-element
-            // "The start attribute, if present, must be a valid integer giving the ordinal value of the first list item."
-            lString32 start_value = parent->getAttributeValue(attr_start);
-            int istart;
-            if ( !start_value.empty() && start_value.atoi(istart) )
-                counterValue = istart;
-            else if ( increment > 0 )
-                counterValue = 1;
-            else  {
-                // For a reversed ordering the default start is equal to the
-                // number of child elements.
-                counterValue = 0;
-
-                ldomNode * sibling = parent->getUnboxedFirstChild(true);
-                while ( sibling ) {
-                    css_style_ref_t cs = sibling->getStyle();
-                    if ( cs.isNull() ) { // Should not happen, but let's be sure
-                        if ( sibling == this )
-                            break;
-                        sibling = sibling->getUnboxedNextSibling(true);
-                        continue;
-                    }
-                    if ( cs->display != css_d_list_item_block && cs->display != css_d_list_item_legacy) {
-                        // Alien element among list item nodes, skip it to not mess numbering
-                        if ( sibling == this ) // Should not happen, but let's be sure
-                            break;
-                        sibling = sibling->getUnboxedNextSibling(true);
-                        continue;
-                    }
-                    counterValue++;
-                    sibling = sibling->getUnboxedNextSibling(true); // skip text nodes
-                }
-            }
-
-            // iterate parent's real children from start up to this node
-            counterValue -= increment;
-            ldomNode * sibling = parent->getUnboxedFirstChild(true);
-            while ( sibling ) {
-                css_style_ref_t cs = sibling->getStyle();
-                if ( cs.isNull() ) { // Should not happen, but let's be sure
-                    if ( sibling == this )
-                        break;
-                    sibling = sibling->getUnboxedNextSibling(true);
-                    continue;
-                }
-                if ( cs->display != css_d_list_item_block && cs->display != css_d_list_item_legacy) {
-                    // Alien element among list item nodes, skip it to not mess numbering
-                    if ( sibling == this ) // Should not happen, but let's be sure
-                        break;
-                    sibling = sibling->getUnboxedNextSibling(true);
-                    continue;
-                }
-
-                // Count advances irrespective of the list style.
-                counterValue += increment;
-
-                // See if it has a 'value' attribute that overrides the incremented value
-                // https://www.w3.org/TR/html5/grouping-content.html#the-li-element
-                // "The value attribute, if present, must be a valid integer giving the ordinal value of the list item."
-                lString32 value = sibling->getAttributeValue(attr_value);
-                if ( !value.empty() ) {
-                    int ivalue;
-                    if ( value.atoi(ivalue) )
-                        counterValue = ivalue;
-                }
-                if ( sibling == this )
-                    break;
-                sibling = sibling->getUnboxedNextSibling(true); // skip text nodes
-            }
-        } while (0);
-
         static const char * lower_roman[] = {"i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix",
                                              "x", "xi", "xii", "xiii", "xiv", "xv", "xvi", "xvii", "xviii", "xix",
                                          "xx", "xxi", "xxii", "xxiii"};
@@ -18500,24 +18399,135 @@ bool ldomNode::getNodeListMarker( int & counterValue, lString32 & marker, int & 
         }
         break;
     }
-    bool res = false;
-    if ( !marker.empty() ) {
-        LVFontRef font = getFont();
-        if ( !font.isNull() ) {
-            TextLangCfg * lang_cfg = TextLangMan::getTextLangCfg( this );
-            markerWidth = font->getTextWidth((marker + "  ").c_str(), marker.length()+2, lang_cfg) + font->getSize()/8;
-            res = true;
-        } else {
-            marker.clear();
+    return marker;
+}
+
+struct ListSibling {
+    ldomNode *node;
+    css_style_ref_t style;
+    bool isListItem;
+};
+
+void collectListSiblings(ldomNode *parent, std::vector<ListSibling> &siblings, int &itemCount)
+{
+    const int count = parent->getChildCount();
+    for (int i = 0; i < count; ++i) {
+        ldomNode *child = parent->getChildNode(i);
+        if (!child || !child->isElement())
+            continue;
+        if (child->isBoxingNode()) {
+            collectListSiblings(child, siblings, itemCount);
+            continue;
         }
+        if (child->getNodeId() == el_pseudoElem)
+            continue;
+        const css_style_ref_t style = child->getStyle();
+        if (style.isNull())
+            continue;
+        const bool isListItem = style->display == css_d_list_item_block || style->display == css_d_list_item_legacy;
+        siblings.push_back({child, style, isListItem});
+        itemCount += isListItem;
     }
-    return res;
+}
+
+bool hasNumberedMarker(css_list_style_type_t type)
+{
+    switch (type) {
+    case css_lst_decimal:
+    case css_lst_lower_roman:
+    case css_lst_upper_roman:
+    case css_lst_lower_alpha:
+    case css_lst_upper_alpha:
+        return true;
+    default:
+        return false;
+    }
+}
+
+} // namespace
+
+int ldomDocument::measureListMarkers(ldomNode *parent)
+{
+    // Indexed traversal visits each child once, even through layout boxes.
+    // A reversed list without an explicit start needs the item count first.
+    std::vector<ListSibling> siblings;
+    int itemCount = 0;
+    collectListSiblings(parent, siblings, itemCount);
+    const bool reversed = parent->hasAttribute(attr_reversed);
+    const int step = reversed ? -1 : 1;
+    int start;
+    if (!parent->getAttributeValue(attr_start).atoi(start))
+        start = reversed ? itemCount : 1;
+    lInt64 ordinal = static_cast<lInt64>(start) - step;
+    lInt64 widthOrdinal = 0;
+    int maxWidth = 0;
+
+    for (const ListSibling &sibling : siblings) {
+        const bool numbered = hasNumberedMarker(sibling.style->list_style_type);
+        int value;
+        const bool hasValue = (sibling.isListItem || numbered) &&
+                              sibling.node->getAttributeValue(attr_value).atoi(value);
+        if (sibling.isListItem)
+            ordinal = hasValue ? value : ordinal + step;
+
+        if (numbered) {
+            _listOrdinals.set(sibling.node->getDataIndex(), hasValue ? value : ordinal);
+
+            // Preserve the existing width calculation for lists with mixed
+            // marker types. Its running counter advances on numbered markers.
+            if (hasValue)
+                widthOrdinal = value;
+            else if (widthOrdinal != 0)
+                widthOrdinal += step;
+            else
+                widthOrdinal = ordinal;
+        }
+        const lString32 marker = formatListMarker(*sibling.style, widthOrdinal);
+        if (marker.empty())
+            continue;
+        LVFontRef font = sibling.node->getFont();
+        if (font.isNull())
+            continue;
+        TextLangCfg *lang = TextLangMan::getTextLangCfg(sibling.node);
+        const int width = font->getTextWidth((marker + "  ").c_str(), marker.length() + 2, lang) + font->getSize() / 8;
+        if (width > maxWidth)
+            maxWidth = width;
+    }
+    return maxWidth;
+}
+#endif
+
+bool ldomNode::getNodeListMarker(lString32 &marker, int &markerWidth)
+{
+#if BUILD_LITE!=1
+    marker.clear();
+    markerWidth = 0;
+    const css_style_ref_t style = getStyle();
+    ldomNode *parent = getUnboxedParent();
+    if (style.isNull() || !parent)
+        return false;
+
+    ldomDocument *doc = getDocument();
+    const lUInt32 parentIndex = parent->getDataIndex();
+    int maxWidth;
+    if (!doc->_listMarkerWidths.get(parentIndex, maxWidth)) {
+        maxWidth = doc->measureListMarkers(parent);
+        doc->_listMarkerWidths.set(parentIndex, maxWidth);
+    }
+    const lInt64 ordinal = hasNumberedMarker(style->list_style_type) ? doc->_listOrdinals.get(getDataIndex()) : 0;
+    marker = formatListMarker(*style, ordinal);
+    if (!marker.empty() && !getFont().isNull()) {
+        markerWidth = maxWidth;
+        return true;
+    }
+    marker.clear();
+    return false;
 #else
+    markerWidth = 0;
     marker = cs32("*");
     return true;
 #endif
 }
-
 
 /// returns first child node
 ldomNode * ldomNode::getFirstChild() const
@@ -19129,20 +19139,13 @@ LVImageSourceRef ldomDocument::getObjectImageSource( lString32 refName )
     return LVCreateStreamImageSource( stream );
 }
 
+#if BUILD_LITE!=1
 void ldomDocument::resetNodeNumberingProps()
 {
-    lists.clear();
+    _listMarkerWidths.clear();
+    _listOrdinals.clear();
 }
-
-ListNumberingPropsRef ldomDocument::getNodeNumberingProps( lUInt32 nodeDataIndex )
-{
-    return lists.get(nodeDataIndex);
-}
-
-void ldomDocument::setNodeNumberingProps( lUInt32 nodeDataIndex, ListNumberingPropsRef v )
-{
-    lists.set(nodeDataIndex, v);
-}
+#endif
 
 /// returns the sum of this node and its parents' top and bottom margins, borders and paddings
 int ldomNode::getSurroundingAddedHeight()

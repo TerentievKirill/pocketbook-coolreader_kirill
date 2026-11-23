@@ -221,6 +221,7 @@ for name, sources, engine, arguments in [
     ('hyphenation-metadata', ['tests/hyphenation-metadata.cpp'], True, [out]),
     ('fb2-embedded-binaries', ['tests/fb2-embedded-binaries.cpp'], True, []),
     ('document-directory', ['tests/document-directory.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', html_book, html_cache]),
+    ('ordered-list-numbering', ['tests/ordered-list-numbering.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf']),
     ('performance-caches', ['tests/performance-caches.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', out]),
     ('in-book-search', ['tests/in-book-search.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf']),
     ('reader-checkpoint', ['tests/reader-checkpoint.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', firmware / 'ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', firmware / 'ebrmain/cramfs/fonts/DroidSans.ttf', out]),

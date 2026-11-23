@@ -1097,8 +1097,8 @@ public:
     /// replace node with r/w implementation
     ldomNode * modify();
 
-    /// for display:list-item node, get marker
-    bool getNodeListMarker( int & counterValue, lString32 & marker, int & markerWidth );
+    /// Get a list item's marker and the widest marker width in its list.
+    bool getNodeListMarker(lString32 &marker, int &markerWidth);
     /// is node a floating floatBox
     bool isFloatingBox() const;
     /// is node an inlineBox that has not been re-inlined by having
@@ -2376,18 +2376,6 @@ class ldomNavigationHistory
         }
 };
 
-class ListNumberingProps
-{
-public:
-    int maxCounter;
-    int maxWidth;
-    ListNumberingProps( int c, int w )
-        : maxCounter(c), maxWidth(w)
-    {
-    }
-};
-typedef LVRef<ListNumberingProps> ListNumberingPropsRef;
-
 class ldomDocument : public lxmlDocBase
 {
     friend struct ldomNode;
@@ -2423,7 +2411,11 @@ private:
     std::atomic<bool> _hasDecodedBinarySizes{false};
     void clearDecodedBinarySizes();
 
-    LVHashTable<lUInt32, ListNumberingPropsRef> lists;
+#if BUILD_LITE!=1
+    LVHashTable<lUInt32, int> _listMarkerWidths{100};
+    LVHashTable<lUInt32, lInt64> _listOrdinals{16};
+    int measureListMarkers(ldomNode *parent);
+#endif
 
     LVEmbeddedFontList _fontList;
 
@@ -2458,9 +2450,7 @@ public:
         _rendered = false;
     }
 
-    ListNumberingPropsRef getNodeNumberingProps( lUInt32 nodeDataIndex );
-    void setNodeNumberingProps( lUInt32 nodeDataIndex, ListNumberingPropsRef v );
-    void resetNodeNumberingProps();
+    void resetNodeNumberingProps() override;
 #endif
 
 #if BUILD_LITE!=1

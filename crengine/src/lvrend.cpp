@@ -2929,36 +2929,7 @@ void SplitLines( const lString32 & str, lString32Collection & lines )
 lString32 renderListItemMarker( ldomNode * enode, int & marker_width, LFormattedText * txform, int line_h, lUInt32 flags ) {
     lString32 marker;
     marker_width = 0;
-    ldomDocument* doc = enode->getDocument();
-    // The UL > LI parent-child chain may have had some of our boxing elements inserted
-    ldomNode * parent = enode->getUnboxedParent();
-    ListNumberingPropsRef listProps =  doc->getNodeNumberingProps( parent->getDataIndex() );
-    if ( listProps.isNull() ) { // no previously cached info: compute and cache it
-        // Scan all our siblings to know the widest marker width
-        int counterValue = 0;
-        int maxWidth = 0;
-        ldomNode * sibling = parent->getUnboxedFirstChild(true);
-        while ( sibling ) {
-            lString32 marker;
-            int markerWidth = 0;
-            if ( sibling->getNodeListMarker( counterValue, marker, markerWidth ) ) {
-                if ( markerWidth > maxWidth )
-                    maxWidth = markerWidth;
-            }
-            sibling = sibling->getUnboxedNextSibling(true); // skip text nodes
-        }
-        listProps = ListNumberingPropsRef( new ListNumberingProps(counterValue, maxWidth) );
-        doc->setNodeNumberingProps( parent->getDataIndex(), listProps );
-    }
-    // Note: node->getNodeListMarker() uses font->getTextWidth() without any hint about
-    // text direction, so the marker is measured LTR.. We should probably upgrade them
-    // to measureText() with the right direction, to get a correct marker_width...
-    // For now, as node->getNodeListMarker() adds some whitespace and padding, we should
-    // be fine with any small error due to different measuring with LTR vs RTL.
-    int counterValue = 0;
-    if ( enode->getNodeListMarker( counterValue, marker, marker_width ) ) {
-        if ( !listProps.isNull() )
-            marker_width = listProps->maxWidth;
+    if ( enode->getNodeListMarker(marker, marker_width) ) {
         css_style_ref_t style = enode->getStyle();
         LVFontRef font = enode->getFont();
         lUInt32 cl = getForegroundColor(style);
@@ -2973,6 +2944,7 @@ lString32 renderListItemMarker( ldomNode * enode, int & marker_width, LFormatted
                 line_h = lengthToPx(enode, style->line_height, em, em, true);
             }
             // Scale line_h according to document's _interlineScaleFactor
+            ldomDocument *doc = enode->getDocument();
             if (style->line_height.type != css_val_screen_px && doc->getInterlineScaleFactor() != INTERLINE_SCALE_FACTOR_NO_SCALE)
                 line_h = (line_h * doc->getInterlineScaleFactor()) >> INTERLINE_SCALE_FACTOR_SHIFT;
             if ( STYLE_HAS_CR_HINT(style, STRUT_CONFINED) )
@@ -3537,28 +3509,7 @@ void renderFinalBlock( ldomNode * enode, LFormattedText * txform, RenderRectAcce
             lString32 marker;
             int marker_width = 0;
 
-            ListNumberingPropsRef listProps =  enode->getDocument()->getNodeNumberingProps( enode->getParentNode()->getDataIndex() );
-            if ( listProps.isNull() ) { // no previously cached info: compute and cache it
-                // Scan all our siblings to know the widest marker width
-                int counterValue = 0;
-                int maxWidth = 0;
-                ldomNode * sibling = enode->getUnboxedParent()->getUnboxedFirstChild(true);
-                while ( sibling ) {
-                    lString32 marker;
-                    int markerWidth = 0;
-                    if ( sibling->getNodeListMarker( counterValue, marker, markerWidth ) ) {
-                        if ( markerWidth > maxWidth )
-                            maxWidth = markerWidth;
-                    }
-                    sibling = sibling->getUnboxedNextSibling(true); // skip text nodes
-                }
-                listProps = ListNumberingPropsRef( new ListNumberingProps(counterValue, maxWidth) );
-                enode->getDocument()->setNodeNumberingProps( enode->getParentNode()->getDataIndex(), listProps );
-            }
-            int counterValue = 0;
-            if ( enode->getNodeListMarker( counterValue, marker, marker_width ) ) {
-                if ( !listProps.isNull() )
-                    marker_width = listProps->maxWidth;
+            if ( enode->getNodeListMarker(marker, marker_width) ) {
                 css_list_style_position_t sp = style->list_style_position;
                 LVFontRef font = enode->getFont();
                 lUInt32 cl = getForegroundColor(style);
