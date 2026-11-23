@@ -32,7 +32,9 @@ int main(int argc, char **argv) {
     CHECK(InitFontManager(lString8::empty_str));
     CHECK(fontMan->RegisterFont(lString8(argv[1])));
     for (const pbdevice::Profile &profile : pbdevice::profiles) {
-        CHECK(pbdevice::supported(profile.model, profile.firmware));
+        const std::string firmware = profile.firmware ? profile.firmware :
+            std::string("U") + profile.model + ".6.10.1";
+        CHECK(pbdevice::supported(profile.model, firmware.c_str()));
         CRPropRef defaults = LVCreatePropsContainer();
         LVStreamRef stream = LVOpenFileStream(argv[2], LVOM_READ);
         CHECK(!stream.isNull() && defaults->loadFromStream(stream.get()));

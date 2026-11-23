@@ -8,19 +8,21 @@ with adjustable fonts and page layouts, bookmarks, offline StarDict dictionaries
 and Wi-Fi updates. This fork supports compatible firmware on Touch HD 3, Verse, Verse
 Pro, Era and InkPad 4; see the compatibility and testing details below.
 
-[Downloads](https://readertools.eu/coolreader/downloads/) · [Installation](https://readertools.eu/coolreader/installation/) · [Manual](https://readertools.eu/coolreader/manual/) · [Release 1.0.8](https://github.com/dderugin/pocketbook-coolreader/releases/tag/v1.0.8)
+[Downloads](https://readertools.eu/coolreader/downloads/) · [Installation](https://readertools.eu/coolreader/installation/) · [Manual](https://readertools.eu/coolreader/manual/) · [Release 1.0.9](https://github.com/dderugin/pocketbook-coolreader/releases/tag/v1.0.9)
 
-Release **1.0.8** fixes the crash when opening Settings with Russian localization,
-completes the current Russian UI catalog, and adds the Verse PB629 profile for
-firmware U629.6.11.2020. Book info, bookmarks, notes, recent books, contents,
-Help, shortcuts and tap-zone settings now share the current reader design.
-Book info uses readable stacked values and preserves special characters.
+Release **1.0.9** improves EPUB and FB2 opening, search, page lookup and painting,
+reduces repeated archive, image and contents work, and adds grouped default-reader
+selection. Opening a book directly skips the welcome document.
 
-It retains the offline dictionary downloads, StarDict support, grouped settings,
-font controls and reading-state improvements from earlier releases.
+The shared package now includes 22 Linux device profiles with automatic-update
+eligibility. The 17 added profiles remain experimental; color readers use grayscale
+rendering. See the [release notes](docs/releases/1.0.9.md) for changes and limits.
 
 It provides one shared ARMv7 Linux executable and install ZIP for
-the five models below. Firmware snapshots used for verification:
+22 Linux model profiles, including the five firmware-qualified models below.
+The additional profiles are experimental and share the OTA channel; see the
+[expanded device list and limits](DEVICE-SUPPORT.md#expanded-linux-device-profiles).
+Firmware snapshots used for verification:
 
 | Device | Firmware tested |
 | --- | --- |
@@ -30,7 +32,7 @@ the five models below. Firmware snapshots used for verification:
 | Era / PB700 | U700.6.10.3209 |
 | InkPad 4 / PB743G | U743g.6.11.1683 |
 
-Twenty-four ARM regression groups and thirteen
+Thirty-four ARM regression groups and thirteen
 software probes on each additional firmware pass; interactive hardware testing
 and end-to-end device OTA acceptance remain pending. Firmware builds are no
 longer restricted to this list; unknown models and API levels below 6.10 are rejected. See the [device matrix](DEVICE-SUPPORT.md) and
@@ -55,7 +57,8 @@ now record executable-stack requirements and exercise the actual startup entry
 point on all four runtimes. The reported InkPad 4 failure has no device logs yet;
 this release does not establish that its cause is resolved on hardware.
 
-Every model uses the same download and Wi-Fi update channel. **Settings → About &
+All 22 registered Linux profiles use the same download and Wi-Fi update channel.
+The additional profiles retain experimental validation status. **Settings → About &
 updates → Check for updates** checks manually; automatic checks are optional.
 **Settings → About & updates → Version**
 shows the installed release. Moving from the earlier PB632-only release requires
