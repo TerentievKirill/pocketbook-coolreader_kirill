@@ -2226,7 +2226,7 @@ public:
     ldomXPointer getXPointer();
     /// set position pointer (for cases where we need to create a LVTocItem as a container, but
     /// we'll know the xpointer only later, mostly always the same xpointer as its first child)
-    void setXPointer(ldomXPointer xp) { _position = xp; }
+    void setXPointer(ldomXPointer xp);
     /// returns position path
     lString32 getPath();
     /// returns Y position
@@ -2242,12 +2242,12 @@ public:
     {
         LVTocItem * item = new LVTocItem( ptr, path, name );
         addChild( item );
+        invalidatePageNumbers();
         return item;
     }
-    void clear() { _children.clear(); }
+    void clear();
     // root node constructor
-    LVTocItem( ldomDocument * doc ) : _parent(NULL), _doc(doc), _level(0), _index(0), _page(0) { }
-    ~LVTocItem() { clear(); }
+    LVTocItem( ldomDocument * doc ) : _parent(NULL), _doc(doc), _level(0), _index(0), _page(0), _percent(0) { }
 
     /// For use on the root toc item only (_page, otherwise unused, can be used to store this flag)
     void setAlternativeTocFlag() { if (_level==0) _page = 1; }
@@ -2255,8 +2255,8 @@ public:
 
     /// When page numbers have been calculated, LVDocView::updatePageNumbers()
     /// sets the root toc item _percent to -1. So let's use it to know that fact.
-    bool hasValidPageNumbers() { return _level==0 && _percent == -1; }
-    void invalidatePageNumbers() { if (_level==0) _percent = 0; }
+    bool hasValidPageNumbers() const { return _level==0 && _percent == -1; }
+    void invalidatePageNumbers();
 };
 
 /// PageMapItem

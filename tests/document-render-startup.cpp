@@ -352,6 +352,33 @@ static int testRendering(const char *defaultsFile, const char *epubFile, const c
     CHECK(toc->getChildCount() == 1 && toc->getChild(0)->getName() == U"Chapter");
     puts("PASS: EPUB spine order, first duplicate ID, skipped entries, nonlinear appendix and NCX lookup");
 
+    CHECK(toc->hasValidPageNumbers() && epub.getToc() == toc);
+    LVTocItem *chapter = toc->getChild(0);
+    LVTocItem *appendix = chapter->addChild(U"Appendix", ldomXPointer(second, 0), lString32::empty_str);
+    CHECK(!toc->hasValidPageNumbers());
+    CHECK(epub.getToc() == toc && toc->hasValidPageNumbers());
+    CHECK(appendix->getPage() == epub.getBookmarkPage(appendix->getXPointer()));
+    const lString32 appendixPath = appendix->getPath();
+    appendix->setXPointer(ldomXPointer(first, 0));
+    CHECK(!toc->hasValidPageNumbers() && appendix->getPath() != appendixPath);
+    CHECK(epub.getToc() == toc && appendix->getPage() == epub.getBookmarkPage(appendix->getXPointer()));
+    appendix->setXPointer(ldomXPointer());
+    CHECK(!toc->hasValidPageNumbers());
+    CHECK(epub.getToc() == toc && appendix->getPage() == -1 && appendix->getPercent() == -1);
+    chapter->clear();
+    CHECK(!toc->hasValidPageNumbers() && chapter->getChildCount() == 0);
+    CHECK(epub.getToc() == toc && toc->hasValidPageNumbers());
+
+    epub.Resize(640, 900);
+    CHECK(epub.getToc() == toc); // Opening the TOC must resolve the pending reflow.
+    const int pageAfterReflow = epub.getBookmarkPage(chapter->getXPointer());
+    CHECK(toc->hasValidPageNumbers() && chapter->getPage() == pageAfterReflow);
+    doc->buildAlternativeToc();
+    CHECK(!toc->hasValidPageNumbers() && toc->hasAlternativeTocFlag());
+    CHECK(epub.getToc() == toc && toc->hasValidPageNumbers() && toc->hasAlternativeTocFlag());
+    CHECK(toc->getChildCount() > 0);
+    puts("PASS: TOC page numbering follows pending reflow, nested edits and alternative TOC rebuilds");
+
     ldomNode *body = first->getParentNode();
     CHECK(body == second->getParentNode() && body->getChildCount() == 2);
     auto setBounds = [](ldomNode *node, int y, int topOverflow, int bottomOverflow) {

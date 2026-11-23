@@ -15230,6 +15230,7 @@ void ldomDocument::clearDecodedBinarySizes()
 
 void ldomDocument::clear()
 {
+    m_toc.invalidatePageNumbers();
     clearDecodedBinarySizes();
 #if BUILD_LITE!=1
     invalidateChapterPaintIndex();
@@ -19672,6 +19673,27 @@ lString32 tinyNodeCollection::getStatistics()
 }
 
 
+void LVTocItem::invalidatePageNumbers()
+{
+    LVTocItem *root = this;
+    while (root->_parent)
+        root = root->_parent;
+    root->_percent = 0;
+}
+
+void LVTocItem::clear()
+{
+    _children.clear();
+    invalidatePageNumbers();
+}
+
+void LVTocItem::setXPointer(ldomXPointer xp)
+{
+    _position = xp;
+    _path.clear();
+    invalidatePageNumbers();
+}
+
 /// returns position pointer
 ldomXPointer LVTocItem::getXPointer()
 {
@@ -19860,7 +19882,7 @@ void ldomDocument::buildAlternativeToc()
     m_toc.setAlternativeTocFlag();
     // cache file will have to be updated with the alt TOC
     restartCacheSave();
-    _toc_from_cache_valid = false; // to force update of page numbers
+    _toc_from_cache_valid = false;
 }
 
 /// returns position pointer

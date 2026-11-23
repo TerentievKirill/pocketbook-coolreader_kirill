@@ -931,17 +931,15 @@ void dumpSection(ldomNode * elem) {
 }
 
 LVTocItem * LVDocView::getToc() {
-	if (!m_doc)
-		return NULL;
-        // When just loaded from cache, TocItems are missing their _position
-        // properties (a XPointer object), but all other properties (_path,
-        // _page, _percent) are valid and enough to display TOC.
-        // Avoid calling updatePageNumbers() in that case (as it is expensive
-        // and would delay book opening when loaded from cache - it will be
-        // called when it is really needed: after next full rendering)
-        if (!m_doc->isTocFromCacheValid() || !m_doc->getToc()->hasValidPageNumbers())
-            updatePageNumbers(m_doc->getToc());
-	return m_doc->getToc();
+    LVLock lock(getMutex());
+    if (!m_doc)
+        return NULL;
+    // A pending reflow can invalidate the page numbers.
+    checkRender();
+    LVTocItem *toc = m_doc->getToc();
+    if (!toc->hasValidPageNumbers())
+        updatePageNumbers(toc);
+    return toc;
 }
 
 static lString32 getSectionHeader(ldomNode * section) {
@@ -1020,31 +1018,26 @@ int getSectionPage(ldomNode * section, LVRendPageList & pages) {
  */
 
 /// update page numbers for items
-void LVDocView::updatePageNumbers(LVTocItem * item) {
-	if (!item->getXPointer().isNull()) {
-		lvPoint p = item->getXPointer().toPoint();
-		int y = p.y;
-		int h = GetFullHeight();
-		int page = getBookmarkPage(item->_position);
-		if (page >= 0 && page < getPageCount())
-			item->_page = page;
-		else
-			item->_page = -1;
-		if (y >= 0 && y < h && h > 0)
-			item->_percent = (int) ((lInt64) y * 10000 / h); // % * 100
-		else
-			item->_percent = -1;
-	} else {
-		//CRLog::error("Page position is not found for path %s", LCSTR(item->getPath()) );
-		// unknown position
-                // Don't update _page of root toc item, as it carries the alternative TOC flag
-                if (item->_level > 0)
-                    item->_page = -1;
-		item->_percent = -1;
-	}
-	for (int i = 0; i < item->getChildCount(); i++) {
-		updatePageNumbers(item->getChild(i));
-	}
+void LVDocView::updatePageNumbers(LVTocItem *item) {
+    if (item->_level > 0) {
+        const ldomXPointer position = item->getXPointer();
+        item->_page = -1;
+        item->_percent = -1;
+        if (!position.isNull()) {
+            const int y = position.toPoint().y;
+            const int height = GetFullHeight();
+            const int page = getBookmarkPage(position);
+            if (page >= 0 && page < getPageCount())
+                item->_page = page;
+            if (y >= 0 && y < height)
+                item->_percent = (int)((lInt64)y * 10000 / height);
+        }
+    }
+    for (int i = 0; i < item->getChildCount(); i++)
+        updatePageNumbers(item->getChild(i));
+    // The root stores the validity marker and the alternative TOC flag.
+    if (item->_level == 0)
+        item->_percent = -1;
 }
 
 LVPageMap * LVDocView::getPageMap() {
