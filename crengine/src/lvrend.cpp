@@ -9050,6 +9050,47 @@ void DrawBackgroundImage(ldomNode *enode,LVDrawBuf & drawbuf,int x0,int y0,int d
     }
 }
 
+// Keep annotation clipping out of the common text-paint path.
+#if defined(__GNUC__)
+__attribute__((noinline, cold))
+#endif
+static void DrawAnnotatedText(LFormattedText &text, LVDrawBuf &drawbuf, ldomNode *enode,
+                              RenderRectAccessor &fmt, int textX, int textY,
+                              ldomMarkedRangeList *marks, ldomMarkedRangeList *bookmarks)
+{
+    lvRect rc;
+    enode->getAbsRect( rc, true );
+    if ( !RENDER_RECT_HAS_FLAG(fmt, INNER_FIELDS_SET) ) {
+        // In legacy mode, getAbsRect( ..., inner=true) did not have
+        // the inner geometry stored in fmt and computed. We need
+        // to correct it with paddings:
+        int padding_left = measureBorder(enode,3)+lengthToPx(enode, enode->getStyle()->padding[0],rc.width());
+        int padding_right = measureBorder(enode,1)+lengthToPx(enode, enode->getStyle()->padding[1],rc.width());
+        int padding_top = measureBorder(enode,0)+lengthToPx(enode, enode->getStyle()->padding[2],rc.height());
+        int padding_bottom = measureBorder(enode,2)+lengthToPx(enode, enode->getStyle()->padding[3],rc.height());
+        rc.top += padding_top;
+        rc.left += padding_left;
+        rc.right -= padding_right;
+        rc.bottom -= padding_bottom;
+    }
+    ldomMarkedRangeList *nbookmarks = NULL;
+    if ( bookmarks && !bookmarks->empty() ) {
+        nbookmarks = new ldomMarkedRangeList( bookmarks, rc );
+    }
+    if ( marks && !marks->empty() ) {
+        // Keep marks that are part of the top and bottom overflows
+        lvRect crop_rc = lvRect(rc);
+        crop_rc.top -= fmt.getTopOverflow();
+        crop_rc.bottom += fmt.getBottomOverflow();
+        ldomMarkedRangeList nmarks( marks, rc, &crop_rc );
+        text.Draw( &drawbuf, textX, textY, &nmarks, nbookmarks );
+    } else {
+        text.Draw( &drawbuf, textX, textY, NULL, nbookmarks );
+    }
+    if (nbookmarks)
+        delete nbookmarks;
+}
+
 //=======================================================================
 // Draw document
 //=======================================================================
@@ -9497,43 +9538,12 @@ void DrawDocument( LVDrawBuf & drawbuf, ldomNode * enode, int x0, int y0, int dx
                 LFormattedTextRef txform;
                 enode->renderFinalBlock( txform, &fmt, inner_width );
                 fmt.push();
-                {
-                    lvRect rc;
-                    enode->getAbsRect( rc, true );
-                    if ( !RENDER_RECT_HAS_FLAG(fmt, INNER_FIELDS_SET) ) {
-                        // In legacy mode, getAbsRect( ..., inner=true) did not have
-                        // the inner geometry stored in fmt and computed. We need
-                        // to correct it with paddings:
-                        int padding_left = measureBorder(enode,3)+lengthToPx(enode, enode->getStyle()->padding[0],rc.width());
-                        int padding_right = measureBorder(enode,1)+lengthToPx(enode, enode->getStyle()->padding[1],rc.width());
-                        int padding_top = measureBorder(enode,0)+lengthToPx(enode, enode->getStyle()->padding[2],rc.height());
-                        int padding_bottom = measureBorder(enode,2)+lengthToPx(enode, enode->getStyle()->padding[3],rc.height());
-                        rc.top += padding_top;
-                        rc.left += padding_left;
-                        rc.right -= padding_right;
-                        rc.bottom -= padding_bottom;
-                    }
-                    ldomMarkedRangeList *nbookmarks = NULL;
-                    if ( bookmarks && bookmarks->length()) { // internal crengine bookmarked text highlights
-                        nbookmarks = new ldomMarkedRangeList( bookmarks, rc );
-                    }
-                    if ( marks && marks->length() ) { // "native highlighting" of a selection in progress
-                        // Keep marks that are part of the top and bottom overflows
-                        lvRect crop_rc = lvRect(rc);
-                        crop_rc.top -= fmt.getTopOverflow();
-                        crop_rc.bottom += fmt.getBottomOverflow();
-                        ldomMarkedRangeList nmarks( marks, rc, &crop_rc );
-                        // DrawBackgroundImage(enode, drawbuf, x0, y0, doc_x, doc_y, fmt.getWidth(), fmt.getHeight());
-                        // Draw regular text with currently marked highlights
-                        txform->Draw( &drawbuf, doc_x+x0 + padding_left, doc_y+y0 + padding_top, &nmarks, nbookmarks );
-                    } else {
-                        // DrawBackgroundImage(enode, drawbuf, x0, y0, doc_x, doc_y, fmt.getWidth(), fmt.getHeight());
-                        // Draw regular text, no marks
-                        txform->Draw( &drawbuf, doc_x+x0 + padding_left, doc_y+y0 + padding_top, marks, nbookmarks );
-                    }
-                    if (nbookmarks)
-                        delete nbookmarks;
-                }
+                const int textX = doc_x + x0 + padding_left;
+                const int textY = doc_y + y0 + padding_top;
+                if ( (marks && !marks->empty()) || (bookmarks && !bookmarks->empty()) )
+                    DrawAnnotatedText(*txform.get(), drawbuf, enode, fmt, textX, textY, marks, bookmarks);
+                else
+                    txform->Draw(&drawbuf, textX, textY);
                 #if (DEBUG_TREE_DRAW!=0)
                     drawbuf.FillRect( doc_x+x0, doc_y+y0, doc_x+x0+fmt.getWidth(), doc_y+y0+1, color );
                     drawbuf.FillRect( doc_x+x0, doc_y+y0, doc_x+x0+1, doc_y+y0+fmt.getHeight(), color );

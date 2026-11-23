@@ -126,6 +126,46 @@ static std::string pagePixels(LVDocView &view) {
     return pixels;
 }
 
+static int testAnnotationPainting() {
+    for (int flags : {BLOCK_RENDERING_FLAGS_DEFAULT, BLOCK_RENDERING_FLAGS_LEGACY}) {
+        LVDocView view(8);
+        view.setDefaultFontFace(lString8("DejaVu Sans"));
+        view.Resize(600, 800);
+        view.setShowCover(false);
+        CRPropRef prefs = LVCreatePropsContainer();
+        prefs->setInt(PROP_STATUS_LINE, 2);
+        prefs->setInt(PROP_RENDER_BLOCK_RENDERING_FLAGS, flags);
+        prefs->setInt(PROP_HIGHLIGHT_COMMENT_BOOKMARKS, highlight_mode_solid);
+        view.propsApply(prefs);
+        view.setStyleSheet(lString8("body,section,p { display: block; } p { padding: 9px 12px; }"));
+        const lString8 book("<FictionBook><body><section><p id='text'>"
+                            "Highlighted words and bookmarked words on one page."
+                            "</p></section></body></FictionBook>");
+        CHECK(view.LoadDocument(LVCreateStringStream(book), U"annotations.fb2"));
+        CHECK(!view.getPageImage(0).isNull());
+        ldomNode *paragraph = view.getDocument()->getElementById(U"text");
+        CHECK(paragraph && paragraph->getChildCount() == 1);
+        ldomNode *text = paragraph->getChildNode(0);
+        CHECK(text->isText());
+        CHECK(view.goToPage(view.getBookmarkPage(ldomXPointer(text, 0)), false));
+        const auto plain = pagePixels(view);
+        ldomXRange highlight(ldomXPointer(text, 0), ldomXPointer(text, 11));
+        highlight.setFlags(1);
+        view.selectRange(highlight);
+        const auto highlighted = pagePixels(view);
+        CHECK(highlighted != plain);
+        ldomXRange note(ldomXPointer(text, 22), ldomXPointer(text, 32));
+        CRBookmark *bookmark = view.saveRangeBookmark(note, bmkt_comment, U"A saved annotation");
+        CHECK(bookmark && pagePixels(view) != highlighted);
+        view.clearSelection();
+        CHECK(pagePixels(view) != plain);
+        CHECK(view.removeBookmark(bookmark));
+        CHECK(pagePixels(view) == plain);
+    }
+    puts("PASS: plain text, selections and bookmarks paint correctly with enhanced and legacy geometry");
+    return 0;
+}
+
 static int testFontWeight() {
     LVDocView view(8);
     view.setDefaultFontFace(lString8("DejaVu Sans"));
@@ -308,6 +348,7 @@ static int testRendering(const char *defaultsFile, const char *epubFile, const c
     view.propsApply(legacyWeight);
     CHECK(view.propsGetCurrent()->getIntDef(PROP_FONT_BASE_WEIGHT) == 400);
     CHECK(testFontWeight() == 0);
+    CHECK(testAnnotationPainting() == 0);
     CHECK(Utf8ToUnicode("😀").length() == 1);
     // Exercise the shipped stylesheet: upstream now requires explicit CSS
     // hints to collect FB2 notes/comments into the referencing page footer.
