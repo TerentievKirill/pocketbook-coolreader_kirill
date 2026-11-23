@@ -4,7 +4,9 @@
 #include "fb2def.h"
 #undef XS_IMPLEMENT_SCHEME
 #include "testutil.h"
+#include "../crengine/src/lvimg/lvdecodedimagecache.h"
 #include <cstring>
+#include <vector>
 
 lString32 pbSkinFileName, openedCacheFile, currentCacheDir;
 
@@ -91,16 +93,40 @@ static int checkImageMetadata()
     binary->setAttributeValue(LXML_NS_NONE, attr_id, U"figure");
     ldomNode *text = binary->insertChildText(lString32(
         U"iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR4nGPQiKoAIgAGPQH1LIKyHQAAAABJRU5ErkJggg=="));
-    for (int i = 0; i < 2; ++i) {
+
+    class ImageRows : public LVImageDecoderCallback {
+    public:
+        std::vector<lUInt32> pixels;
+        bool mutate = false;
+        void OnStartDecode(LVImageSource *) override {}
+        void OnEndDecode(LVImageSource *, bool) override {}
+        bool OnLineDecoded(LVImageSource *source, int, lUInt32 *data) override {
+            pixels.insert(pixels.end(), data, data + source->GetWidth());
+            if (mutate)
+                data[0] ^= 0x00ffffff;
+            return true;
+        }
+    };
+    std::vector<lUInt32> original;
+    for (int i = 0; i < 4; ++i) {
         LVImageSourceRef source = image->getObjectImageSource();
         CHECK(!source.isNull() && source->GetWidth() == 2 && source->GetHeight() == 1);
+        ImageRows rows;
+        rows.mutate = i == 1 || i == 2; // Mutate during capture and replay.
+        CHECK(source->Decode(&rows) && rows.pixels.size() == 2);
+        if (i == 0)
+            original = rows.pixels;
+        else
+            CHECK(rows.pixels == original);
     }
 
     text->setText(lString32(
         U"iVBORw0KGgoAAAANSUhEUgAAAAEAAAADCAIAAADdv/LVAAAADklEQVR4nGPQiKpggGIAELAC74YHU7wAAAAASUVORK5CYII="));
-    for (int i = 0; i < 2; ++i) {
+    for (int i = 0; i < 3; ++i) {
         LVImageSourceRef source = image->getObjectImageSource();
         CHECK(!source.isNull() && source->GetWidth() == 1 && source->GetHeight() == 3);
+        ImageRows rows;
+        CHECK(source->Decode(&rows) && rows.pixels.size() == 3);
     }
 
     root->removeChild(1)->destroy();
@@ -108,12 +134,46 @@ static int checkImageMetadata()
     return 0;
 }
 
+static int checkDecodedImageBudget()
+{
+    LVDecodedImageCache cache;
+    const LVImageMetadata medium{512, 640, LVImageFormat::Png};
+    const LVImageMetadata full{1024, 1024, LVImageFormat::Png};
+    const LVDecodedImageCache::Key a{16, lString32()}, b{32, lString32()};
+    const LVDecodedImageCache::Key c{48, lString32()}, d{64, lString32()};
+    CHECK(!cache.seenRecently(a) && cache.seenRecently(a));
+    for (const auto &key : {a, b, c}) {
+        auto image = cache.reserve(medium);
+        CHECK(image);
+        cache.insert(key, image, cache.generation());
+    }
+    CHECK(cache.find(a)); // Promote A, so B is evicted first.
+    auto next = cache.reserve(medium);
+    CHECK(next && !cache.find(b) && cache.find(a) && cache.find(c));
+    cache.insert(d, next, cache.generation());
+    cache.invalidateBinary(d.binaryIndex);
+    CHECK(!cache.find(d));
+    // Even after invalidation the pinned buffer still consumes budget.
+    CHECK(!cache.reserve(full));
+    next.reset();
+    auto entire = cache.reserve(full);
+    CHECK(entire);
+    const auto generation = cache.generation();
+    cache.clear();
+    cache.insert(a, entire, generation);
+    CHECK(!cache.find(a) && !cache.reserve(medium));
+    entire.reset();
+    CHECK(cache.reserve(medium));
+    CHECK(!cache.reserve(LVImageMetadata{2048, 1024, LVImageFormat::Png}));
+    return 0;
+}
+
 int main()
 {
     InitFontManager(lString8::empty_str);
-    const int result = checkBinaryStreams() || checkImageMetadata();
+    const int result = checkBinaryStreams() || checkImageMetadata() || checkDecodedImageBudget();
     ShutdownFontManager();
     if (!result)
-        puts("PASS: FB2 binary streams and image metadata across DOM edits, node reuse and document isolation");
+        puts("PASS: FB2 binary edits, decoded pixels, LRU eviction, and pinned-image budget");
     return result;
 }

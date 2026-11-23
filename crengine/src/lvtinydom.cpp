@@ -275,6 +275,9 @@ enum CacheFileBlockType {
 #define XXH_INLINE_ALL
 #include "xxhash.h"
 #include <lvtextfm.h>
+#if BUILD_LITE!=1
+#include "lvimg/lvdecodedimagecache.h"
+#endif
 
 #if (USE_ZLIB == 1)
 #define PACK_BUF_SIZE 0x10000
@@ -15209,8 +15212,11 @@ void ldomDocument::setContainer(LVContainerRef cont, bool cacheImageMetadata)
 #if CR_USE_THREADS==1
     std::lock_guard<std::mutex> lock(_decodedBinarySizeMutex);
 #endif
-    if (_container.get() != cont.get() || _cacheArchiveImageMetadata != cacheImageMetadata)
+    if (_container.get() != cont.get() || _cacheArchiveImageMetadata != cacheImageMetadata) {
         _archiveImageMetadata.clear();
+        if (_decodedImages)
+            _decodedImages->clear();
+    }
     _cacheArchiveImageMetadata = cacheImageMetadata;
 #endif
     _container = cont;
@@ -15224,6 +15230,8 @@ void ldomDocument::clearDecodedBinarySizes()
     _decodedBinarySizes.reset();
 #if BUILD_LITE!=1
     _archiveImageMetadata.clear();
+    if (_decodedImages)
+        _decodedImages->clear();
 #endif
     _hasDecodedBinarySizes.store(false, std::memory_order_relaxed);
 }
@@ -18754,6 +18762,10 @@ void ldomNode::invalidateDecodedBinarySize()
     std::lock_guard<std::mutex> lock(doc->_decodedBinarySizeMutex);
 #endif
     if (doc->_decodedBinarySizes) {
+#if BUILD_LITE!=1
+        if (doc->_decodedImages)
+            doc->_decodedImages->invalidateBinary(binary->getDataIndex());
+#endif
         doc->_decodedBinarySizes->remove(binary->getDataIndex());
         doc->_hasDecodedBinarySizes.store(doc->_decodedBinarySizes->length() != 0, std::memory_order_relaxed);
     }
@@ -19263,22 +19275,23 @@ bool ldomDocument::syncArchiveImageCache(const lString32 &name)
     const lString32 book = getProps()->getStringDef(DOC_PROP_FILE_NAME, "");
     if (_imageCodeBase != base || _imageBookName != book) {
         _archiveImageMetadata.clear();
+        if (_decodedImages)
+            _decodedImages->clear();
         _imageCodeBase = base;
         _imageBookName = book;
     }
     return true;
 }
 
-bool ldomDocument::getCachedImageMetadata(const lString32 &name, LVImageMetadata &metadata)
+bool ldomDocument::getCachedImageMetadata(const lString32 &name, LVImageMetadata &metadata, lUInt32 *binaryIndex)
 {
-#if CR_USE_THREADS==1
-    std::lock_guard<std::mutex> lock(_decodedBinarySizeMutex);
-#endif
     if (ldomNode *binary = findImageBinary(name)) {
         EmbeddedBinaryInfo info;
         if (binary->isElement() && binary->getNodeId() == el_binary && _decodedBinarySizes &&
                 _decodedBinarySizes->get(binary->getDataIndex(), info) && info.image.format != LVImageFormat::Unknown) {
             metadata = info.image;
+            if (binaryIndex)
+                *binaryIndex = binary->getDataIndex();
             return true;
         }
         return false;
@@ -19288,8 +19301,13 @@ bool ldomDocument::getCachedImageMetadata(const lString32 &name, LVImageMetadata
 
 bool ldomDocument::getObjectImageMetadata(const lString32 &name, LVImageMetadata &metadata)
 {
-    if (getCachedImageMetadata(name, metadata))
-        return true;
+    {
+#if CR_USE_THREADS==1
+        std::lock_guard<std::mutex> lock(_decodedBinarySizeMutex);
+#endif
+        if (getCachedImageMetadata(name, metadata))
+            return true;
+    }
     if (!LVReadImageMetadata(getObjectImageStream(name), metadata))
         return false;
 #if CR_USE_THREADS==1
@@ -19311,18 +19329,55 @@ bool ldomDocument::getObjectImageMetadata(const lString32 &name, LVImageMetadata
 
 bool ldomDocument::decodeObjectImage(const lString32 &name, LVImageDecoderCallback *callback)
 {
+    LVImageMetadata metadata;
+    LVDecodedImageCache::Key key;
+    std::shared_ptr<LVDecodedImage> cached;
+    std::shared_ptr<LVDecodedImage> pending;
+    lUInt64 generation = 0;
+    bool hasMetadata;
+    {
+#if CR_USE_THREADS==1
+        std::lock_guard<std::mutex> lock(_decodedBinarySizeMutex);
+#endif
+        hasMetadata = getCachedImageMetadata(name, metadata, &key.binaryIndex);
+        if (callback && hasMetadata && LVDecodedImageCache::eligible(metadata) &&
+                (key.binaryIndex || name.length() <= 1024)) {
+            if (!key.binaryIndex)
+                key.path = name;
+            if (!_decodedImages)
+                _decodedImages.reset(new LVDecodedImageCache);
+            cached = _decodedImages->find(key);
+            // Let a first-time image use the streaming decoder without copying pixels.
+            if (!cached && _decodedImages->seenRecently(key)) {
+                generation = _decodedImages->generation();
+                pending = _decodedImages->reserve(metadata);
+            }
+        }
+    }
+    if (cached && cached->Decode(callback))
+        return true;
     LVStreamRef stream = getObjectImageStream(name);
     if (stream.isNull())
         return false;
-    LVImageMetadata metadata;
-    if (!getCachedImageMetadata(name, metadata)) {
-        LVImageSourceRef image = LVCreateStreamImageSource(stream);
-        return !image.isNull() && image->Decode(callback);
-    }
-    if (!callback)
+    if (hasMetadata && !callback)
         return true;
-    LVImageSourceRef image = LVCreateStreamImageDecoder(stream, metadata.format);
-    return !image.isNull() && image->Decode(callback);
+    LVImageSourceRef image = hasMetadata ? LVCreateStreamImageDecoder(stream, metadata.format)
+                                         : LVCreateStreamImageSource(stream);
+    if (image.isNull())
+        return false;
+    if (!pending)
+        return image->Decode(callback);
+
+    LVImageCapture capture(*pending, *callback);
+    const bool success = image->Decode(&capture);
+    if (success && capture.complete()) {
+#if CR_USE_THREADS==1
+        std::lock_guard<std::mutex> lock(_decodedBinarySizeMutex);
+#endif
+        if (key.binaryIndex || syncArchiveImageCache(name))
+            _decodedImages->insert(key, pending, generation);
+    }
+    return success;
 }
 
 /// returns object image stream

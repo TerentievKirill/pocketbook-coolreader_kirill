@@ -2182,6 +2182,7 @@ public:
 
 class LVTocItem;
 class LVDocView;
+class LVDecodedImageCache;
 
 /// TOC item
 class LVTocItem
@@ -2436,11 +2437,13 @@ private:
     friend class NodeImageProxy;
     bool _cacheArchiveImageMetadata = false;
     LVHashTable<lString32, LVImageMetadata> _archiveImageMetadata{32};
+    std::unique_ptr<LVDecodedImageCache> _decodedImages;
     lString32 _imageCodeBase;
     lString32 _imageBookName;
     ldomNode *findImageBinary(const lString32 &name);
     bool syncArchiveImageCache(const lString32 &name);
-    bool getCachedImageMetadata(const lString32 &name, LVImageMetadata &metadata);
+    // Called with the image and binary metadata lock held.
+    bool getCachedImageMetadata(const lString32 &name, LVImageMetadata &metadata, lUInt32 *binaryIndex = nullptr);
     bool getObjectImageMetadata(const lString32 &name, LVImageMetadata &metadata);
     bool decodeObjectImage(const lString32 &name, LVImageDecoderCallback *callback);
 
