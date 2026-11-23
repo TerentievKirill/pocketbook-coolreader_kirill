@@ -9986,6 +9986,31 @@ static ldomNode * getNodeByIndex(ldomNode *parent, int index, T predicat, int& c
     return NULL;
 }
 
+static void collectTocSections(ldomNode *parent, std::vector<ldomNode *> &sections)
+{
+    const int count = parent->getChildCount();
+    for (int i = 0; i < count; ++i) {
+        ldomNode *child = parent->getChildNode(i);
+        // Normalized paths see through layout wrappers, as getNodeByIndex does.
+        if (isBoxingNode(child))
+            collectTocSections(child, sections);
+        else if (child->getNodeId() == el_section)
+            sections.push_back(child);
+    }
+}
+
+ldomNode *LVTocSectionIndex::find(ldomNode *parent, int ordinal)
+{
+    auto entry = _sections.find(parent);
+    if (entry == _sections.end()) {
+        entry = _sections.emplace(parent, std::vector<ldomNode *>()).first;
+        collectTocSections(parent, entry->second);
+    }
+    const auto &sections = entry->second;
+    const auto offset = static_cast<size_t>(ordinal - 1);
+    return offset < sections.size() ? sections[offset] : nullptr;
+}
+
 /// create XPointer from relative pointer non-normalized string made by toStringV1()
 ldomXPointer ldomDocument::createXPointerV1( ldomNode * baseNode, const lString32 & xPointerStr )
 {
@@ -10090,7 +10115,8 @@ ldomXPointer ldomDocument::createXPointerV1( ldomNode * baseNode, const lString3
 }
 
 /// create XPointer from relative pointer normalized string made by toStringV2()
-ldomXPointer ldomDocument::createXPointerV2( ldomNode * baseNode, const lString32 & xPointerStr )
+ldomXPointer ldomDocument::createXPointerV2( ldomNode * baseNode, const lString32 & xPointerStr,
+                                          LVTocSectionIndex *sections )
 {
     //CRLog::trace( "ldomDocument::createXPointer(%s)", UnicodeToUtf8(xPointerStr).c_str() );
     if ( xPointerStr.empty() || !baseNode )
@@ -10115,9 +10141,12 @@ ldomXPointer ldomDocument::createXPointerV2( ldomNode * baseNode, const lString3
         case xpath_step_element:
             // element of type 'name' with 'index'        /elemname[N]/
             {
-                ldomNodeIdPredicate predicat(getElementNameIndex( name.c_str() ));
+                const lUInt16 id = getElementNameIndex(name.c_str());
                 count = 0;
-                foundNode = getNodeByIndex(currNode, index, predicat, count);
+                if (sections && id == el_section && index > 0 && currNode->getChildCount() >= 32)
+                    foundNode = sections->find(currNode, index);
+                else
+                    foundNode = getNodeByIndex(currNode, index, ldomNodeIdPredicate(id), count);
                 if (foundNode == NULL) {
                     //CRLog::trace("    Element %d is not found. foundCount=%d", id, foundCount);
                     return ldomXPointer(); // node not found
@@ -19821,8 +19850,15 @@ void LVTocItem::setXPointer(ldomXPointer xp)
 /// returns position pointer
 ldomXPointer LVTocItem::getXPointer()
 {
+    return getXPointer(nullptr);
+}
+
+ldomXPointer LVTocItem::getXPointer(LVTocSectionIndex *sections)
+{
     if ( _position.isNull() && !_path.empty() ) {
-        _position = _doc->createXPointer( _path );
+        _position = sections && _path[0] != '#'
+            ? _doc->createXPointerV2(_doc->getRootNode(), _path, sections)
+            : _doc->createXPointer(_path);
         if ( _position.isNull() ) {
             CRLog::trace("TOC node is not found for path %s", LCSTR(_path) );
         } else {

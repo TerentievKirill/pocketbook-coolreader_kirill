@@ -48,6 +48,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <unordered_map>
 
 #include "lvmemman.h"
 #include "lvstring.h"
@@ -2185,6 +2186,14 @@ class LVDocView;
 class LVDecodedImageCache;
 
 /// TOC item
+// Temporary lookup for a bulk TOC update, while the DOM stays fixed.
+class LVTocSectionIndex
+{
+    friend class ldomDocument;
+    std::unordered_map<ldomNode *, std::vector<ldomNode *>> _sections;
+    ldomNode *find(ldomNode *parent, int ordinal);
+};
+
 class LVTocItem
 {
     friend class LVDocView;
@@ -2206,6 +2215,7 @@ private:
     //====================================================
     void setPage( int n ) { _page = n; }
     void setPercent( int n ) { _percent = n; }
+    ldomXPointer getXPointer(LVTocSectionIndex *sections);
 public:
     /// serialize to byte array (pointer will be incremented by number of bytes written)
     bool serialize( SerialBuf & buf );
@@ -2399,6 +2409,7 @@ class ldomDocument : public lxmlDocBase
     friend struct ldomNode;
     friend class ldomDocumentWriter;
     friend class ldomDocumentWriterFilter;
+    friend class LVTocItem;
 private:
     LVTocItem m_toc;
     LVPageMap m_pagemap;
@@ -2482,7 +2493,8 @@ private:
     /// create XPointer from a non-normalized string made by toStringV1()
     ldomXPointer createXPointerV1( ldomNode * baseNode, const lString32 & xPointerStr );
     /// create XPointer from a normalized string made by toStringV2()
-    ldomXPointer createXPointerV2( ldomNode * baseNode, const lString32 & xPointerStr );
+    ldomXPointer createXPointerV2( ldomNode * baseNode, const lString32 & xPointerStr,
+                                 LVTocSectionIndex *sections = nullptr );
 protected:
 
 #if BUILD_LITE!=1

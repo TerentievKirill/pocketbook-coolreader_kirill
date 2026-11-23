@@ -378,7 +378,7 @@ static int testRendering(const char *defaultsFile, const char *epubFile, const c
         sections.Resize(1072, 1448);
         sections.setStyleSheet(UnicodeToUtf8(LVReadTextFile(lString32(fb2Css))));
         sections.propsApply(LVClonePropsContainer(preferences));
-        const lString8 fb2(
+        lString8 fb2(
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
             "<FictionBook xmlns=\"http://www.gribuser.ru/xml/fictionbook/2.0\">"
             "<stylesheet type=\"text/css\">section.floating {float: left; width: 8em}</stylesheet>"
@@ -389,15 +389,17 @@ static int testRendering(const char *defaultsFile, const char *epubFile, const c
             "<section id=\"child1\"><title><p>Child 1</p></title><p>Text</p></section>\n"
             "<section id=\"child2\"><p>Untitled child</p></section></section>\n"
             "<section id=\"float\" class=\"floating\"><title><p>Float</p></title><p>Text</p></section>\n"
-            "<section id=\"after\"><title><p>After the float</p></title><p>Text</p></section></body>"
-            "<body name=\"notes\"><title><p>Notes</p></title>"
-            "<section id=\"note\"><p>Note</p></section></body></FictionBook>");
+            "<section id=\"after\"><title><p>After the float</p></title><p>Text</p></section>");
+        for (int i = 0; i < 32; ++i)
+            fb2 += "<section><p>Text</p></section>";
+        fb2 += "</body><body name=\"notes\"><title><p>Notes</p></title>"
+               "<section id=\"note\"><p>Note</p></section></body></FictionBook>";
         CHECK(sections.LoadDocument(LVCreateStringStream(fb2), U"sections.fb2"));
         CHECK(sections.getDocFormat() == doc_format_fb2);
         ldomDocument *book = sections.getDocument();
         LVTocItem *toc = book->getToc();
         const lString32 base(U"/FictionBook[1]/body[1]");
-        CHECK(toc->getChildCount() == 5);
+        CHECK(toc->getChildCount() == 37);
         CHECK(toc->getChild(0)->getPath() == base + U"/section[1]");
         LVTocItem *parent = toc->getChild(1);
         CHECK(parent->getPath() == base + U"/section[2]" && parent->getChildCount() == 2);
@@ -409,9 +411,35 @@ static int testRendering(const char *defaultsFile, const char *epubFile, const c
         CHECK(floatSection && floatSection->getParentNode()->getNodeId() == el_floatBox);
         CHECK(toc->getChild(3)->getPath() == base + U"/section[3]");
         CHECK(toc->getChild(3)->getXPointer().getNode() == book->getElementById(U"after"));
-        CHECK(toc->getChild(4)->getPath() == U"/FictionBook[1]/body[2]");
+        CHECK(toc->getChild(36)->getPath() == U"/FictionBook[1]/body[2]");
+
+        // Cache records contain paths with no live pointers. Compare the bulk
+        // resolver with ordinary XPath resolution on the same DOM.
+        sections.Render();
+        CHECK(book->getDOMVersionRequested() >= DOM_VERSION_WITH_NORMALIZED_XPOINTERS);
+        const std::vector<lString32> paths = {
+            base + U"/section[3]",
+            base + U"/section[4]",
+            base + U"/section[2]/section[2]",
+            base + U"/section[36]/p[1]/text()[1].2",
+            base + U"/section[100]",
+            lString32(U"#after"),
+            lString32(U"/FictionBook[1]/body[2]")
+        };
+        toc->clear();
+        for (const auto &path : paths)
+            toc->addChild(U"Destination", ldomXPointer(), path);
+        CHECK(sections.getToc() == toc && toc->hasValidPageNumbers());
+        for (int i = 0; i < toc->getChildCount(); ++i) {
+            const auto expected = book->createXPointer(paths[i]);
+            auto *item = toc->getChild(i);
+            CHECK(item->getPath() == paths[i]);
+            CHECK(item->getPage() == (expected.isNull() ? -1 : sections.getBookmarkPage(expected)));
+            const auto resolved = item->getXPointer();
+            CHECK(resolved.getNode() == expected.getNode() && resolved.getOffset() == expected.getOffset());
+        }
     }
-    puts("PASS: FB2 TOC paths preserve mixed, nested and float-wrapped sections and the notes body");
+    puts("PASS: FB2 TOC path creation and bulk resolution preserve nested and float-wrapped sections");
     {
         LVDocView sections(8);
         sections.setDefaultFontFace(lString8("DejaVu Sans"));

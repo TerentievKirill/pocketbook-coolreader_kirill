@@ -1019,8 +1019,15 @@ int getSectionPage(ldomNode * section, LVRendPageList & pages) {
 
 /// update page numbers for items
 void LVDocView::updatePageNumbers(LVTocItem *item) {
+    LVTocSectionIndex sections;
+    const bool indexSections = m_doc && getDocFormat() == doc_format_fb2 &&
+            m_doc->getDOMVersionRequested() >= DOM_VERSION_WITH_NORMALIZED_XPOINTERS;
+    updatePageNumbers(item, indexSections ? &sections : nullptr);
+}
+
+void LVDocView::updatePageNumbers(LVTocItem *item, LVTocSectionIndex *sections) {
     if (item->_level > 0) {
-        const ldomXPointer position = item->getXPointer();
+        const ldomXPointer position = item->getXPointer(sections);
         item->_page = -1;
         item->_percent = -1;
         if (!position.isNull()) {
@@ -1034,7 +1041,7 @@ void LVDocView::updatePageNumbers(LVTocItem *item) {
         }
     }
     for (int i = 0; i < item->getChildCount(); i++)
-        updatePageNumbers(item->getChild(i));
+        updatePageNumbers(item->getChild(i), sections);
     // The root stores the validity marker and the alternative TOC flag.
     if (item->_level == 0)
         item->_percent = -1;

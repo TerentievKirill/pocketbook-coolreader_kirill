@@ -330,6 +330,8 @@ class LVDocView : public CacheLoadingCallback
 {
     friend class LVDrawThread;
 private:
+    void updatePageNumbers(LVTocItem *item, LVTocSectionIndex *sections);
+
     int m_bitsPerPixel;
     int m_dx;
     int m_dy;
