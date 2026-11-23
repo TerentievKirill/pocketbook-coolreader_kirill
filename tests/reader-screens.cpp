@@ -40,7 +40,15 @@ int main(int argc,char **argv) {
         Screen screen(w,h);CRGUIWindowManager wm(&screen);CHECK(wm.loadSkin(lString32(argv[3])));
         const int keys[]={0,0,0,0};
         for (const char *name : {"menu","bookmarks","browse","dialog"}) wm.getAccTables().add(name,keys);
-        auto *reader=new V3DocViewWin(&wm,lString32());reader->setRect(screen.getRect());
+        const bool directLaunch = size == 1;
+        auto *reader = new V3DocViewWin(&wm, lString32(), directLaunch);
+        reader->setRect(screen.getRect());
+        CHECK((reader->getDocView()->getDocument() == nullptr) == directLaunch);
+        if (directLaunch) {
+            const auto missingBook = Utf8ToUnicode(lString8(argv[5])) + U"/missing-direct-launch.fb2";
+            CHECK(!reader->loadDocument(missingBook));
+            CHECK(reader->getDocView()->getDocument() == nullptr);
+        }
         reader->getDocView()->setCallback(NULL);
         lString8 xml("<FictionBook><description><title-info><book-title>Long title &amp; &lt;metadata&gt; Привет</book-title><author><first-name>Test</first-name><last-name>Author</last-name></author></title-info></description><body><section>");
         for(int i=0;i<70;++i) xml << "<p>Reader screen test. Книга для проверки оформления.</p>";

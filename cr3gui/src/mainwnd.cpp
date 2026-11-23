@@ -63,8 +63,9 @@ DECL_DEF_CR_FONT_SIZES;
 
 #define PROGRESS_ICON_FILE lString32("cr3_wait_icon.png")
 
-V3DocViewWin::V3DocViewWin( CRGUIWindowManager * wm, lString32 dataDir )
-: CRViewDialog ( wm, lString32::empty_str, lString8::empty_str, lvRect(), false, false ), _dataDir(dataDir), _settingsSaveFailed(false), _historySaveFailed(false), _loadFileStart(0)
+V3DocViewWin::V3DocViewWin( CRGUIWindowManager * wm, lString32 dataDir, bool noDefaultDocument )
+    : CRViewDialog(wm, lString32::empty_str, lString8::empty_str, lvRect(), false, false, noDefaultDocument),
+      _dataDir(dataDir), _settingsSaveFailed(false), _historySaveFailed(false), _loadFileStart(0)
 {
     CRLog::trace("V3DocViewWin()");
     LVArray<int> sizes( cr_font_sizes, sizeof(cr_font_sizes)/sizeof(int) );

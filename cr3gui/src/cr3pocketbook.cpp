@@ -2384,7 +2384,7 @@ public:
 #endif
     static CRPocketBookDocView * instance;
     CRPocketBookDocView( CRGUIWindowManager * wm, lString32 dataDir )
-        : V3DocViewWin( wm, dataDir ), _bm3x3(NULL), _toc(NULL), _tocLength(0), _dictDlg(NULL), _rotatetimerset(false),
+        : V3DocViewWin(wm, dataDir, /*noDefaultDocument=*/true), _bm3x3(NULL), _toc(NULL), _tocLength(0), _dictDlg(NULL), _rotatetimerset(false),
         _lastturn(true), _pauseRotationTimer(false), m_goToPage(-1), _restore_globOrientation(false), m_skipEvent(false),
         m_bmFromSkin(false)
     {
@@ -2399,6 +2399,9 @@ public:
             SetGlobalOrientation(-1);
             _restore_globOrientation = false;
         }
+        // InitDoc can destroy this window before a book has opened.
+        if (!getDocView()->isDocumentOpened())
+            return;
         V3DocViewWin::closing();
         pbGlobals->saveState(getDocView()->getCurPage(), getDocView()->getPageCount());
         if (!exiting) {

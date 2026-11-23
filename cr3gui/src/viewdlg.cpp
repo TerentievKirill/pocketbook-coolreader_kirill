@@ -101,8 +101,9 @@ static const char * def_view_css =
 ""
 ;
 
-CRViewDialog::CRViewDialog(CRGUIWindowManager * wm, lString32 title, lString8 text, lvRect rect, bool showScroll, bool showFrame )
-    : CRDocViewWindow(wm), _text(text), _showScroll( showScroll ), _showFrame( showFrame ), _lastNavigationDirection(0)
+CRViewDialog::CRViewDialog(CRGUIWindowManager * wm, lString32 title, lString8 text, lvRect rect,
+                           bool showScroll, bool showFrame, bool noDefaultDocument )
+    : CRDocViewWindow(wm, noDefaultDocument), _text(text), _showScroll( showScroll ), _showFrame( showFrame ), _lastNavigationDirection(0)
 {
     _passKeysToParent = _passCommandsToParent = false;
     if ( _showFrame ) {

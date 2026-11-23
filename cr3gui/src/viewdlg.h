@@ -79,7 +79,8 @@ public:
     virtual bool getTitleRect(lvRect &rc);
     virtual bool getStatusRect(lvRect &rc);
     virtual bool getScrollRect(lvRect &rc);
-    CRViewDialog(CRGUIWindowManager * wm, lString32 title, lString8 text, lvRect rect, bool showScroll, bool showFrame );
+    CRViewDialog(CRGUIWindowManager * wm, lString32 title, lString8 text, lvRect rect,
+                 bool showScroll, bool showFrame, bool noDefaultDocument = false );
 
     virtual bool onCommand( int command, int params = 0 );
 };

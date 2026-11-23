@@ -1012,11 +1012,11 @@ class CRDocViewWindow : public CRGUIWindowBase
         {
             return _docview;
         }
-        CRDocViewWindow( CRGUIWindowManager * wm )
+        CRDocViewWindow( CRGUIWindowManager * wm, bool noDefaultDocument = false )
         : CRGUIWindowBase( wm )
         {
             CRLog::trace("CRDocViewWindow()");
-            _docview = new LVDocView( wm->getScreen()->getCanvas()->GetBitsPerPixel() );
+            _docview = new LVDocView( wm->getScreen()->getCanvas()->GetBitsPerPixel(), noDefaultDocument );
             CRLog::trace("resizing...");
             _docview->Resize( getWidth(), getHeight() );
             _docview->setPageMargins( lvRect(10, 10, 10, 10) );
