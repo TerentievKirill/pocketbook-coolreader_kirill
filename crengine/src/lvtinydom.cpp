@@ -5226,7 +5226,7 @@ void ldomDocument::indexChapterPaintGroups(ldomNode *body, int format)
     if (!fb2 && format != doc_format_epub)
         return;
 
-    _chapterPointLookupSafe = !fb2;
+    _chapterPointLookupSafe = true;
     const int count = body->getChildCount();
     _chapterPaintGroups.reserve(count);
     bool inGroup = false;
@@ -5287,15 +5287,15 @@ bool ldomDocument::ensureChapterPaintIndex(ldomNode *body)
         return false;
     if (_indexedChapterBody != body) {
         ldomNode *parent = body->getParentNode();
-        const int format = getProps()->getIntDef(DOC_PROP_FILE_FORMAT_ID, doc_format_none);
-        if (format == doc_format_fb2) {
-            if (!parent || parent->getNodeId() != el_FictionBook || parent->getParentNode() != getRootNode() ||
-                    body->getRendMethod() != erm_block || body->hasAttribute(attr_NonLinear) ||
-                    parent->findChildElement(LXML_NS_ANY, el_body, 0) != body)
-                return false;
-        } else if (parent != getRootNode()) {
+        ldomNode *root = getRootNode();
+        const bool nested = parent != root;
+        if (nested && (!parent || parent->getNodeId() != el_FictionBook || parent->getParentNode() != root ||
+                       body->getRendMethod() != erm_block || body->hasAttribute(attr_NonLinear)))
             return false;
-        }
+        const int format = getProps()->getIntDef(DOC_PROP_FILE_FORMAT_ID, doc_format_none);
+        if (nested != (format == doc_format_fb2) ||
+                (nested && parent->findChildElement(LXML_NS_ANY, el_body, 0) != body))
+            return false;
         invalidateChapterPaintIndex();
         indexChapterPaintGroups(body, format);
     }
@@ -5310,8 +5310,7 @@ std::vector<ldomDocument::ChapterPaintGroup>::const_iterator ldomDocument::first
 
 int ldomDocument::firstChapterForPoint(ldomNode *body, int y)
 {
-    if ((_indexedChapterBody != body && body->getParentNode() != getRootNode()) ||
-            !ensureChapterPaintIndex(body) || !_chapterPointLookupSafe)
+    if (!ensureChapterPaintIndex(body) || !_chapterPointLookupSafe)
         return 0;
     const auto group = firstChapterGroup(y);
     // Later chapters can supply the closest text in a gap between chapters.

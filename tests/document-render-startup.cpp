@@ -460,15 +460,22 @@ static int testRendering(const char *defaultsFile, const char *epubFile, const c
         ldomNode *main = book->nodeFromXPath(U"/FictionBook/body[1]");
         ldomNode *notes = book->nodeFromXPath(U"/FictionBook/body[2]");
         CHECK(main && notes && main->getChildCount() == 33 && notes->getChildCount() == 1);
-        auto setBounds = [](ldomNode *node, int y, int overflow = 0) {
+        auto setBounds = [](ldomNode *node, int y, int overflow = 0, int height = 40) {
             RenderRectAccessor rect(node);
+            rect.setX(0);
             rect.setY(y);
-            rect.setHeight(40);
+            rect.setWidth(200);
+            rect.setHeight(height);
             rect.setTopOverflow(0);
             rect.setBottomOverflow(overflow);
+            rect.setFlags(0);
         };
-        for (int i = 0; i < main->getChildCount(); ++i)
-            setBounds(main->getChildNode(i), 100 * i);
+        setBounds(main, 0, 0, 3300);
+        for (int i = 0; i < main->getChildCount(); ++i) {
+            auto *child = main->getChildNode(i);
+            child->setRendMethod(erm_final);
+            setBounds(child, 100 * i);
+        }
         setBounds(notes->getChildNode(0), 0);
         auto paintRangeIs = [&](ldomNode *body, int y, int expectedFirst, int expectedEnd) {
             int first = 0, end = body->getChildCount();
@@ -478,12 +485,27 @@ static int testRendering(const char *defaultsFile, const char *epubFile, const c
         CHECK(paintRangeIs(main, 1910, 19, 20));
         CHECK(paintRangeIs(main, 1940, 20, 20));
         CHECK(paintRangeIs(notes, 1910, 0, 1));
-        setBounds(main->getChildNode(18), 1800, 100);
+        auto *earlier = main->getChildNode(18);
+        auto *later = main->getChildNode(19);
+        CHECK(main->elementFromPoint(lvPoint(10, 1910), PT_DIR_EXACT) == later);
+        CHECK(main->elementFromPoint(lvPoint(10, 1890), PT_DIR_SCAN_FORWARD_LOGICAL_FIRST) == later);
+        CHECK(main->elementFromPoint(lvPoint(10, 1890), PT_DIR_SCAN_BACKWARD_LOGICAL_FIRST) == earlier);
+        earlier->setRendMethod(erm_block);
+        setBounds(earlier, 1800, 100);
+        auto *descendant = earlier->getChildNode(0);
+        descendant->setRendMethod(erm_final);
+        setBounds(descendant, 100);
         CHECK(paintRangeIs(main, 1910, 18, 20)); // Keep both passes of the overflow group.
+        CHECK(main->elementFromPoint(lvPoint(10, 1910), PT_DIR_EXACT) == descendant);
+        earlier->setRendMethod(erm_inline);
+        setBounds(earlier, 1800);
+        setBounds(descendant, 1910);
+        CHECK(main->elementFromPoint(lvPoint(10, 1910), PT_DIR_SCAN_FORWARD_LOGICAL_FIRST) == descendant);
+        earlier->setRendMethod(erm_block);
         main->insertChildElement(el_floatBox);
         CHECK(paintRangeIs(main, 1910, 0, 34)); // Direct floats need the complete sibling traversal.
     }
-    puts("PASS: FB2 paint ranges preserve overflow groups, the notes body and direct floats");
+    puts("PASS: FB2 paint ranges and point lookup preserve gaps, overflow, notes and unusual children");
     LVDocView epub(8);
     epub.setDefaultFontFace(lString8("DejaVu Sans"));
     epub.Resize(1072, 1448);
