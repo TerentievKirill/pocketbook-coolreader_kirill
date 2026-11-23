@@ -9242,7 +9242,7 @@ void DrawDocument( LVDrawBuf & drawbuf, ldomNode * enode, int x0, int y0, int dx
         case erm_table_footer_group:
         case erm_block:
             {
-                // Retain whole paint groups when narrowing an EPUB body's children.
+                // Retain whole paint groups when narrowing the reading body's children.
                 int first = 0;
                 int cnt = enode->getChildCount();
                 if (cnt >= 32 && enode->getNodeId() == el_body)

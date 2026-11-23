@@ -2460,7 +2460,7 @@ private:
     std::vector<ChapterPaintGroup> _chapterPaintGroups;
     bool _chapterPointLookupSafe = false;
     void invalidateChapterPaintIndex(ldomNode *changed = nullptr);
-    void indexChapterPaintGroups(ldomNode *body);
+    void indexChapterPaintGroups(ldomNode *body, int format);
     bool ensureChapterPaintIndex(ldomNode *body);
     std::vector<ChapterPaintGroup>::const_iterator firstChapterGroup(lInt64 y) const;
     int firstChapterForPoint(ldomNode *body, int y);

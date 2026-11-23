@@ -412,6 +412,50 @@ static int testRendering(const char *defaultsFile, const char *epubFile, const c
         CHECK(toc->getChild(4)->getPath() == U"/FictionBook[1]/body[2]");
     }
     puts("PASS: FB2 TOC paths preserve mixed, nested and float-wrapped sections and the notes body");
+    {
+        LVDocView sections(8);
+        sections.setDefaultFontFace(lString8("DejaVu Sans"));
+        sections.Resize(1072, 1448);
+        sections.setStyleSheet(UnicodeToUtf8(LVReadTextFile(lString32(fb2Css))));
+        sections.propsApply(LVClonePropsContainer(preferences));
+        lString8 fb2(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+            "<FictionBook xmlns=\"http://www.gribuser.ru/xml/fictionbook/2.0\">"
+            "<description><title-info><book-title>Paint ranges</book-title></title-info></description>"
+            "<body><title><p>Book title</p></title>");
+        for (int i = 0; i < 32; ++i)
+            fb2 += "<section><title><p>Section</p></title><p>Text</p></section>";
+        fb2 += "</body><body name=\"notes\"><section><p>Note</p></section></body></FictionBook>";
+        CHECK(sections.LoadDocument(LVCreateStringStream(fb2), U"paint-ranges.fb2"));
+        sections.Render();
+        ldomDocument *book = sections.getDocument();
+        ldomNode *main = book->nodeFromXPath(U"/FictionBook/body[1]");
+        ldomNode *notes = book->nodeFromXPath(U"/FictionBook/body[2]");
+        CHECK(main && notes && main->getChildCount() == 33 && notes->getChildCount() == 1);
+        auto setBounds = [](ldomNode *node, int y, int overflow = 0) {
+            RenderRectAccessor rect(node);
+            rect.setY(y);
+            rect.setHeight(40);
+            rect.setTopOverflow(0);
+            rect.setBottomOverflow(overflow);
+        };
+        for (int i = 0; i < main->getChildCount(); ++i)
+            setBounds(main->getChildNode(i), 100 * i);
+        setBounds(notes->getChildNode(0), 0);
+        auto paintRangeIs = [&](ldomNode *body, int y, int expectedFirst, int expectedEnd) {
+            int first = 0, end = body->getChildCount();
+            book->getChapterPaintRange(body, -y, 10, first, end);
+            return first == expectedFirst && end == expectedEnd;
+        };
+        CHECK(paintRangeIs(main, 1910, 19, 20));
+        CHECK(paintRangeIs(main, 1940, 20, 20));
+        CHECK(paintRangeIs(notes, 1910, 0, 1));
+        setBounds(main->getChildNode(18), 1800, 100);
+        CHECK(paintRangeIs(main, 1910, 18, 20)); // Keep both passes of the overflow group.
+        main->insertChildElement(el_floatBox);
+        CHECK(paintRangeIs(main, 1910, 0, 34)); // Direct floats need the complete sibling traversal.
+    }
+    puts("PASS: FB2 paint ranges preserve overflow groups, the notes body and direct floats");
     LVDocView epub(8);
     epub.setDefaultFontFace(lString8("DejaVu Sans"));
     epub.Resize(1072, 1448);

@@ -5219,30 +5219,35 @@ void ldomDocument::invalidateChapterPaintIndex(ldomNode *changed)
     }
 }
 
-void ldomDocument::indexChapterPaintGroups(ldomNode *body)
+void ldomDocument::indexChapterPaintGroups(ldomNode *body, int format)
 {
     _indexedChapterBody = body;
-    if (getProps()->getIntDef(DOC_PROP_FILE_FORMAT_ID, doc_format_none) != doc_format_epub)
+    const bool fb2 = format == doc_format_fb2;
+    if (!fb2 && format != doc_format_epub)
         return;
 
-    _chapterPointLookupSafe = true;
+    _chapterPointLookupSafe = !fb2;
     const int count = body->getChildCount();
     _chapterPaintGroups.reserve(count);
     bool inGroup = false;
     lInt64 groupTop = 0, groupBottom = 0, previousBottom = 0;
     for (int i = 0; i < count; ++i) {
         ldomNode *child = body->getChildNode(i);
-        if (!child || !child->isElement() || child->getNodeId() != el_DocFragment) {
+        // The FB2 body can have titles and other blocks alongside its sections.
+        // Direct floats are painted separately by DrawDocument.
+        if (!child || !child->isElement() ||
+                (fb2 ? child->getNodeId() == el_floatBox : child->getNodeId() != el_DocFragment)) {
             _chapterPaintGroups.clear();
             return;
         }
-        // Table rows can paint outside the viewport even when their box is
-        // offscreen. Require the merged EPUB spine's fragment-only body.
         const auto method = child->getRendMethod();
+        const bool bounded = method == erm_block || method == erm_final || method == erm_invisible;
         // Inline nodes can be searched before their vertical bounds are checked.
-        if (method != erm_block && method != erm_final && method != erm_invisible)
+        if (!bounded)
             _chapterPointLookupSafe = false;
-        if (method >= erm_table_row_group && method <= erm_table_row) {
+        // Legacy table rows can paint outside their bounds. FB2 also falls
+        // back for direct children with any other unusual render method.
+        if ((fb2 && !bounded) || (method >= erm_table_row_group && method <= erm_table_row)) {
             _chapterPaintGroups.clear();
             return;
         }
@@ -5281,10 +5286,18 @@ bool ldomDocument::ensureChapterPaintIndex(ldomNode *body)
     if (!_rendered)
         return false;
     if (_indexedChapterBody != body) {
-        if (body->getParentNode() != getRootNode())
+        ldomNode *parent = body->getParentNode();
+        const int format = getProps()->getIntDef(DOC_PROP_FILE_FORMAT_ID, doc_format_none);
+        if (format == doc_format_fb2) {
+            if (!parent || parent->getNodeId() != el_FictionBook || parent->getParentNode() != getRootNode() ||
+                    body->getRendMethod() != erm_block || body->hasAttribute(attr_NonLinear) ||
+                    parent->findChildElement(LXML_NS_ANY, el_body, 0) != body)
+                return false;
+        } else if (parent != getRootNode()) {
             return false;
+        }
         invalidateChapterPaintIndex();
-        indexChapterPaintGroups(body);
+        indexChapterPaintGroups(body, format);
     }
     return !_chapterPaintGroups.empty();
 }
@@ -5297,7 +5310,8 @@ std::vector<ldomDocument::ChapterPaintGroup>::const_iterator ldomDocument::first
 
 int ldomDocument::firstChapterForPoint(ldomNode *body, int y)
 {
-    if (!ensureChapterPaintIndex(body) || !_chapterPointLookupSafe)
+    if ((_indexedChapterBody != body && body->getParentNode() != getRootNode()) ||
+            !ensureChapterPaintIndex(body) || !_chapterPointLookupSafe)
         return 0;
     const auto group = firstChapterGroup(y);
     // Later chapters can supply the closest text in a gap between chapters.
