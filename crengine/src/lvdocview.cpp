@@ -827,7 +827,12 @@ public:
 	virtual void run()
 	{
 		//CRLog::trace("LVDrawThread::run() offset==%d", _offset);
+#if CR_USE_THREADS == 1
 		_view->Draw( *_drawbuf, _offset, _page, true );
+#else
+		// Synchronous draws already have a fresh buffer sized by cachePageImage().
+		_view->Draw( *_drawbuf, _offset, _page, true, false );
+#endif
 		//_drawbuf->Rotate( _view->GetRotateAngle() );
 	}
 };
