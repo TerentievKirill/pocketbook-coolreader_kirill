@@ -13,7 +13,7 @@ REQUIRED_TESTS = {
     'dependency-compatibility', 'web-tls', 'standby-frontlight',
     'gray-buffer-copy', 'image-scaling', 'hyphenation-metadata',
     'performance-caches', 'reader-checkpoint', 'settings-editor',
-    'fb2-embedded-binaries', 'in-book-search', 'file-associations',
+    'fb2-embedded-binaries', 'in-book-search', 'file-associations', 'document-directory',
     'document-render', 'reading-state-migration', 'dictionary-browser', 'dictionary-safety', 'native-dictionary-api', 'dictionary-download', 'stardict', 'history-persistence', 'archive-boundaries', 'atomic-faults',
 }
 

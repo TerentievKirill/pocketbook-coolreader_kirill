@@ -94,6 +94,20 @@ with zipfile.ZipFile(out / 'ota-ui-success.zip', 'w', zipfile.ZIP_DEFLATED) as a
 def png_chunk(kind, data):
     return struct.pack('!I', len(data)) + kind + data + struct.pack('!I', zlib.crc32(kind + data) & 0xffffffff)
 pixel = b'\x89PNG\r\n\x1a\n' + png_chunk(b'IHDR', struct.pack('!2I5B', 1, 1, 8, 2, 0, 0, 0)) + png_chunk(b'IDAT', zlib.compress(b'\x00\xff\x00\x00')) + png_chunk(b'IEND', b'')
+html_dir = out / 'loose-document'
+html_cache = out / 'loose-document-cache'
+shutil.rmtree(html_cache, ignore_errors=True)
+(html_dir / 'assets' / 'styles').mkdir(parents=True, exist_ok=True)
+(html_dir / 'assets' / 'изображение.png').write_bytes(pixel)
+(html_dir / 'assets' / 'theme.css').write_text('#styled { color: #345678; }', encoding='utf-8')
+(html_dir / 'assets' / 'styles' / 'book.css').write_text('@import url(../theme.css);', encoding='utf-8')
+html_book = html_dir / 'Книга.html'
+html_book.write_text(
+    '<html><head><meta charset="UTF-8"><title>Loose document</title>'
+    '<link rel="stylesheet" type="text/css" href="assets/styles/book.css"></head>'
+    '<body><p id="styled">Stylesheet test</p><img src="assets/изображение.png" width="48" height="36">'
+    + '<p>Cold and cached page rendering in a loose document.</p>' * 2500
+    + '</body></html>', encoding='utf-8')
 epub = out / 'regression-章节.epub'
 with zipfile.ZipFile(epub, 'w', zipfile.ZIP_DEFLATED) as book:
     book.writestr('mimetype', 'application/epub+zip', compress_type=zipfile.ZIP_STORED)
@@ -206,6 +220,7 @@ for name, sources, engine, arguments in [
     ('image-scaling', ['tests/image-scaling.cpp'], True, []),
     ('hyphenation-metadata', ['tests/hyphenation-metadata.cpp'], True, [out]),
     ('fb2-embedded-binaries', ['tests/fb2-embedded-binaries.cpp'], True, []),
+    ('document-directory', ['tests/document-directory.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', html_book, html_cache]),
     ('performance-caches', ['tests/performance-caches.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', out]),
     ('in-book-search', ['tests/in-book-search.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf']),
     ('reader-checkpoint', ['tests/reader-checkpoint.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', firmware / 'ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', firmware / 'ebrmain/cramfs/fonts/DroidSans.ttf', out]),

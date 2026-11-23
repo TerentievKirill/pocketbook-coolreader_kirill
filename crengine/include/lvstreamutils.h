@@ -104,6 +104,9 @@ LVContainerRef LVOpenDirectory( const lChar32 * path, const char32_t * mask = U"
 LVContainerRef LVOpenDirectory(const lString32& path, const char32_t * mask = U"*.*" );
 LVContainerRef LVOpenDirectory(const lString8& path, const char32_t * mask = U"*.*" );
 
+/// Open named files directly and enumerate the directory only if a listing is requested.
+LVContainerRef LVOpenDirectoryForLookup(const lString32 &path);
+
 bool LVDirectoryIsEmpty(const lString8& path);
 bool LVDirectoryIsEmpty(const lString32& path);
 

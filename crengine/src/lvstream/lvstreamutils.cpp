@@ -386,6 +386,13 @@ LVContainerRef LVOpenDirectory( const char32_t * path, const char32_t * mask )
     return dir;
 }
 
+LVContainerRef LVOpenDirectoryForLookup(const lString32 &path)
+{
+    if (path.length() > 1 && path[0] == ASSET_PATH_PREFIX)
+        return LVOpenDirectory(path);
+    return LVContainerRef(LVDirectoryContainer::OpenForLookup(path));
+}
+
 /// creates TCR decoder stream for stream
 LVStreamRef LVCreateTCRDecoderStream( LVStreamRef stream )
 {

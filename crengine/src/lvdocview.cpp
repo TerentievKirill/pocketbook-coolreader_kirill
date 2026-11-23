@@ -3436,7 +3436,7 @@ bool LVDocView::goLink(lString32 link, bool savePos) {
 			lString32 arcname =
 					m_doc_props->getStringDef(DOC_PROP_ARC_NAME, "");
 			if (arcname.empty()) {
-				container = LVOpenDirectory(dir.c_str());
+				container = LVOpenDirectoryForLookup(dir);
 				if (container.isNull())
 					return false;
 			} else {
@@ -4383,7 +4383,7 @@ bool LVDocView::LoadDocument(const lChar32 * fname, bool metadataOnly) {
 #endif
 
 	m_doc_props->setString(DOC_PROP_FILE_PATH, dir);
-	m_container = LVOpenDirectory(dir.c_str());
+	m_container = LVOpenDirectoryForLookup(dir);
 	if (m_container.isNull())
 		return false;
 	LVStreamRef stream = m_container->OpenStream(fn.c_str(), LVOM_READ);

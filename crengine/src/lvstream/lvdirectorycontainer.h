@@ -31,6 +31,10 @@ class LVDirectoryContainerItemInfo : public LVCommonContainerItemInfo
 
 class LVDirectoryContainer : public LVNamedContainer
 {
+    bool _listOnDemand;
+    mutable LVContainerRef _listing;
+    const LVContainerRef &listing() const;
+    LVDirectoryContainer(lString32 path, bool listOnDemand);
 protected:
     LVDirectoryContainer * m_parent;
 public:
@@ -39,20 +43,12 @@ public:
     {
         return (LVContainer*)m_parent;
     }
-    virtual const LVContainerItemInfo * GetObjectInfo(int index)
-    {
-        if (index>=0 && index<m_list.length())
-            return m_list[index];
-        return NULL;
-    }
-    virtual int GetObjectCount() const
-    {
-        return m_list.length();
-    }
+    virtual const LVContainerItemInfo * GetObjectInfo(int index);
+    virtual int GetObjectCount() const;
     virtual lverror_t GetSize( lvsize_t * pSize );
-    LVDirectoryContainer();
     virtual ~LVDirectoryContainer();
     static LVDirectoryContainer * OpenDirectory( const char32_t * path, const char32_t * mask = U"*.*" );
+    static LVDirectoryContainer * OpenForLookup(const lString32 &path);
 };
 
 #endif  // __LVDIRECTORYCONTAINER_H_INCLUDED__
