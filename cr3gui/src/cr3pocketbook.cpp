@@ -30,6 +30,9 @@
 #include "pbcheckpoint.h"
 #include "lvperf.h"
 #include "pb_device_profile.h"
+#if defined(POCKETBOOK_PRO) && !defined(POCKETBOOK_PRO_PRO2)
+#include "pbquickmenu.h"
+#endif
 #ifdef POCKETBOOK_FW6
 #include "pbstandbyfrontlight.h"
 #include <signal.h>
@@ -524,6 +527,9 @@ class CRPocketBookWindowManager : public CRGUIWindowManager
 private:
     bool m_incommand;
     bool _startLogoPending = false;
+#if defined(POCKETBOOK_PRO) && !defined(POCKETBOOK_PRO_PRO2)
+    PBQuickMenuIcons _quickMenuIcons;
+#endif
 protected:
     LVHashTable<lString8, int> _pbTable;
 
@@ -533,6 +539,9 @@ protected:
         }
     }
 public:
+#if defined(POCKETBOOK_PRO) && !defined(POCKETBOOK_PRO_PRO2)
+    PBQuickMenuIcons &quickMenuIcons() { return _quickMenuIcons; }
+#endif
     /// translate string by key, return default value if not found
     virtual lString32 translateString( const char * key, const char * defValue )
     {
@@ -813,6 +822,8 @@ ibitmap* LVImageSourceRef_to_ibitmab(LVImageSourceRef &img) {
     if( !img.isNull() ) {
 
         ibitmap *bmp = NewBitmap(img->GetWidth(), img->GetHeight());
+        if (!bmp)
+            return NULL;
         LVGrayDrawBuf tmpBufLock( img->GetWidth(), img->GetHeight(), bmp->depth );
 
         tmpBufLock.Draw(img, 0, 0, img->GetWidth(), img->GetHeight(), true);
@@ -983,20 +994,6 @@ public:
     }
 };
 
-#define TM_NB_ICONS 7
-
-const char *touchMenuIcons[TM_NB_ICONS] = {
-    "home",
-    "toc",
-    // "goto",
-    // "cite",
-    "bookmarks",
-    "dictionary",
-    "search",
-    "rotate",
-    "settings"
-};
-
 class CRPocketBookQuickMenuWindow : public CRPocketBookInkViewWindow
 {
 private:
@@ -1090,7 +1087,7 @@ public:
 
                 // Match tapped icon
                 int position = icon_space;
-                for( int i = 0; i < TM_NB_ICONS; i++ ) {
+                for( int i = 0; i < pbQuickMenuIconCount; i++ ) {
 
                     // If found icon
                     if( x >= position && x <= position + icon_width ) {
@@ -1120,7 +1117,7 @@ public:
 
                 // Match tapped icon
                 int position = icon_space;
-                for( int i = 0; i < TM_NB_ICONS; i++ ) {
+                for( int i = 0; i < pbQuickMenuIconCount; i++ ) {
 
                     // If found icon
                     if( x >= position && x <= position + icon_width ) {
@@ -1177,58 +1174,32 @@ public:
         return true;
     }
 
+    PBQuickMenuLayout iconLayout() const {
+        return {ScreenWidth(), ScreenHeight(), icon_width, icon_height, icon_space, GetOrientation()};
+    }
+
     virtual void IconTapped(int iconKey, int position, CRGUITouchEventType evType) {
         CRLog::trace("CRPocketBookQuickMenuWindow::IconTapped(%d, %d)", iconKey, position);
-
-        // Image name
-        lString32 path;
-        if( strcmp(touchMenuIcons[iconKey], "bookmarks") == 0 && main_win->getDocView()->currentPageIsBookmarked() ) {
-            path = lString32("icon_") + lString32(touchMenuIcons[iconKey]) + lString32("_alt_tap.png");
-        }
-        else {
-            path = lString32("icon_") + lString32(touchMenuIcons[iconKey]) + lString32("_tap.png");
-        }
-        CRLog::trace("CRPocketBookQuickMenuWindow::IconTapped(): [%d] %s", iconKey, UnicodeToUtf8(path).c_str());
-
-        // Get image
-        LVImageSourceRef img = CRPocketBookWindowManager::instance->getSkin()->getImage(path);
-
-        if( !img.isNull() ) {
-
-            // Convert
-            ibitmap* bmp = LVImageSourceRef_to_ibitmab(img);
-
-            // Draw
-            StretchBitmap(position, 0, icon_width, icon_height, bmp, 0);
-
-            // Shitty bug fix (some black line shows up at the right of the icons)
-            int shittyWidth = round(icon_width*0.04);
-            FillArea(position+icon_width-shittyWidth, 0, shittyWidth, icon_height, 0x00FFFFFF);
-
-            // Free memory
-            free(bmp);
-
-            // Highlight tapped icon
+        const bool bookmarked = strcmp(pbQuickMenuIconNames[iconKey], "bookmarks") == 0 &&
+                                main_win->getDocView()->currentPageIsBookmarked();
+        auto *wm = CRPocketBookWindowManager::instance;
+        if (wm->quickMenuIcons().drawPressed(wm->getSkin(), iconLayout(), bookmarked, iconKey))
             PartialUpdateBW(position, 0, icon_width, icon_height);
-        }
-        else {
-            CRLog::trace("CRPocketBookQuickMenuWindow::IconTapped(): NOT FOUND: [%d] %s", iconKey, UnicodeToUtf8(path).c_str());
-        }
 
         // Close current window
         SelfCloseNoUpdate();
 
         // Execute proper command
-        if( strcmp(touchMenuIcons[iconKey], "home") == 0 ) {
+        if( strcmp(pbQuickMenuIconNames[iconKey], "home") == 0 ) {
             executeCommand(PB_QUICK_MENU_SELECT, 1);
         }
-        else if( strcmp(touchMenuIcons[iconKey], "toc") == 0 ) {
+        else if( strcmp(pbQuickMenuIconNames[iconKey], "toc") == 0 ) {
             executeCommand(PB_QUICK_MENU_SELECT, 7);
         }
-        else if( strcmp(touchMenuIcons[iconKey], "cite") == 0 ) {
+        else if( strcmp(pbQuickMenuIconNames[iconKey], "cite") == 0 ) {
             executeCommand(MCMD_CITES_LIST, 0);
         }
-        else if( strcmp(touchMenuIcons[iconKey], "bookmarks") == 0 ) {
+        else if( strcmp(pbQuickMenuIconNames[iconKey], "bookmarks") == 0 ) {
             if( evType == CRTOUCH_UP ) {
                 executeCommand(PB_QUICK_MENU_SELECT, 3);
             }
@@ -1242,68 +1213,24 @@ public:
                 }
             }
         }
-        else if( strcmp(touchMenuIcons[iconKey], "dictionary") == 0 ) {
+        else if( strcmp(pbQuickMenuIconNames[iconKey], "dictionary") == 0 ) {
             executeCommand(PB_QUICK_MENU_SELECT, 6);
         }
-        else if( strcmp(touchMenuIcons[iconKey], "search") == 0 ) {
+        else if( strcmp(pbQuickMenuIconNames[iconKey], "search") == 0 ) {
             executeCommand(PB_QUICK_MENU_SELECT, 2);
         }
-        else if( strcmp(touchMenuIcons[iconKey], "rotate") == 0 ) {
+        else if( strcmp(pbQuickMenuIconNames[iconKey], "rotate") == 0 ) {
             executeCommand(PB_QUICK_MENU_SELECT, 5);
         }
-        else if( strcmp(touchMenuIcons[iconKey], "settings") == 0 ) {
+        else if( strcmp(pbQuickMenuIconNames[iconKey], "settings") == 0 ) {
             executeCommand(PB_QUICK_MENU_SELECT, 8);
         }
     }
 
     virtual void DrawTop(bool updateScreen) {
-        CRLog::trace("CRPocketBookQuickMenuWindow::DrawTop(%d)", updateScreen?1:0);
-
-        // Draw top background
-        FillArea(0, 0, ScreenWidth(), icon_height+2, 0x00FFFFFF);
-        FillArea(0, icon_height, ScreenWidth(), 1, 0x00000000);
-
-        // Draw top icons
-        int position = icon_space;
-        for( int i = 0; i < TM_NB_ICONS; i++ ) {
-
-
-            // Image name
-            lString32 path;
-            if( strcmp(touchMenuIcons[i], "bookmarks") == 0 && main_win->getDocView()->currentPageIsBookmarked() ) {
-                path = lString32("icon_") + lString32(touchMenuIcons[i]) + lString32("_alt.png");
-            }
-            else {
-                path = lString32("icon_") + lString32(touchMenuIcons[i]) + lString32(".png");
-            }
-            CRLog::trace("CRPocketBookQuickMenuWindow::DrawTop(): [%d] %s", i, UnicodeToUtf8(path).c_str());
-
-            // Get image
-            LVImageSourceRef img = CRPocketBookWindowManager::instance->getSkin()->getImage(path);
-
-            if( !img.isNull() ) {
-
-                // Convert
-                ibitmap* bmp = LVImageSourceRef_to_ibitmab(img);
-
-                // Draw
-                StretchBitmap(position, 0, icon_width, icon_height, bmp, 0);
-
-                // Shitty bug fix (some black line shows up at the right of the icons)
-                int shittyWidth = round(icon_width*0.04);
-                FillArea(position+icon_width-shittyWidth, 0, shittyWidth, icon_height, 0x00FFFFFF);
-
-                // Free memory
-                free(bmp);
-            }
-            else {
-                CRLog::trace("CRPocketBookQuickMenuWindow::DrawTop(): NOT FOUND: [%d] %s", i, UnicodeToUtf8(path).c_str());
-            }
-
-            // Increase position
-            position += icon_width + icon_space;
-        }
-
+        const bool bookmarked = main_win->getDocView()->currentPageIsBookmarked();
+        auto *wm = CRPocketBookWindowManager::instance;
+        wm->quickMenuIcons().drawTop(wm->getSkin(), iconLayout(), bookmarked);
         if( updateScreen ) {
             CRLog::trace("CRPocketBookQuickMenuWindow::DrawTop(): PartialUpdate(0, 0, %d, %d);", ScreenWidth(), icon_height+1);
             PartialUpdate(0, 0, ScreenWidth(), icon_height+1);
@@ -1485,6 +1412,7 @@ public:
     }
 
     virtual void OpenTouchMenu() {
+        LVPerfScope timing("quick-menu.open");
         CRLog::trace("CRPocketBookQuickMenuWindow::OpenTouchMenu()");
 
         isTouchMenuVisible = true;
@@ -1513,7 +1441,7 @@ public:
         CRLog::trace("CRPocketBookQuickMenuWindow::OpenTouchMenu(): Set class vars");
         icon_width = PanelHeight();
         icon_height = PanelHeight();
-        icon_space = (ScreenWidth() - icon_width * TM_NB_ICONS) / (TM_NB_ICONS + 1);
+        icon_space = (ScreenWidth() - icon_width * pbQuickMenuIconCount) / (pbQuickMenuIconCount + 1);
 
         bottomH = icon_height*2+1;
         bottomY = ScreenHeight()-PanelHeight()-bottomH;

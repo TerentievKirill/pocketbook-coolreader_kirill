@@ -228,6 +228,7 @@ for name, sources, engine, arguments in [
     ('settings-editor', ['tests/settings-editor.cpp', 'cr3gui/src/settings.cpp', 'cr3gui/src/fsmenu.cpp', 'cr3gui/src/pb_file_associations.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', firmware / 'ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', build / 'cr3gui/pb631fw5.cr3skin', out]),
     ('file-associations', ['tests/file-associations.cpp', 'cr3gui/src/pb_file_associations.cpp'], True, [out]),
     ('reader-screens', ['tests/reader-screens.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', firmware / 'ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', build / 'cr3gui/pb631fw5.cr3skin', build / 'i18n/ru/LC_MESSAGES/cr3.mo', out]),
+    ('quick-menu-icons', ['tests/quick-menu-icons.cpp'], True, [build / 'cr3gui/pb631fw5.cr3skin', build / 'cr3gui/pb626fw5.cr3skin']),
     ('translation-lookup', ['tests/translation-lookup.cpp'], True, [build / 'i18n/ru/LC_MESSAGES/cr3.mo']),
     ('skin-language-symbol', ['tests/skin-language-symbol.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', firmware / 'ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', build / 'cr3gui/pb631fw5.cr3skin', out]),
     ('document-render', ['tests/document-render-startup.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', firmware / 'ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', firmware / 'ebrmain/cramfs/fonts/DroidSans.ttf', root / profile['package']['assets'] / 'cr3-defaults.ini', root / 'cr3gui/data/hyph/', epub, root / 'cr3gui/data/fb2.css']),
@@ -252,16 +253,16 @@ for name, sources, engine, arguments in [
         subprocess.run([str(compiler).replace('-g++', '-gcc'), '-shared', '-fPIC',
                         'tests/native-dictionary-api-library.c', '-o', str(fixture)], check=True)
         test_options = options + ['-DCR3_NATIVE_DICTIONARY_LIBRARY="' + str(fixture) + '"']
-    if name in ('settings-editor', 'reader-screens'):
+    if name in ('settings-editor', 'reader-screens', 'quick-menu-icons'):
         # The real menu must exercise the application's OTA/touch feature flags.
         app_flags = (build / 'cr3gui/CMakeFiles/cr3-pb.app.dir/flags.make').read_text()
         test_options = flags('CXX_DEFINES', app_flags) + flags('CXX_INCLUDES', app_flags) + flags('CXX_FLAGS', app_flags)
     command = [compiler] + test_options + sources
-    if name == 'reader-screens':
+    if name in ('reader-screens', 'quick-menu-icons'):
         # Exercise the actual frontend screens without entering InkViewMain.
         objects = sorted((build / 'cr3gui/CMakeFiles/cr3-pb.app.dir').rglob('*.o'))
         entry = next(p for p in objects if p.name == 'cr3pocketbook.cpp.o')
-        renamed = out / 'reader-screens-app.o'
+        renamed = out / (name + '-app.o')
         subprocess.run([str(compiler).replace('-g++', '-objcopy'), '--redefine-sym',
                         'main=cr3_application_main', str(entry), str(renamed)], check=True)
         command += [renamed if p == entry else p for p in objects]

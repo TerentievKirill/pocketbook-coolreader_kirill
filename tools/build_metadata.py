@@ -8,7 +8,7 @@ from targets import DEFAULT_TARGET, load_target, target_evidence, firmware_path,
 from runtime_compatibility import runtime_fingerprint
 
 REQUIRED_TESTS = {
-    'shared-device-profiles', 'translation-lookup', 'reader-screens',
+    'shared-device-profiles', 'translation-lookup', 'reader-screens', 'quick-menu-icons',
     'frontlight-status', 'ota-ui', 'ota-package', 'reference-initialization', 'css-null-ancestor', 'skin-language-symbol',
     'dependency-compatibility', 'web-tls', 'standby-frontlight',
     'gray-buffer-copy', 'image-scaling', 'hyphenation-metadata',
