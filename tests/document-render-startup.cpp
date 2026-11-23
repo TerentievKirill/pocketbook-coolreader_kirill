@@ -446,6 +446,42 @@ static int testRendering(const char *defaultsFile, const char *epubFile, const c
     second->setRendMethod(erm_table_row);
     CHECK(paintRangeIs(300, 0, 2)); // Preserve the legacy table-row exceptions.
     puts("PASS: EPUB paint ranges, overflow groups, render-rectangle changes and table fallback");
+
+    // Synthetic chapter boxes let us check gaps and overflow independently of CSS.
+    CHECK(BLOCK_RENDERING_N(body, ENHANCED) && body->getRendMethod() == erm_block);
+    while (body->getChildCount() < 32)
+        body->insertChildElement(el_DocFragment);
+    auto setBox = [](ldomNode *node, int y, int height, int overflow = 0) {
+        RenderRectAccessor rect(node);
+        rect.setX(0);
+        rect.setY(y);
+        rect.setWidth(200);
+        rect.setHeight(height);
+        rect.setTopOverflow(0);
+        rect.setBottomOverflow(overflow);
+        rect.setFlags(0);
+    };
+    setBox(body, 0, 3200);
+    for (int i = 0; i < body->getChildCount(); ++i) {
+        auto *fragment = body->getChildNode(i);
+        fragment->setRendMethod(erm_final);
+        setBox(fragment, i * 100, 40);
+    }
+    CHECK(body->elementFromPoint(lvPoint(10, 3001), PT_DIR_EXACT) == body->getChildNode(30));
+    CHECK(body->elementFromPoint(lvPoint(10, 2950), PT_DIR_SCAN_FORWARD_LOGICAL_FIRST) == body->getChildNode(30));
+    CHECK(body->elementFromPoint(lvPoint(10, 2950), PT_DIR_SCAN_BACKWARD_LOGICAL_FIRST) == body->getChildNode(29));
+    auto *earlier = body->getChildNode(2);
+    auto *descendant = earlier->insertChildElement(el_p);
+    descendant->setRendMethod(erm_final);
+    earlier->setRendMethod(erm_block);
+    setBox(earlier, 200, 40, 3000);
+    setBox(descendant, 2800, 40);
+    CHECK(body->elementFromPoint(lvPoint(10, 3001), PT_DIR_EXACT) == descendant);
+    earlier->setRendMethod(erm_inline);
+    setBox(earlier, 200, 40);
+    setBox(descendant, 3000, 40);
+    CHECK(body->elementFromPoint(lvPoint(10, 3001), PT_DIR_SCAN_FORWARD_LOGICAL_FIRST) == descendant);
+    puts("PASS: EPUB point lookup preserves chapter gaps, reverse scans, overflow and inline fallback");
     return 0;
 }
 int main(int argc, char **argv) {

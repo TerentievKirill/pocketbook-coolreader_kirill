@@ -5215,6 +5215,7 @@ void ldomDocument::invalidateChapterPaintIndex(ldomNode *changed)
                                changed->getParentNode() == _indexedChapterBody)) {
         _indexedChapterBody = nullptr;
         _chapterPaintGroups.clear();
+        _chapterPointLookupSafe = false;
     }
 }
 
@@ -5224,6 +5225,7 @@ void ldomDocument::indexChapterPaintGroups(ldomNode *body)
     if (getProps()->getIntDef(DOC_PROP_FILE_FORMAT_ID, doc_format_none) != doc_format_epub)
         return;
 
+    _chapterPointLookupSafe = true;
     const int count = body->getChildCount();
     _chapterPaintGroups.reserve(count);
     bool inGroup = false;
@@ -5237,6 +5239,9 @@ void ldomDocument::indexChapterPaintGroups(ldomNode *body)
         // Table rows can paint outside the viewport even when their box is
         // offscreen. Require the merged EPUB spine's fragment-only body.
         const auto method = child->getRendMethod();
+        // Inline nodes can be searched before their vertical bounds are checked.
+        if (method != erm_block && method != erm_final && method != erm_invisible)
+            _chapterPointLookupSafe = false;
         if (method >= erm_table_row_group && method <= erm_table_row) {
             _chapterPaintGroups.clear();
             return;
@@ -5271,24 +5276,42 @@ void ldomDocument::indexChapterPaintGroups(ldomNode *body)
                                                  _chapterPaintGroups[i - 1].top);
 }
 
-void ldomDocument::getChapterPaintRange(ldomNode *body, int y, int height, int &first, int &end)
+bool ldomDocument::ensureChapterPaintIndex(ldomNode *body)
 {
     if (!_rendered)
-        return;
+        return false;
     if (_indexedChapterBody != body) {
         if (body->getParentNode() != getRootNode())
-            return;
+            return false;
         invalidateChapterPaintIndex();
         indexChapterPaintGroups(body);
     }
-    if (_chapterPaintGroups.empty())
+    return !_chapterPaintGroups.empty();
+}
+
+std::vector<ldomDocument::ChapterPaintGroup>::const_iterator ldomDocument::firstChapterGroup(lInt64 y) const
+{
+    return std::upper_bound(_chapterPaintGroups.begin(), _chapterPaintGroups.end(), y,
+        [](lInt64 top, const ChapterPaintGroup &group) { return top < group.bottom; });
+}
+
+int ldomDocument::firstChapterForPoint(ldomNode *body, int y)
+{
+    if (!ensureChapterPaintIndex(body) || !_chapterPointLookupSafe)
+        return 0;
+    const auto group = firstChapterGroup(y);
+    // Later chapters can supply the closest text in a gap between chapters.
+    return group == _chapterPaintGroups.cbegin() ? 0 : (group - 1)->endChild;
+}
+
+void ldomDocument::getChapterPaintRange(ldomNode *body, int y, int height, int &first, int &end)
+{
+    if (!ensureChapterPaintIndex(body))
         return;
 
-    const auto begin = _chapterPaintGroups.begin();
-    const auto finish = _chapterPaintGroups.end();
-    const auto from = std::upper_bound(begin, finish, -lInt64(y),
-        [](lInt64 top, const ChapterPaintGroup &group) { return top < group.bottom; });
-    const auto to = std::lower_bound(from, finish, lInt64(height) - y,
+    const auto begin = _chapterPaintGroups.cbegin();
+    const auto from = firstChapterGroup(-lInt64(y));
+    const auto to = std::lower_bound(from, _chapterPaintGroups.cend(), lInt64(height) - y,
         [](const ChapterPaintGroup &group, lInt64 bottom) { return group.top < bottom; });
     first = from == begin ? 0 : (from - 1)->endChild;
     end = to == begin ? 0 : (to - 1)->endChild;
@@ -17952,7 +17975,8 @@ ldomNode * ldomNode::elementFromPoint( lvPoint pt, int direction, bool strict_bo
 
     RenderRectAccessor fmt( this );
 
-    if ( BLOCK_RENDERING_N(this, ENHANCED) ) {
+    const bool enhanced = BLOCK_RENDERING_N(this, ENHANCED);
+    if ( enhanced ) {
         // In enhanced rendering mode, because of collapsing of vertical margins
         // and the fact that we did not update style margins to their computed
         // values, a children box with margins can overlap its parent box, if
@@ -18116,7 +18140,11 @@ ldomNode * ldomNode::elementFromPoint( lvPoint pt, int direction, bool strict_bo
     int count = getChildCount();
     strict_bounds_checking = RENDER_RECT_HAS_FLAG(fmt, CHILDREN_RENDERING_REORDERED);
     if ( direction >= PT_DIR_EXACT ) { // PT_DIR_EXACT or PT_DIR_SCAN_FORWARD*
-        for ( int i=0; i<count; i++ ) {
+        int first = 0;
+        // Enhanced forward hit tests reject chapters ending at or before the point.
+        if ( count >= 32 && enhanced && !strict_bounds_checking && rm == erm_block && getNodeId() == el_body )
+            first = getDocument()->firstChapterForPoint(this, pt.y - fmt.getY());
+        for ( int i=first; i<count; i++ ) {
             ldomNode * p = getChildNode( i );
             ldomNode * e = p->elementFromPoint( lvPoint(pt.x-fmt.getX(), pt.y-fmt.getY()), direction, strict_bounds_checking );
             if ( e )
