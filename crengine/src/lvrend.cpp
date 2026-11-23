@@ -9201,8 +9201,11 @@ void DrawDocument( LVDrawBuf & drawbuf, ldomNode * enode, int x0, int y0, int dx
         case erm_table_footer_group:
         case erm_block:
             {
-                // recursive draw all sub-blocks for blocks
+                // Retain whole paint groups when narrowing an EPUB body's children.
+                int first = 0;
                 int cnt = enode->getChildCount();
+                if (cnt >= 32 && enode->getNodeId() == el_body)
+                    enode->getDocument()->getChapterPaintRange(enode, doc_y, dy, first, cnt);
 
                 bool in_two_steps_drawing = true;
                 if ( draw_content && draw_background )
@@ -9210,7 +9213,7 @@ void DrawDocument( LVDrawBuf & drawbuf, ldomNode * enode, int x0, int y0, int dx
 
                 if ( in_two_steps_drawing && draw_background ) { // draw_content==false
                     // Recursively draw background only
-                    for (int i=0; i<cnt; i++) {
+                    for (int i=first; i<cnt; i++) {
                         ldomNode * child = enode->getChildNode( i );
                         // No need to draw early the background of floatboxes:
                         // it will be drawn with the content after non-floating
@@ -9306,7 +9309,7 @@ void DrawDocument( LVDrawBuf & drawbuf, ldomNode * enode, int x0, int y0, int dx
                 // and negative margins are involved, their background could be drawn
                 // over non-floating text... but that's not easy to check...)
                 bool has_floats = false;
-                for (int i=0; i<cnt; i++) {
+                for (int i=first; i<cnt; i++) {
                     ldomNode * child = enode->getChildNode( i );
                     if ( child->isFloatingBox() ) {
                         has_floats = true;
@@ -9376,7 +9379,7 @@ void DrawDocument( LVDrawBuf & drawbuf, ldomNode * enode, int x0, int y0, int dx
 
                 // Then draw over the floating nodes ignored in previous loop
                 if (has_floats) {
-                    for (int i=0; i<cnt; i++) {
+                    for (int i=first; i<cnt; i++) {
                         ldomNode * child = enode->getChildNode( i );
                         if ( !child->isFloatingBox() )
                             continue;

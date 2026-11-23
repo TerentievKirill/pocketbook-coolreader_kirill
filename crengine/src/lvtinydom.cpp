@@ -240,6 +240,7 @@ enum CacheFileBlockType {
 };
 
 
+#include <algorithm>
 #include <vector>
 #include <stdlib.h>
 #include <string.h>
@@ -5205,6 +5206,91 @@ bool ldomDocument::parseStyleSheet(lString32 cssFile)
     return parser.Parse(cssFile);
 }
 
+void ldomDocument::invalidateChapterPaintIndex(ldomNode *changed)
+{
+    if (_indexedChapterBody && (!changed || changed == _indexedChapterBody ||
+                               changed->getParentNode() == _indexedChapterBody)) {
+        _indexedChapterBody = nullptr;
+        _chapterPaintGroups.clear();
+    }
+}
+
+void ldomDocument::indexChapterPaintGroups(ldomNode *body)
+{
+    _indexedChapterBody = body;
+    if (getProps()->getIntDef(DOC_PROP_FILE_FORMAT_ID, doc_format_none) != doc_format_epub)
+        return;
+
+    const int count = body->getChildCount();
+    _chapterPaintGroups.reserve(count);
+    bool inGroup = false;
+    lInt64 groupTop = 0, groupBottom = 0, previousBottom = 0;
+    for (int i = 0; i < count; ++i) {
+        ldomNode *child = body->getChildNode(i);
+        if (!child || !child->isElement() || child->getNodeId() != el_DocFragment) {
+            _chapterPaintGroups.clear();
+            return;
+        }
+        // Table rows can paint outside the viewport even when their box is
+        // offscreen. Require the merged EPUB spine's fragment-only body.
+        const auto method = child->getRendMethod();
+        if (method >= erm_table_row_group && method <= erm_table_row) {
+            _chapterPaintGroups.clear();
+            return;
+        }
+        RenderRectAccessor rect(child);
+        const lInt64 top = lInt64(rect.getY()) - rect.getTopOverflow();
+        const lInt64 boxBottom = lInt64(rect.getY()) + rect.getHeight();
+        const int overflow = rect.getBottomOverflow();
+        const lInt64 bottom = boxBottom + overflow;
+        if (inGroup) {
+            groupTop = std::min(groupTop, top);
+            groupBottom = std::max(groupBottom, bottom);
+        } else {
+            groupTop = top;
+            groupBottom = bottom;
+        }
+        // Mirror DrawDocument's two-pass float-overflow grouping. Offscreen
+        // members can determine whether a visible sibling is drawn in two passes.
+        inGroup = overflow != 0 || (inGroup && boxBottom < previousBottom);
+        previousBottom = bottom;
+        if (!inGroup || i + 1 == count) {
+            if (!_chapterPaintGroups.empty())
+                groupBottom = std::max(groupBottom, _chapterPaintGroups.back().bottom);
+            _chapterPaintGroups.push_back({i + 1, groupTop, groupBottom});
+        }
+    }
+
+    // The prefix maxima and suffix minima remain ordered even when negative
+    // margins or overflow make the individual groups' boxes nonmonotonic.
+    for (size_t i = _chapterPaintGroups.size(); i > 1; --i)
+        _chapterPaintGroups[i - 2].top = std::min(_chapterPaintGroups[i - 2].top,
+                                                 _chapterPaintGroups[i - 1].top);
+}
+
+void ldomDocument::getChapterPaintRange(ldomNode *body, int y, int height, int &first, int &end)
+{
+    if (!_rendered)
+        return;
+    if (_indexedChapterBody != body) {
+        if (body->getParentNode() != getRootNode())
+            return;
+        invalidateChapterPaintIndex();
+        indexChapterPaintGroups(body);
+    }
+    if (_chapterPaintGroups.empty())
+        return;
+
+    const auto begin = _chapterPaintGroups.begin();
+    const auto finish = _chapterPaintGroups.end();
+    const auto from = std::upper_bound(begin, finish, -lInt64(y),
+        [](lInt64 top, const ChapterPaintGroup &group) { return top < group.bottom; });
+    const auto to = std::lower_bound(from, finish, lInt64(height) - y,
+        [](const ChapterPaintGroup &group, lInt64 bottom) { return group.top < bottom; });
+    first = from == begin ? 0 : (from - 1)->endChild;
+    end = to == begin ? 0 : (to - 1)->endChild;
+}
+
 bool ldomDocument::render( LVRendPageList * pages, LVDocViewCallback * callback, int width, int dy,
                            bool showCover, int y0, font_ref_t def_font, int def_interline_space,
                            CRPropRef props, int usable_left_overflow, int usable_right_overflow )
@@ -5231,6 +5317,7 @@ bool ldomDocument::render( LVRendPageList * pages, LVDocViewCallback * callback,
 
     bool was_just_rendered_from_cache = _just_rendered_from_cache; // cleared by checkRenderContext()
     if ( !checkRenderContext() ) {
+        invalidateChapterPaintIndex();
         if ( _nodeDisplayStyleHashInitial == NODE_DISPLAY_STYLE_HASH_UNINITIALIZED ) { // happen when just loaded
             // For knowing/debugging cases when node styles set up during loading
             // is invalid (should happen now only when EPUB has embedded fonts
@@ -5292,6 +5379,7 @@ bool ldomDocument::render( LVRendPageList * pages, LVDocViewCallback * callback,
         _rendered = false;
     }
     if ( !_rendered ) {
+        invalidateChapterPaintIndex();
         if ( callback ) {
             callback->OnFormatStart();
         }
@@ -15144,6 +15232,7 @@ void ldomDocument::clear()
 {
     clearDecodedBinarySizes();
 #if BUILD_LITE!=1
+    invalidateChapterPaintIndex();
     clearRendBlockCache();
     resetNodeNumberingProps();
     _rendered = false;
@@ -15189,6 +15278,7 @@ bool ldomDocument::openFromCache( CacheLoadingCallback * formatCallback, LVDocVi
 /// load document cache file content, @see saveChanges()
 bool ldomDocument::loadCacheFileContent(CacheLoadingCallback * formatCallback, LVDocViewCallback * progressCallback)
 {
+    invalidateChapterPaintIndex();
     clearDecodedBinarySizes();
     CRLog::trace("ldomDocument::loadCacheFileContent()");
     {
@@ -16678,6 +16768,9 @@ void ldomNode::destroy()
     if ( isNull() )
         return;
     invalidateDecodedBinarySize();
+#if BUILD_LITE!=1
+    getDocument()->invalidateChapterPaintIndex(this);
+#endif
     //CRLog::trace("ldomNode::destroy(%d) type=%d", this->_handle._dataIndex, TNTYPE);
     switch ( TNTYPE ) {
     case NT_TEXT:
@@ -17299,6 +17392,9 @@ lUInt16 ldomNode::getNodeNsId() const
 void ldomNode::setNodeId( lUInt16 id )
 {
     ASSERT_NODE_NOT_NULL;
+#if BUILD_LITE!=1
+    getDocument()->invalidateChapterPaintIndex(this);
+#endif
     if ( !isElement() )
         return;
     invalidateDecodedBinarySize();
@@ -17578,6 +17674,7 @@ void ldomNode::setRenderData( lvdomElementFormatRec & newData)
     ASSERT_NODE_NOT_NULL;
     if ( !isElement() )
         return;
+    getDocument()->invalidateChapterPaintIndex(this);
     getDocument()->_rectStorage.setRendRectData(_handle._dataIndex, &newData);
 }
 
@@ -17587,6 +17684,7 @@ void ldomNode::clearRenderData()
     ASSERT_NODE_NOT_NULL;
     if ( !isElement() )
         return;
+    getDocument()->invalidateChapterPaintIndex(this);
     lvdomElementFormatRec rec;
     getDocument()->_rectStorage.setRendRectData(_handle._dataIndex, &rec);
 }
@@ -17596,6 +17694,7 @@ void ldomNode::clearRenderDataRecursive()
     ASSERT_NODE_NOT_NULL;
     if ( !isElement() )
         return;
+    getDocument()->invalidateChapterPaintIndex(this);
     lvdomElementFormatRec rec;
     getDocument()->_rectStorage.setRendRectData(_handle._dataIndex, &rec);
     int cnt = getChildCount();
@@ -18061,6 +18160,7 @@ void ldomNode::setRendMethod( lvdom_element_render_method method )
     ASSERT_NODE_NOT_NULL;
     if ( isElement() ) {
 #if BUILD_LITE!=1
+        getDocument()->invalidateChapterPaintIndex(this);
         if ( !isPersistent() ) {
 #endif
             NPELEM->_rendMethod = method;
@@ -18665,6 +18765,9 @@ void ldomNode::addChild( lInt32 childNodeIndex )
     if ( !isElement() )
         return;
     invalidateDecodedBinarySize();
+#if BUILD_LITE!=1
+    getDocument()->invalidateChapterPaintIndex(this);
+#endif
     if ( isPersistent() )
         modify(); // convert to mutable element
     tinyElement * me = NPELEM;
@@ -18675,6 +18778,9 @@ void ldomNode::addChild( lInt32 childNodeIndex )
 void ldomNode::moveItemsTo( ldomNode * destination, int startChildIndex, int endChildIndex )
 {
     ASSERT_NODE_NOT_NULL;
+#if BUILD_LITE!=1
+    getDocument()->invalidateChapterPaintIndex();
+#endif
     if ( !isElement() )
         return;
     invalidateDecodedBinarySize();
@@ -18760,6 +18866,9 @@ ldomNode * ldomNode::insertChildElement( lUInt32 index, lUInt16 nsid, lUInt16 id
     ASSERT_NODE_NOT_NULL;
     if  ( isElement() ) {
         invalidateDecodedBinarySize();
+#if BUILD_LITE!=1
+        getDocument()->invalidateChapterPaintIndex(this);
+#endif
         if ( isPersistent() )
             modify();
         tinyElement * me = NPELEM;
@@ -18779,6 +18888,9 @@ ldomNode * ldomNode::insertChildElement( lUInt16 id )
     ASSERT_NODE_NOT_NULL;
     if  ( isElement() ) {
         invalidateDecodedBinarySize();
+#if BUILD_LITE!=1
+        getDocument()->invalidateChapterPaintIndex(this);
+#endif
         if ( isPersistent() )
             modify();
         ldomNode * node = getDocument()->allocTinyElement( this, LXML_NS_NONE, id );
@@ -18795,6 +18907,9 @@ ldomNode * ldomNode::insertChildText( lUInt32 index, const lString32 & value )
     ASSERT_NODE_NOT_NULL;
     if  ( isElement() ) {
         invalidateDecodedBinarySize();
+#if BUILD_LITE!=1
+        getDocument()->invalidateChapterPaintIndex(this);
+#endif
         if ( isPersistent() )
             modify();
         tinyElement * me = NPELEM;
@@ -18823,6 +18938,9 @@ ldomNode * ldomNode::insertChildText( const lString32 & value )
     ASSERT_NODE_NOT_NULL;
     if  ( isElement() ) {
         invalidateDecodedBinarySize();
+#if BUILD_LITE!=1
+        getDocument()->invalidateChapterPaintIndex(this);
+#endif
         if ( isPersistent() )
             modify();
         tinyElement * me = NPELEM;
@@ -18848,6 +18966,9 @@ ldomNode * ldomNode::insertChildText(const lString8 & s8, bool before_last_child
     ASSERT_NODE_NOT_NULL;
     if  ( isElement() ) {
         invalidateDecodedBinarySize();
+#if BUILD_LITE!=1
+        getDocument()->invalidateChapterPaintIndex(this);
+#endif
         if ( isPersistent() )
             modify();
         tinyElement * me = NPELEM;
@@ -18872,6 +18993,9 @@ ldomNode * ldomNode::insertChildText(const lString8 & s8, bool before_last_child
 ldomNode * ldomNode::removeChild( lUInt32 index )
 {
     ASSERT_NODE_NOT_NULL;
+#if BUILD_LITE!=1
+    getDocument()->invalidateChapterPaintIndex(this);
+#endif
     if  ( isElement() ) {
         invalidateDecodedBinarySize();
         if ( isPersistent() )

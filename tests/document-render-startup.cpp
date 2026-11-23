@@ -297,6 +297,33 @@ static int testRendering(const char *defaultsFile, const char *epubFile, const c
     LVTocItem *toc = epub.getToc();
     CHECK(toc->getChildCount() == 1 && toc->getChild(0)->getName() == U"Chapter");
     puts("PASS: EPUB spine order, first duplicate ID, skipped entries, nonlinear appendix and NCX lookup");
+
+    ldomNode *body = first->getParentNode();
+    CHECK(body == second->getParentNode() && body->getChildCount() == 2);
+    auto setBounds = [](ldomNode *node, int y, int topOverflow, int bottomOverflow) {
+        RenderRectAccessor rect(node);
+        rect.setY(y);
+        rect.setHeight(40);
+        rect.setTopOverflow(topOverflow);
+        rect.setBottomOverflow(bottomOverflow);
+    };
+    setBounds(first, 100, 0, 0);
+    setBounds(second, 200, 0, 0);
+    auto paintRangeIs = [&](int y, int expectedFirst, int expectedEnd) {
+        int from = 0, to = 2;
+        doc->getChapterPaintRange(body, -y, 10, from, to);
+        return from == expectedFirst && to == expectedEnd;
+    };
+    CHECK(paintRangeIs(210, 1, 2));
+    CHECK(paintRangeIs(140, 1, 1)); // A fragment ending at the viewport start is offscreen.
+    setBounds(first, 100, 0, 100);
+    CHECK(paintRangeIs(210, 0, 2)); // Keep the whole two-pass group.
+    setBounds(first, 100, 0, 0);
+    setBounds(second, 200, 150, 0);
+    CHECK(paintRangeIs(160, 1, 2)); // A later fragment can overflow upward.
+    second->setRendMethod(erm_table_row);
+    CHECK(paintRangeIs(300, 0, 2)); // Preserve the legacy table-row exceptions.
+    puts("PASS: EPUB paint ranges, overflow groups, render-rectangle changes and table fallback");
     return 0;
 }
 int main(int argc, char **argv) {

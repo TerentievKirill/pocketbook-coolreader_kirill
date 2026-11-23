@@ -67,6 +67,7 @@
 #include "serialbuf.h"
 #include "lvstring32hashedcollection.h"
 #include "lvdocviewcallback.h"
+#include <vector>
 
 #if MATHML_SUPPORT==1
 #include "mathml.h"
@@ -2446,6 +2447,16 @@ private:
     LVHashTable<lUInt32, int> _listMarkerWidths{100};
     LVHashTable<lUInt32, lInt64> _listOrdinals{16};
     int measureListMarkers(ldomNode *parent);
+
+    struct ChapterPaintGroup {
+        int endChild;
+        lInt64 top;
+        lInt64 bottom;
+    };
+    ldomNode *_indexedChapterBody = nullptr;
+    std::vector<ChapterPaintGroup> _chapterPaintGroups;
+    void invalidateChapterPaintIndex(ldomNode *changed = nullptr);
+    void indexChapterPaintGroups(ldomNode *body);
 #endif
 
     LVEmbeddedFontList _fontList;
@@ -2482,6 +2493,7 @@ public:
     }
 
     void resetNodeNumberingProps() override;
+    void getChapterPaintRange(ldomNode *body, int y, int height, int &first, int &end);
 #endif
 
 #if BUILD_LITE!=1
