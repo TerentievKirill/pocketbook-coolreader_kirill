@@ -5870,11 +5870,42 @@ static lString32 getSectionHeader( ldomNode * section )
     return header;
 }
 
+lString32 ldomElementWriter::getSectionPathSegment()
+{
+    ldomNode *parent = _parent->_element;
+    if (_element->getParentNode() == parent) {
+        int preceding = _parent->_sectionsBeforeLastSection;
+        const int count = parent->getChildCount();
+        // Revisit the last section's slot: closing it may have replaced it
+        // with a float or inline box before we reach the next section.
+        for (int i = _parent->_lastSectionChild; i < count; ++i) {
+            ldomNode *child = parent->getChildNode(i);
+            if (child == _element) {
+                _parent->_lastSectionChild = i;
+                _parent->_sectionsBeforeLastSection = preceding;
+                return _element->getNodeName() + "[" + fmt::decimal(preceding + 1) + "]";
+            }
+            if (child->isElement() && child->getNodeId() == el_section)
+                ++preceding;
+        }
+    }
+
+    // Resume from the beginning if the section moved or was inserted out of order.
+    _parent->_lastSectionChild = 0;
+    _parent->_sectionsBeforeLastSection = 0;
+    return _element->getXPathSegment();
+}
+
 lString32 ldomElementWriter::getPath()
 {
     if ( !_path.empty() || _element->isRoot() )
         return _path;
-    _path = _parent->getPath() + "/" + _element->getXPathSegment();
+    const bool fb2Section = _element->getNodeId() == el_section
+#if MATHML_SUPPORT==1
+                            && !_insideMathML
+#endif
+                            && _document->getProps()->getIntDef(DOC_PROP_FILE_FORMAT_ID, doc_format_none) == doc_format_fb2;
+    _path = _parent->getPath() + "/" + (fb2Section ? getSectionPathSegment() : _element->getXPathSegment());
     return _path;
 }
 

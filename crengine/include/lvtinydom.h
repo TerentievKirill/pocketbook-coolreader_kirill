@@ -2653,6 +2653,8 @@ class ldomElementWriter
     ldomNode * _element;
     LVTocItem * _tocItem;
     lString32 _path;
+    int _lastSectionChild = 0;
+    int _sectionsBeforeLastSection = 0;
     const css_elem_def_props_t * _typeDef;
     bool _allowText;
     bool _isBlock;
@@ -2673,6 +2675,7 @@ class ldomElementWriter
         return _element;
     }
     lString32 getPath();
+    lString32 getSectionPathSegment();
     void onText( const lChar32 * text, int len, lUInt32 flags, bool insert_before_last_child=false );
     void addAttribute( lUInt16 nsid, lUInt16 id, const lChar32 * value );
     //lxmlElementWriter * pop( lUInt16 id );

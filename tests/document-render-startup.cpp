@@ -372,6 +372,46 @@ static int testRendering(const char *defaultsFile, const char *epubFile, const c
         CHECK(!notes.getPageImage(0).isNull());
     }
     puts("PASS: FB2 notes/comments appear in page footers; disabling footnotes is respected");
+    {
+        LVDocView sections(8);
+        sections.setDefaultFontFace(lString8("DejaVu Sans"));
+        sections.Resize(1072, 1448);
+        sections.setStyleSheet(UnicodeToUtf8(LVReadTextFile(lString32(fb2Css))));
+        sections.propsApply(LVClonePropsContainer(preferences));
+        const lString8 fb2(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+            "<FictionBook xmlns=\"http://www.gribuser.ru/xml/fictionbook/2.0\">"
+            "<stylesheet type=\"text/css\">section.floating {float: left; width: 8em}</stylesheet>"
+            "<description><title-info><book-title>Sections</book-title></title-info></description>"
+            "<body><title><p>Book title</p></title>\n"
+            "<section id=\"first\"><title><p>First</p></title><p>Text</p></section>\n"
+            "<section id=\"parent\"><title><p>Parent</p></title>\n"
+            "<section id=\"child1\"><title><p>Child 1</p></title><p>Text</p></section>\n"
+            "<section id=\"child2\"><p>Untitled child</p></section></section>\n"
+            "<section id=\"float\" class=\"floating\"><title><p>Float</p></title><p>Text</p></section>\n"
+            "<section id=\"after\"><title><p>After the float</p></title><p>Text</p></section></body>"
+            "<body name=\"notes\"><title><p>Notes</p></title>"
+            "<section id=\"note\"><p>Note</p></section></body></FictionBook>");
+        CHECK(sections.LoadDocument(LVCreateStringStream(fb2), U"sections.fb2"));
+        CHECK(sections.getDocFormat() == doc_format_fb2);
+        ldomDocument *book = sections.getDocument();
+        LVTocItem *toc = book->getToc();
+        const lString32 base(U"/FictionBook[1]/body[1]");
+        CHECK(toc->getChildCount() == 5);
+        CHECK(toc->getChild(0)->getPath() == base + U"/section[1]");
+        LVTocItem *parent = toc->getChild(1);
+        CHECK(parent->getPath() == base + U"/section[2]" && parent->getChildCount() == 2);
+        CHECK(parent->getChild(0)->getPath() == parent->getPath() + U"/section[1]");
+        CHECK(parent->getChild(1)->getPath() == parent->getPath() + U"/section[2]");
+        CHECK(parent->getChild(1)->getName().empty());
+        CHECK(toc->getChild(2)->getPath() == base + U"/section[3]");
+        ldomNode *floatSection = book->getElementById(U"float");
+        CHECK(floatSection && floatSection->getParentNode()->getNodeId() == el_floatBox);
+        CHECK(toc->getChild(3)->getPath() == base + U"/section[3]");
+        CHECK(toc->getChild(3)->getXPointer().getNode() == book->getElementById(U"after"));
+        CHECK(toc->getChild(4)->getPath() == U"/FictionBook[1]/body[2]");
+    }
+    puts("PASS: FB2 TOC paths preserve mixed, nested and float-wrapped sections and the notes body");
     LVDocView epub(8);
     epub.setDefaultFontFace(lString8("DejaVu Sans"));
     epub.Resize(1072, 1448);
