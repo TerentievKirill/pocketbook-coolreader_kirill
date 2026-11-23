@@ -8566,34 +8566,6 @@ ldomDocumentWriter::ldomDocumentWriter(ldomDocument * document, bool headerOnly)
 }
 
 
-bool FindNextNode( ldomNode * & node, ldomNode * root )
-{
-    if ( node->getChildCount()>0 ) {
-        // first child
-        node = node->getChildNode(0);
-        return true;
-    }
-    if (node->isRoot() || node == root )
-        return false; // root node reached
-    int index = node->getNodeIndex();
-    ldomNode * parent = node->getParentNode();
-    while (parent)
-    {
-        if ( index < (int)parent->getChildCount()-1 ) {
-            // next sibling
-            node = parent->getChildNode( index + 1 );
-            return true;
-        }
-        if (parent->isRoot() || parent == root )
-            return false; // root node reached
-        // up one level
-        index = parent->getNodeIndex();
-        parent = parent->getParentNode();
-    }
-    //if ( node->getNodeType() == LXML_TEXT_NODE )
-    return false;
-}
-
 // base64 decode table
 static const signed char base64_decode_table[] = {
    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, //0..15
@@ -8610,107 +8582,131 @@ static const signed char base64_decode_table[] = {
 class LVBase64NodeStream : public LVNamedStream
 {
 private:
+    struct TextCursor {
+        ldomNode *parent;
+        int nextChild;
+    };
+
     ldomNode *  m_elem;
-    ldomNode *  m_curr_node;
-    lString32   m_curr_text;
+    TextCursor m_cursor;
+    std::vector<TextCursor> m_ancestors;
+    lString8    m_curr_text;
+    lString32   m_wide_text;
     int         m_text_pos;
     lvsize_t    m_size;
     lvpos_t     m_pos;
 
     int         m_iteration;
     lUInt32     m_value;
+    bool        m_padding;
 
     lUInt8      m_bytes[BASE64_BUF_SIZE];
     int         m_bytes_count;
     int         m_bytes_pos;
 
-    int readNextBytes()
+    template <typename Char>
+    bool decodeChunk(const Char *text, int length)
     {
-        int bytesRead = 0;
-        bool flgEof = false;
-        while ( bytesRead == 0 && !flgEof )
-        {
-            while ( m_text_pos >= (int)m_curr_text.length() )
-            {
-                if ( !findNextTextNode() )
-                    return bytesRead;
+        while (m_text_pos < length && m_bytes_count < BASE64_BUF_SIZE - 3) {
+            const lUInt32 ch = text[m_text_pos];
+            if (ch >= 128) {
+                if (sizeof(Char) == 1)
+                    return false;
+                ++m_text_pos;
+                continue;
             }
-            int len = m_curr_text.length();
-            const lChar32 * txt = m_curr_text.c_str();
-            for ( ; m_text_pos<len && m_bytes_count < BASE64_BUF_SIZE - 3; m_text_pos++ )
-            {
-                lChar32 ch = txt[ m_text_pos ];
-                if ( ch < 128 )
-                {
-                    if ( ch == '=' )
-                    {
-                        // end of stream
-                        if ( m_iteration == 2 )
-                        {
-                            m_bytes[m_bytes_count++] = (lUInt8)((m_value>>4) & 0xFF);
-                            bytesRead++;
-                        }
-                        else if ( m_iteration == 3 )
-                        {
-                            m_bytes[m_bytes_count++] = (lUInt8)((m_value>>10) & 0xFF);
-                            m_bytes[m_bytes_count++] = (lUInt8)((m_value>>2) & 0xFF);
-                            bytesRead += 2;
-                        }
-                        // stop!!!
-                        //m_text_pos--;
-                        m_iteration = 0;
-                        flgEof = true;
-                        break;
-                    }
-                    else
-                    {
-                        int k = base64_decode_table[ch];
-                        if ( !(k & 0x80) ) {
-                            // next base-64 digit
-                            m_value = (m_value << 6) | (k);
-                            m_iteration++;
-                            if (m_iteration==4)
-                            {
-                                //
-                                m_bytes[m_bytes_count++] = (lUInt8)((m_value>>16) & 0xFF);
-                                m_bytes[m_bytes_count++] = (lUInt8)((m_value>>8) & 0xFF);
-                                m_bytes[m_bytes_count++] = (lUInt8)((m_value>>0) & 0xFF);
-                                m_iteration = 0;
-                                m_value = 0;
-                                bytesRead+=3;
-                            }
-                        } else {
-                            //m_text_pos++;
-                        }
-                    }
+            if (sizeof(Char) == 1 && ch == 0) {
+                // Utf8ToUnicode() used to stop at an embedded NUL.
+                m_text_pos = length;
+                break;
+            }
+            ++m_text_pos;
+            if (ch == '=') {
+                if (m_iteration == 2)
+                    m_bytes[m_bytes_count++] = static_cast<lUInt8>(m_value >> 4);
+                else if (m_iteration == 3) {
+                    m_bytes[m_bytes_count++] = static_cast<lUInt8>(m_value >> 10);
+                    m_bytes[m_bytes_count++] = static_cast<lUInt8>(m_value >> 2);
                 }
+                m_padding = true;
+                break;
+            }
+            const int digit = base64_decode_table[ch];
+            if (digit < 0)
+                continue;
+            m_value = (m_value << 6) | digit;
+            if (++m_iteration == 4) {
+                m_bytes[m_bytes_count++] = static_cast<lUInt8>(m_value >> 16);
+                m_bytes[m_bytes_count++] = static_cast<lUInt8>(m_value >> 8);
+                m_bytes[m_bytes_count++] = static_cast<lUInt8>(m_value);
+                m_iteration = 0;
+                m_value = 0;
             }
         }
-        return bytesRead;
+        return true;
+    }
+
+    int readNextBytes()
+    {
+        while (!m_bytes_count && !m_padding) {
+            while (m_text_pos >= (m_wide_text.empty() ? m_curr_text.length() : m_wide_text.length())) {
+                if (!findNextTextNode())
+                    return 0;
+            }
+            if (m_wide_text.empty()) {
+                if (decodeChunk(reinterpret_cast<const lUInt8 *>(m_curr_text.c_str()), m_curr_text.length()))
+                    continue;
+                // Fall back at the first high byte. The ASCII prefix already
+                // consumed has the same offsets in both representations.
+                m_wide_text = Utf8ToUnicode(m_curr_text);
+                m_curr_text.clear();
+            }
+            decodeChunk(m_wide_text.c_str(), m_wide_text.length());
+        }
+        return m_bytes_count;
     }
 
     bool findNextTextNode()
     {
-        while ( FindNextNode( m_curr_node, m_elem ) ) {
-            if ( m_curr_node->isText() ) {
-                m_curr_text = m_curr_node->getText();
+        for (;;) {
+            if (m_cursor.nextChild >= m_cursor.parent->getChildCount()) {
+                if (m_ancestors.empty())
+                    return false;
+                m_cursor = m_ancestors.back();
+                m_ancestors.pop_back();
+                continue;
+            }
+            ldomNode *child = m_cursor.parent->getChildNode(m_cursor.nextChild++);
+            if (child->isText()) {
+                m_curr_text = child->getText8();
+                m_wide_text.clear();
                 m_text_pos = 0;
                 return true;
             }
+            // A nested element is unusual in a binary. Keep its place in
+            // document order, without allocating a stack for text-only nodes.
+            if (child->getChildCount()) {
+                m_ancestors.push_back(m_cursor);
+                m_cursor = {child, 0};
+            }
         }
-        return false;
     }
 
     int bytesAvailable() { return m_bytes_count - m_bytes_pos; }
 
     bool rewind()
     {
-        m_curr_node = m_elem;
+        m_cursor = {m_elem, 0};
+        m_ancestors.clear();
+        m_curr_text.clear();
+        m_wide_text.clear();
+        m_text_pos = 0;
         m_pos = 0;
         m_bytes_count = 0;
         m_bytes_pos = 0;
         m_iteration = 0;
         m_value = 0;
+        m_padding = false;
         return findNextTextNode();
     }
 
@@ -8726,11 +8722,10 @@ private:
                 if ( bytesRead == 0 )
                     return false;
             }
-            int diff = (int) (m_bytes_count - m_bytes_pos);
-            if (diff > (int)count)
-                diff = (int)count;
-            m_pos += diff;
-            count -= diff;
+            const lvsize_t skipped = std::min<lvsize_t>(count, bytesAvailable());
+            m_bytes_pos += skipped;
+            m_pos += skipped;
+            count -= skipped;
         }
         return true;
     }
@@ -8738,7 +8733,7 @@ private:
 public:
     virtual ~LVBase64NodeStream() { }
     LVBase64NodeStream( ldomNode * element, lvsize_t decodedSize )
-        : m_elem(element), m_curr_node(element), m_text_pos(0), m_size(decodedSize), m_pos(0)
+        : m_elem(element), m_size(decodedSize)
     {
         rewind();
         if (decodedSize)
@@ -8804,7 +8799,8 @@ public:
             }
             else
             {
-                skip( npos - currpos );
+                if (!skip(npos - currpos))
+                    return LVERR_FAIL;
             }
         }
         if (newPos)
@@ -8834,13 +8830,13 @@ public:
                     break;
                 }
             }
-            if (sz>(int)size)
-                sz = (int)size;
-            for (int i=0; i<sz; i++)
-                *out++ = m_bytes[m_bytes_pos++];
-            size -= sz;
-            bytesRead += sz;
-            m_pos += sz;
+            const lvsize_t copied = std::min<lvsize_t>(size, sz);
+            memcpy(out, m_bytes + m_bytes_pos, copied);
+            out += copied;
+            m_bytes_pos += copied;
+            size -= copied;
+            bytesRead += copied;
+            m_pos += copied;
         }
 
         if (pBytesRead)

@@ -81,6 +81,47 @@ static int checkBinaryStreams()
     return 0;
 }
 
+static int checkChunkedBinaryStreams()
+{
+    ldomDocument document;
+    auto *root = document.getRootNode();
+    auto *binary = root->insertChildElement(el_binary);
+    // Split quartets across ordinary and nested text nodes and fill several
+    // decoder buffers before reaching padding followed by ignored text.
+    for (int i = 0; i < 112; ++i) {
+        binary->insertChildText(lString8(" Q"));
+        auto *parent = i == 40 ? binary->insertChildElement(el_section) : binary;
+        parent->insertChildText(lString8("U\nJ"));
+        binary->insertChildText(lString8("D"));
+    }
+    binary->insertChildText(lString8("W"));
+    binary->insertChildText(lString8("g=\n=QUJD"));
+    auto stream = binary->createBase64Stream();
+    CHECK(!stream.isNull() && stream->GetSize() == 337);
+    char buffer[5];
+    lvsize_t read = 0;
+    lvpos_t pos = 0;
+    CHECK(stream->Seek(125, LVSEEK_SET, &pos) == LVERR_OK && pos == 125 && stream->GetPos() == pos);
+    CHECK(stream->Read(buffer, sizeof(buffer), &read) == LVERR_OK && read == sizeof(buffer));
+    CHECK(memcmp(buffer, "CABCA", sizeof(buffer)) == 0);
+    CHECK(stream->Seek(-6, LVSEEK_CUR, &pos) == LVERR_OK && pos == 124);
+    CHECK(stream->Read(buffer, 3, &read) == LVERR_OK && read == 3 && memcmp(buffer, "BCA", 3) == 0);
+    CHECK(stream->Seek(-2, LVSEEK_END, &pos) == LVERR_OK && pos == 335);
+    CHECK(stream->Read(buffer, sizeof(buffer), &read) == LVERR_OK && read == 2);
+    CHECK(memcmp(buffer, "CZ", 2) == 0 && stream->Eof());
+    CHECK(stream->Seek(1, LVSEEK_END, nullptr) == LVERR_FAIL);
+
+    auto *legacy = root->insertChildElement(el_binary);
+    // The old UTF-8 conversion tolerated an overlong 'W' and stopped at NUL
+    // within each chunk. Keep that behavior for raw or older stored text.
+    const char raw[] = {'Y', char(0xc1), char(0x97), 'J', 'j', 0, 'Q', 'U', 'J', 'D'};
+    legacy->insertChildText(lString8(raw, sizeof(raw)));
+    legacy->insertChildText(lString32(U"ZéGVm"));
+    CHECK(reads(legacy->createBase64Stream(), "abcdef"));
+    CHECK(reads(legacy->createBase64Stream(), "abcdef"));
+    return 0;
+}
+
 static int checkImageMetadata()
 {
     ldomDocument document;
@@ -171,9 +212,9 @@ static int checkDecodedImageBudget()
 int main()
 {
     InitFontManager(lString8::empty_str);
-    const int result = checkBinaryStreams() || checkImageMetadata() || checkDecodedImageBudget();
+    const int result = checkBinaryStreams() || checkChunkedBinaryStreams() || checkImageMetadata() || checkDecodedImageBudget();
     ShutdownFontManager();
     if (!result)
-        puts("PASS: FB2 binary edits, decoded pixels, LRU eviction, and pinned-image budget");
+        puts("PASS: FB2 binary edits, chunked decoding and seeks, decoded pixels, LRU eviction, and pinned-image budget");
     return result;
 }
