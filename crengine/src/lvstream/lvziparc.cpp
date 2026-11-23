@@ -39,41 +39,49 @@ LVZipArc::~LVZipArc()
 {
 }
 
-LVStreamRef LVZipArc::OpenStream(const char32_t *fname, lvopen_mode_t)
+LVCommonContainerItemInfo *LVZipArc::findMember(const lChar32 *name)
 {
-    if ( fname[0]=='/' )
-        fname++;
-    int found_index = -1;
-    for (int i=0; i<m_list.length(); i++) {
-        if ( m_list[i]->GetName() != NULL && !lStr_cmp( fname, m_list[i]->GetName() ) ) {
-            if ( m_list[i]->IsContainer() ) {
-                // found directory with same name!!!
-                return LVStreamRef();
-            }
-            found_index = i;
-            break;
+    const int count = m_list.length();
+    // Small archives and opens that only touch a few early entries are cheap
+    // to scan. Build the index after enough comparisons to amortize its cost.
+    if (!m_memberIndex && count >= 128 && m_scannedMembers >= 4 * lUInt64(count)) {
+        m_memberIndex.reset(new LVHashTable<MemberName, LVCommonContainerItemInfo *>(count));
+        // Earlier entries replace later duplicates, including directories.
+        for (int i = count - 1; i >= 0; --i) {
+            auto *item = m_list[i];
+            MemberName key{item->GetName()};
+            if (key.name)
+                m_memberIndex->set(key, item);
         }
     }
-    if (found_index<0)
-        return LVStreamRef(); // not found
-    // make filename
-    lString32 fn = fname;
-    LVStreamRef strm = m_stream; // fix strange arm-linux-g++ bug
-    LVStreamRef stream(
-                LVZipDecodeStream::Create(
-                    strm,
-                    m_list[found_index]->GetSrcPos(),
-                    fn,
-                    m_list[found_index]->GetSrcSize(),
-                    m_list[found_index]->GetSize() )
-                );
-    if (!stream.isNull()) {
-        stream->SetName(m_list[found_index]->GetName());
-        // Use buffering?
-        //return stream;
-        return stream;
-        //return LVCreateBufferedStream( stream, ZIP_STREAM_BUFFER_SIZE );
+    if (m_memberIndex)
+        return m_memberIndex->get(MemberName{name});
+
+    int i = 0;
+    for (; i < count; ++i) {
+        const lChar32 *entryName = m_list[i]->GetName();
+        if (entryName && !lStr_cmp(name, entryName)) {
+            m_scannedMembers += i + 1;
+            return m_list[i];
+        }
     }
+    m_scannedMembers += count;
+    return NULL;
+}
+
+LVStreamRef LVZipArc::OpenStream(const char32_t *fname, lvopen_mode_t)
+{
+    if (fname[0] == '/')
+        ++fname;
+    auto *item = findMember(fname);
+    if (!item || item->IsContainer())
+        return LVStreamRef();
+
+    LVStreamRef strm = m_stream; // fix strange arm-linux-g++ bug
+    LVStreamRef stream(LVZipDecodeStream::Create(
+        strm, item->GetSrcPos(), lString32(fname), item->GetSrcSize(), item->GetSize()));
+    if (!stream.isNull())
+        stream->SetName(item->GetName());
     return stream;
 }
 
@@ -82,6 +90,8 @@ int LVZipArc::ReadContents() {
     //bool arcComment = false;
     bool truncated = false;
 
+    m_memberIndex.reset();
+    m_scannedMembers = 0;
     m_list.clear();
     if (!m_stream || m_stream->Seek(0, LVSEEK_SET, NULL) != LVERR_OK)
         return -1;

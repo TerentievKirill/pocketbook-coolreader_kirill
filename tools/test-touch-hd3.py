@@ -2,7 +2,7 @@
 """Run ARM regressions using the configured build and extracted firmware runtime."""
 from pathlib import Path
 import argparse, datetime, io, json, os, re, shlex, subprocess, zipfile
-import struct, zlib, shutil, sys
+import struct, zlib, shutil, sys, warnings
 import http.server, ssl, threading
 from build_metadata import sha256, source_metadata
 from targets import DEFAULT_TARGET, load_target, firmware_path, tool, target_evidence, verify_build_target
@@ -65,6 +65,21 @@ with zipfile.ZipFile(legacy, 'w') as z:
 # Replace a UTF-8 character with an invalid leading byte, preserving header lengths.
 bad = (out / 'utf8-stored.zip').read_bytes().replace('Т'.encode(), b'\xc0\x80')
 (out / 'invalid-utf8.zip').write_bytes(bad)
+indexed = io.BytesIO()
+with zipfile.ZipFile(indexed, 'w') as archive:
+    for i in range(150):
+        archive.writestr(f'padding/{i:03d}.txt', '')
+    archive.writestr('Тест/章节-é.xhtml', b'first', zipfile.ZIP_DEFLATED)
+    archive.writestr('Тест/章节-É.xhtml', b'case')
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', message='Duplicate name:', category=UserWarning)
+        archive.writestr('Тест/章节-é.xhtml', b'second')
+    # Local-header recovery stops at the last entry when it reaches EOF.
+    archive.writestr('tail.txt', b'tail')
+with zipfile.ZipFile(indexed) as archive:
+    central_directory = archive.start_dir
+(out / 'indexed.zip').write_bytes(indexed.getvalue())
+(out / 'indexed-local-headers.zip').write_bytes(indexed.getvalue()[:central_directory])
 # OTA fixtures cover verified extraction, corruption, traversal and release identity.
 shared_ota = profile['build']['cmake'].get('CR3_SHARED_PACKAGE') == 'ON'
 compatibility = '629 U629.6.11.2020\n632 U632.6.11.2001\n634 U634.6.10.3425\n700 U700.6.10.3209\n743G U743g.6.11.1683\n'

@@ -28,9 +28,21 @@
 #if (USE_ZLIB==1)
 
 #include "lvarccontainerbase.h"
+#include "lvhashtable.h"
+#include <memory>
 
 class LVZipArc : public LVArcContainerBase
 {
+    struct MemberName {
+        const lChar32 *name;
+        bool operator==(const MemberName &other) const { return !lStr_cmp(name, other.name); }
+        friend lUInt32 getHash(const MemberName &key) { return calcStringHash(key.name); }
+    };
+    // Keys borrow their filenames from m_list for the lifetime of the index.
+    std::unique_ptr<LVHashTable<MemberName, LVCommonContainerItemInfo *>> m_memberIndex;
+    lUInt64 m_scannedMembers = 0;
+
+    LVCommonContainerItemInfo *findMember(const lChar32 *name);
 protected:
     // whether the alternative "truncated" method was used, or is to be used
     bool m_alt_reading_method = false;
