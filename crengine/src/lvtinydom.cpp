@@ -4031,7 +4031,6 @@ _elementNameTable(MAX_ELEMENT_TYPE_ID)
 , _nextUnknownNsId(UNKNOWN_NAMESPACE_TYPE_ID)
 , _attrValueTable( DOC_STRING_HASH_SIZE )
 ,_idNodeMap(8192)
-,_urlImageMap(1024)
 ,_idAttrId(0)
 ,_nameAttrId(0)
 #if BUILD_LITE!=1
@@ -4183,7 +4182,6 @@ lxmlDocBase::lxmlDocBase( lxmlDocBase & doc )
     //lvdomStyleCache _styleCache;         // Style cache
 ,   _attrValueTable(doc._attrValueTable)
 ,   _idNodeMap(doc._idNodeMap)
-,   _urlImageMap(1024)
 ,   _idAttrId(doc._idAttrId) // Id for "id" attribute name
 //,   _docFlags(doc._docFlags)
 #if BUILD_LITE!=1
@@ -15084,12 +15082,28 @@ int tinyNodeCollection::getPersistenceFlags()
     return flag;
 }
 
+void ldomDocument::setContainer(LVContainerRef cont, bool cacheImageMetadata)
+{
+#if BUILD_LITE!=1
+#if CR_USE_THREADS==1
+    std::lock_guard<std::mutex> lock(_decodedBinarySizeMutex);
+#endif
+    if (_container.get() != cont.get() || _cacheArchiveImageMetadata != cacheImageMetadata)
+        _archiveImageMetadata.clear();
+    _cacheArchiveImageMetadata = cacheImageMetadata;
+#endif
+    _container = cont;
+}
+
 void ldomDocument::clearDecodedBinarySizes()
 {
 #if CR_USE_THREADS==1
     std::lock_guard<std::mutex> lock(_decodedBinarySizeMutex);
 #endif
     _decodedBinarySizes.reset();
+#if BUILD_LITE!=1
+    _archiveImageMetadata.clear();
+#endif
     _hasDecodedBinarySizes.store(false, std::memory_order_relaxed);
 }
 
@@ -15100,7 +15114,6 @@ void ldomDocument::clear()
     clearRendBlockCache();
     resetNodeNumberingProps();
     _rendered = false;
-    _urlImageMap.clear();
     _fontList.clear();
     fontMan->UnregisterDocumentFonts(_docIndex);
 #endif
@@ -18845,19 +18858,19 @@ LVStreamRef ldomNode::createBase64Stream()
 #if CR_USE_THREADS==1
     std::unique_lock<std::mutex> lock(doc->_decodedBinarySizeMutex, std::defer_lock);
 #endif
-    lvsize_t size = 0;
+    ldomDocument::EmbeddedBinaryInfo info;
     bool hasSize = false;
     if (binary) {
 #if CR_USE_THREADS==1
         lock.lock();
 #endif
-        hasSize = doc->_decodedBinarySizes && doc->_decodedBinarySizes->get(getDataIndex(), size);
-        if (hasSize && !size)
+        hasSize = doc->_decodedBinarySizes && doc->_decodedBinarySizes->get(getDataIndex(), info);
+        if (hasSize && !info.size)
             return LVStreamRef();
     }
 
-    LVStream *stream = new LVBase64NodeStream(this, size);
-    size = stream->GetSize();
+    LVStream *stream = new LVBase64NodeStream(this, info.size);
+    const lvsize_t size = stream->GetSize();
     if (binary && !hasSize) {
         // An FB2 binary contains text only. Preserve decoding of nested content
         // without caching it, so edits to deeper descendants need no tracking.
@@ -18870,8 +18883,9 @@ LVStreamRef ldomNode::createBase64Stream()
         }
         if (child == childCount) {
             if (!doc->_decodedBinarySizes)
-                doc->_decodedBinarySizes.reset(new LVHashTable<lUInt32, lvsize_t>(16));
-            doc->_decodedBinarySizes->set(getDataIndex(), size);
+                doc->_decodedBinarySizes.reset(new LVHashTable<lUInt32, ldomDocument::EmbeddedBinaryInfo>(16));
+            info.size = size;
+            doc->_decodedBinarySizes->set(getDataIndex(), info);
             doc->_hasDecodedBinarySizes.store(true, std::memory_order_relaxed);
         }
     }
@@ -18922,10 +18936,7 @@ public:
     virtual int    GetHeight() const { return _dy; }
     virtual bool   Decode( LVImageDecoderCallback * callback )
     {
-        LVImageSourceRef img = _node->getDocument()->getObjectImageSource(_refName);
-        if ( img.isNull() )
-            return false;
-        return img->Decode(callback);
+        return _node->getDocument()->decodeObjectImage(_refName, callback);
     }
     virtual ~NodeImageProxy()
     {
@@ -18991,27 +19002,21 @@ LVStreamRef ldomNode::getObjectImageStream()
 LVImageSourceRef ldomNode::getObjectImageSource()
 {
     lString32 refName = getObjectImageRefName(true);
-    LVImageSourceRef ref;
-    if ( refName.empty() )
-        return ref;
-    ref = getDocument()->getObjectImageSource( refName );
-    if (ref.isNull()) {
-        // try again without percent decoding (for fb3)
+    if (refName.empty())
+        return LVImageSourceRef();
+    ldomDocument *doc = getDocument();
+    LVImageMetadata metadata;
+    if (!doc->getObjectImageMetadata(refName, metadata)) {
+        // FB3 can use a literal percent-encoded filename.
         refName = getObjectImageRefName(false);
-        if ( refName.empty() )
-            return ref;
-        ref = getDocument()->getObjectImageSource( refName );
+        if (refName.empty())
+            return LVImageSourceRef();
+        if (!doc->getObjectImageMetadata(refName, metadata)) {
+            CRLog::error("ObjectImageSource cannot be opened by name %s", LCSTR(refName));
+            return LVImageSourceRef();
+        }
     }
-    if ( !ref.isNull() ) {
-        int dx = ref->GetWidth();
-        int dy = ref->GetHeight();
-        ref = LVImageSourceRef( new NodeImageProxy(this, refName, dx, dy) );
-    } else {
-        CRLog::error("ObjectImageSource cannot be opened by name %s", LCSTR(refName));
-    }
-
-    getDocument()->_urlImageMap.set( refName, ref );
-    return ref;
+    return LVImageSourceRef(new NodeImageProxy(this, refName, metadata.width, metadata.height));
 }
 
 /// register embedded document fonts in font manager, if any exist in document
@@ -19070,6 +19075,87 @@ void ldomDocument::unregisterEmbeddedFonts()
     fontMan->UnregisterDocumentFonts(_docIndex);
 }
 
+ldomNode *ldomDocument::findImageBinary(const lString32 &name)
+{
+    if (name[0] != '#')
+        return NULL;
+    const lUInt32 id = findAttrValueIndex(name.c_str() + 1);
+    return id == (lUInt32)-1 ? NULL : getNodeById(id);
+}
+
+// Called with the image and binary metadata lock held. EPUB resources stay
+// stable within the open archive. Loose files can be replaced while reading.
+bool ldomDocument::syncArchiveImageCache(const lString32 &name)
+{
+    if (!_cacheArchiveImageMetadata || name[0] == '#' ||
+            name.startsWith(U"data:image/") || name.startsWith(BLOB_NAME_PREFIX))
+        return false;
+    const lString32 base = getCodeBase();
+    const lString32 book = getProps()->getStringDef(DOC_PROP_FILE_NAME, "");
+    if (_imageCodeBase != base || _imageBookName != book) {
+        _archiveImageMetadata.clear();
+        _imageCodeBase = base;
+        _imageBookName = book;
+    }
+    return true;
+}
+
+bool ldomDocument::getCachedImageMetadata(const lString32 &name, LVImageMetadata &metadata)
+{
+#if CR_USE_THREADS==1
+    std::lock_guard<std::mutex> lock(_decodedBinarySizeMutex);
+#endif
+    if (ldomNode *binary = findImageBinary(name)) {
+        EmbeddedBinaryInfo info;
+        if (binary->isElement() && binary->getNodeId() == el_binary && _decodedBinarySizes &&
+                _decodedBinarySizes->get(binary->getDataIndex(), info) && info.image.format != LVImageFormat::Unknown) {
+            metadata = info.image;
+            return true;
+        }
+        return false;
+    }
+    return syncArchiveImageCache(name) && _archiveImageMetadata.get(name, metadata);
+}
+
+bool ldomDocument::getObjectImageMetadata(const lString32 &name, LVImageMetadata &metadata)
+{
+    if (getCachedImageMetadata(name, metadata))
+        return true;
+    if (!LVReadImageMetadata(getObjectImageStream(name), metadata))
+        return false;
+#if CR_USE_THREADS==1
+    std::lock_guard<std::mutex> lock(_decodedBinarySizeMutex);
+#endif
+    if (ldomNode *binary = findImageBinary(name)) {
+        EmbeddedBinaryInfo info;
+        // The size cache only includes binaries whose children are all text.
+        if (binary->isElement() && binary->getNodeId() == el_binary && _decodedBinarySizes &&
+                _decodedBinarySizes->get(binary->getDataIndex(), info)) {
+            info.image = metadata;
+            _decodedBinarySizes->set(binary->getDataIndex(), info);
+        }
+    } else if (syncArchiveImageCache(name)) {
+        _archiveImageMetadata.set(name, metadata);
+    }
+    return true;
+}
+
+bool ldomDocument::decodeObjectImage(const lString32 &name, LVImageDecoderCallback *callback)
+{
+    LVStreamRef stream = getObjectImageStream(name);
+    if (stream.isNull())
+        return false;
+    LVImageMetadata metadata;
+    if (!getCachedImageMetadata(name, metadata)) {
+        LVImageSourceRef image = LVCreateStreamImageSource(stream);
+        return !image.isNull() && image->Decode(callback);
+    }
+    if (!callback)
+        return true;
+    LVImageSourceRef image = LVCreateStreamImageDecoder(stream, metadata.format);
+    return !image.isNull() && image->Decode(callback);
+}
+
 /// returns object image stream
 LVStreamRef ldomDocument::getObjectImageStream( lString32 refName )
 {
@@ -19119,11 +19205,7 @@ LVStreamRef ldomDocument::getObjectImageStream( lString32 refName )
         }
         return ref;
     }
-    lUInt32 refValueId = findAttrValueIndex( refName.c_str() + 1 );
-    if ( refValueId == (lUInt32)-1 ) {
-        return ref;
-    }
-    ldomNode * objnode = getNodeById( refValueId );
+    ldomNode *objnode = findImageBinary(refName);
     if ( !objnode || !objnode->isElement())
         return ref;
     ref = objnode->createBase64Stream();

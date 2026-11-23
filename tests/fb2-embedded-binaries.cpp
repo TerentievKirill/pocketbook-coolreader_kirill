@@ -1,5 +1,8 @@
 #include "crengine.h"
 #include "fb2def.h"
+#define XS_IMPLEMENT_SCHEME 1
+#include "fb2def.h"
+#undef XS_IMPLEMENT_SCHEME
 #include "testutil.h"
 #include <cstring>
 
@@ -76,12 +79,41 @@ static int checkBinaryStreams()
     return 0;
 }
 
+static int checkImageMetadata()
+{
+    ldomDocument document;
+    document.setNodeTypes(fb2_elem_table);
+    document.setAttributeTypes(fb2_attr_table);
+    ldomNode *root = document.getRootNode();
+    ldomNode *image = root->insertChildElement(el_image);
+    image->setAttributeValue(LXML_NS_NONE, attr_href, U"#figure");
+    ldomNode *binary = root->insertChildElement(el_binary);
+    binary->setAttributeValue(LXML_NS_NONE, attr_id, U"figure");
+    ldomNode *text = binary->insertChildText(lString32(
+        U"iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR4nGPQiKoAIgAGPQH1LIKyHQAAAABJRU5ErkJggg=="));
+    for (int i = 0; i < 2; ++i) {
+        LVImageSourceRef source = image->getObjectImageSource();
+        CHECK(!source.isNull() && source->GetWidth() == 2 && source->GetHeight() == 1);
+    }
+
+    text->setText(lString32(
+        U"iVBORw0KGgoAAAANSUhEUgAAAAEAAAADCAIAAADdv/LVAAAADklEQVR4nGPQiKpggGIAELAC74YHU7wAAAAASUVORK5CYII="));
+    for (int i = 0; i < 2; ++i) {
+        LVImageSourceRef source = image->getObjectImageSource();
+        CHECK(!source.isNull() && source->GetWidth() == 1 && source->GetHeight() == 3);
+    }
+
+    root->removeChild(1)->destroy();
+    CHECK(image->getObjectImageSource().isNull());
+    return 0;
+}
+
 int main()
 {
     InitFontManager(lString8::empty_str);
-    const int result = checkBinaryStreams();
+    const int result = checkBinaryStreams() || checkImageMetadata();
     ShutdownFontManager();
     if (!result)
-        puts("PASS: FB2 embedded binaries, independent streams, DOM edits, node reuse and document isolation");
+        puts("PASS: FB2 binary streams and image metadata across DOM edits, node reuse and document isolation");
     return result;
 }

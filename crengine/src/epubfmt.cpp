@@ -953,7 +953,7 @@ bool ImportEpubDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCall
         return true;
     }
 
-    m_doc->setContainer(m_arc);
+    m_doc->setContainer(m_arc, true);
 
     if ( progressCallback )
         progressCallback->OnLoadFileProgress(1);
@@ -1368,7 +1368,6 @@ bool ImportEpubDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCall
 
     lUInt32 saveFlags = m_doc->getDocFlags();
     m_doc->setDocFlags( saveFlags );
-    m_doc->setContainer( m_arc );
 
     ldomDocumentWriter writer(m_doc);
 #if 0

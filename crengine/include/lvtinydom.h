@@ -1370,7 +1370,6 @@ protected:
     lUInt16       _nextUnknownNsId;      // Next Id for unknown namespace
     lString32HashedCollection _attrValueTable;
     LVHashTable<lUInt32,lInt32> _idNodeMap; // id to data index map
-    LVHashTable<lString32,LVImageSourceRef> _urlImageMap; // url to image source map
     lUInt16 _idAttrId; // Id for "id" attribute name
     lUInt16 _nameAttrId; // Id for "name" attribute name
 
@@ -2403,15 +2402,30 @@ private:
 
     LVContainerRef _container;
 
-    // Transient sizes of embedded binaries, keyed by node index within this document.
+    // Transient information for text-only embedded binaries, keyed by node index.
+    struct EmbeddedBinaryInfo {
+        lvsize_t size = 0;
+        LVImageMetadata image;
+    };
 #if CR_USE_THREADS==1
     std::mutex _decodedBinarySizeMutex;
 #endif
-    std::unique_ptr<LVHashTable<lUInt32, lvsize_t>> _decodedBinarySizes;
+    std::unique_ptr<LVHashTable<lUInt32, EmbeddedBinaryInfo>> _decodedBinarySizes;
     std::atomic<bool> _hasDecodedBinarySizes{false};
     void clearDecodedBinarySizes();
 
 #if BUILD_LITE!=1
+    friend class NodeImageProxy;
+    bool _cacheArchiveImageMetadata = false;
+    LVHashTable<lString32, LVImageMetadata> _archiveImageMetadata{32};
+    lString32 _imageCodeBase;
+    lString32 _imageBookName;
+    ldomNode *findImageBinary(const lString32 &name);
+    bool syncArchiveImageCache(const lString32 &name);
+    bool getCachedImageMetadata(const lString32 &name, LVImageMetadata &metadata);
+    bool getObjectImageMetadata(const lString32 &name, LVImageMetadata &metadata);
+    bool decodeObjectImage(const lString32 &name, LVImageDecoderCallback *callback);
+
     LVHashTable<lUInt32, int> _listMarkerWidths{100};
     LVHashTable<lUInt32, lInt64> _listOrdinals{16};
     int measureListMarkers(ldomNode *parent);
@@ -2508,7 +2522,7 @@ public:
 
 
     LVContainerRef getContainer() { return _container; }
-    void setContainer( LVContainerRef cont ) { _container = cont; }
+    void setContainer(LVContainerRef cont, bool cacheImageMetadata = false);
 
 #if BUILD_LITE!=1
     void clearRendBlockCache() { _renderedBlockCache.clear(); }
