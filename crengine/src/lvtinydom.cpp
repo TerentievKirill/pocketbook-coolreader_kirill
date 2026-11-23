@@ -1932,26 +1932,29 @@ ContinuousOperationResult ldomBlobCache::saveToCache(CRTimerUtil & timeout)
 {
     if (!_list.length() || !_changed || _cacheFile==NULL)
         return CR_DONE;
-    bool res = true;
-    for ( int i=0; i<_list.length(); i++ ) {
-        ldomBlobItem * item = _list[i];
-        if ( item->getData() ) {
-            res = _cacheFile->write(CBT_BLOB_DATA, i, item->getData(), item->getSize(), false) && res;
-            if (res)
-                item->setIndex(i, item->getSize());
-        }
+    while (_nextBlobToSave < _list.length()) {
         if (timeout.expired())
             return CR_TIMEOUT;
+        ldomBlobItem *item = _list[_nextBlobToSave];
+        if (item->getData()) {
+            if (!_cacheFile->write(CBT_BLOB_DATA, _nextBlobToSave, item->getData(), item->getSize(), false))
+                return CR_ERROR;
+            item->setIndex(_nextBlobToSave, item->getSize());
+        }
+        ++_nextBlobToSave;
     }
-    res = saveIndex() && res;
-    if ( res )
-        _changed = false;
-    return res ? CR_DONE : CR_ERROR;
+    if (timeout.expired())
+        return CR_TIMEOUT;
+    if (!saveIndex())
+        return CR_ERROR;
+    _changed = false;
+    return CR_DONE;
 }
 
 void ldomBlobCache::setCacheFile( CacheFile * cacheFile )
 {
     _cacheFile = cacheFile;
+    _nextBlobToSave = 0;
     CRTimerUtil infinite;
     if (_list.empty())
         loadIndex();
@@ -2835,7 +2838,7 @@ bool tinyNodeCollection::createCacheFile()
     _rectStorage.setCache( f );
     _styleStorage.setCache( f );
     _blobCache.setCacheFile( f );
-    setCacheFileStale(true);
+    restartCacheSave();
     return true;
 }
 
@@ -2988,10 +2991,12 @@ bool tinyNodeCollection::loadNodeData(lUInt16 type, ldomNode ** list, int nodeco
     return true;
 }
 
-bool tinyNodeCollection::saveNodeData( lUInt16 type, ldomNode ** list, int nodecount )
+ContinuousOperationResult tinyNodeCollection::saveNodeData(
+    lUInt16 type, ldomNode **list, int nodecount, int &nextPart, CRTimerUtil &maxTime)
 {
     int count = ((nodecount+TNC_PART_LEN-1) >> TNC_PART_SHIFT);
-    for (lUInt16 i=0; i<count; i++) {
+    while (nextPart < count && !maxTime.expired()) {
+        const int i = nextPart++;
         if (!list[i])
             continue;
         int offs = i*TNC_PART_LEN;
@@ -3014,24 +3019,27 @@ bool tinyNodeCollection::saveNodeData( lUInt16 type, ldomNode ** list, int nodec
                 buf[j]._data._nextFreeIndex = tmp;         // restore 32bits part
             }
         }
-        if (!_cacheFile->write(type, i, (lUInt8*)buf, sizeof(ldomNode) * sz, COMPRESS_NODE_DATA))
-            crFatalError(-1, "Cannot write node data");
+        if (!_cacheFile->write(type, i, (lUInt8*)buf, sizeof(ldomNode) * sz, COMPRESS_NODE_DATA)) {
+            --nextPart;
+            return CR_ERROR;
+        }
     }
-    return true;
+    return nextPart == count ? CR_DONE : CR_TIMEOUT;
 }
 
 #define NODE_INDEX_MAGIC 0x19283746
-bool tinyNodeCollection::saveNodeData()
+ContinuousOperationResult tinyNodeCollection::saveNodeData(CRTimerUtil &maxTime)
 {
+    auto result = saveNodeData(CBT_ELEM_NODE, _elemList, _elemCount + 1, _nextElementPartToSave, maxTime);
+    if (result != CR_DONE)
+        return result;
+    result = saveNodeData(CBT_TEXT_NODE, _textList, _textCount + 1, _nextTextPartToSave, maxTime);
+    if (result != CR_DONE || maxTime.expired())
+        return result == CR_ERROR ? CR_ERROR : CR_TIMEOUT;
+
     SerialBuf buf(12, true);
     buf << (lUInt32)NODE_INDEX_MAGIC << (lUInt32)_elemCount << (lUInt32)_textCount;
-    if ( !saveNodeData( CBT_ELEM_NODE, _elemList, _elemCount+1 ) )
-        return false;
-    if ( !saveNodeData( CBT_TEXT_NODE, _textList, _textCount+1 ) )
-        return false;
-    if ( !_cacheFile->write(CBT_NODE_INDEX, buf, COMPRESS_NODE_DATA) )
-        return false;
-    return true;
+    return _cacheFile->write(CBT_NODE_INDEX, buf, COMPRESS_NODE_DATA) ? CR_DONE : CR_ERROR;
 }
 
 bool tinyNodeCollection::loadNodeData()
@@ -3078,6 +3086,9 @@ bool tinyNodeCollection::loadNodeData()
     memcpy( _textList, textList, sizeof(textList) );
     _elemCount = elemcount;
     _textCount = textcount;
+    _nextElementToPersist = elemcount + 1;
+    _nextTextToPersist = textcount + 1;
+    restartCacheSave();
     return true;
 }
 #endif  // BUILD_LITE!=1
@@ -3145,12 +3156,18 @@ ldomNode * tinyNodeCollection::allocTinyNode( int type )
         }
         _itemCount++;
     }
+#if BUILD_LITE!=1
+    rewindNodePersistence(res->_handle._dataIndex);
+#endif
     _nodeStyleHash = 0;
     return res;
 }
 
 void tinyNodeCollection::recycleTinyNode( lUInt32 index )
 {
+#if BUILD_LITE!=1
+    restartCacheSave();
+#endif
     if ( index & 1 ) {
         // element
         index >>= 4;
@@ -3205,42 +3222,52 @@ tinyNodeCollection::~tinyNodeCollection()
 }
 
 #if BUILD_LITE!=1
-/// put all objects into persistent storage
-void tinyNodeCollection::persist( CRTimerUtil & maxTime )
+void tinyNodeCollection::restartCacheSave()
 {
-    CRLog::info("lxmlDocBase::persist() invoked - converting all nodes to persistent objects");
-    // elements
-    for ( int partindex = 0; partindex<=(_elemCount>>TNC_PART_SHIFT); partindex++ ) {
-        ldomNode * part = _elemList[partindex];
-        if ( part ) {
-            int n0 = TNC_PART_LEN * partindex;
-            for ( int i=0; i<TNC_PART_LEN && n0+i<=_elemCount; i++ )
-                if ( !part[i].isNull() && !part[i].isPersistent() ) {
-                    part[i].persist();
-                    if (maxTime.expired())
-                        return;
-                }
+    _cacheFileStale = true;
+    _mapSavingStage = 0;
+    _nextElementPartToSave = 0;
+    _nextTextPartToSave = 0;
+}
+
+void tinyNodeCollection::rewindNodePersistence(lUInt32 index)
+{
+    int &next = index & 1 ? _nextElementToPersist : _nextTextToPersist;
+    const int ordinal = index >> 4;
+    if (ordinal < next)
+        next = ordinal;
+    _cacheFileStale = true;
+    if (_mapSavingStage != 0)
+        restartCacheSave();
+}
+
+bool tinyNodeCollection::persistNodes(ldomNode **list, int count, int &next, CRTimerUtil &maxTime)
+{
+    while (next <= count) {
+        if (maxTime.expired())
+            return false;
+        ldomNode *part = list[next >> TNC_PART_SHIFT];
+        const int end = std::min(count + 1, (next | TNC_PART_MASK) + 1);
+        if (!part) {
+            next = end;
+            continue;
+        }
+        // Check even when walking blocks of already persistent nodes.
+        const int batchEnd = std::min(end, next + 32);
+        for (; next < batchEnd; ++next) {
+            ldomNode &node = part[next & TNC_PART_MASK];
+            if (!node.isNull() && !node.isPersistent())
+                node.persist();
         }
     }
-    //_cacheFile->flush(false); // intermediate flush
-    if ( maxTime.expired() )
-        return;
-    // texts
-    for ( int partindex = 0; partindex<=(_textCount>>TNC_PART_SHIFT); partindex++ ) {
-        ldomNode * part = _textList[partindex];
-        if ( part ) {
-            int n0 = TNC_PART_LEN * partindex;
-            for ( int i=0; i<TNC_PART_LEN && n0+i<=_textCount; i++ )
-                if ( !part[i].isNull() && !part[i].isPersistent() ) {
-                    //CRLog::trace("before persist");
-                    part[i].persist();
-                    //CRLog::trace("after persist");
-                    if (maxTime.expired())
-                        return;
-                }
-        }
-    }
-    //_cacheFile->flush(false); // intermediate flush
+    return true;
+}
+
+/// put all objects into persistent storage
+void tinyNodeCollection::persist(CRTimerUtil &maxTime)
+{
+    if (persistNodes(_elemList, _elemCount, _nextElementToPersist, maxTime))
+        persistNodes(_textList, _textCount, _nextTextToPersist, maxTime);
 }
 #endif
 
@@ -3268,42 +3295,33 @@ void tinyNodeCollection::persist( CRTimerUtil & maxTime )
 
 
 /// saves all unsaved chunks to cache file
-bool ldomDataStorageManager::save( CRTimerUtil & maxTime )
+ContinuousOperationResult ldomDataStorageManager::save(CRTimerUtil &maxTime)
 {
-    bool res = true;
 #if BUILD_LITE!=1
-    if ( !_cache )
-        return true;
-    for ( int i=0; i<_chunks.length(); i++ ) {
-        if ( !_chunks[i]->save() ) {
-            res = false;
-            break;
-        }
-        //CRLog::trace("time elapsed: %d", (int)maxTime.elapsed());
+    if (!_cache)
+        return CR_DONE;
+    const int count = _chunks.length();
+    while (_nextChunkToSave < count) {
         if (maxTime.expired())
-            return res;
-//        if ( (i&3)==3 &&  maxTime.expired() )
-//            return res;
+            return CR_TIMEOUT;
+        if (!_chunks[_nextChunkToSave]->save())
+            return CR_ERROR;
+        ++_nextChunkToSave;
     }
     if (!maxTime.infinite())
-        _cache->flush(false, maxTime); // intermediate flush
-    if ( maxTime.expired() )
-        return res;
-    if ( !res )
-        return false;
-    // save chunk index
-    int n = _chunks.length();
-    SerialBuf buf(n*4+4, true);
-    buf << (lUInt32)n;
-    for ( int i=0; i<n; i++ ) {
+        _cache->flush(false, maxTime);
+    if (maxTime.expired())
+        return CR_TIMEOUT;
+
+    SerialBuf buf(count * 4 + 4, true);
+    buf << (lUInt32)count;
+    for (int i = 0; i < count; ++i)
         buf << (lUInt32)_chunks[i]->_bufpos;
-    }
-    res = _cache->write( cacheType(), 0xFFFF, buf, COMPRESS_NODE_STORAGE_DATA );
-    if ( !res ) {
-        CRLog::error("ldomDataStorageManager::save() - Cannot write chunk index");
-    }
+    if (!_cache->write(cacheType(), 0xFFFF, buf, COMPRESS_NODE_STORAGE_DATA))
+        return CR_ERROR;
+    _nextChunkToSave = 0;
 #endif
-    return res;
+    return CR_DONE;
 }
 
 /// load chunk index from cache file
@@ -3323,6 +3341,7 @@ bool ldomDataStorageManager::load()
     if (n > 10000)
         return false; // invalid
     _recentChunk = NULL;
+    _nextChunkToSave = 0;
     _chunks.clear();
     lUInt32 compsize = 0;
     lUInt32 uncompsize = 0;
@@ -3361,6 +3380,9 @@ ldomTextStorageChunk * ldomDataStorageManager::getChunk( lUInt32 address )
 void ldomDataStorageManager::setCache( CacheFile * cache )
 {
     _cache = cache;
+#if BUILD_LITE!=1
+    _nextChunkToSave = 0;
+#endif
 }
 
 /// type
@@ -3745,6 +3767,8 @@ int ldomTextStorageChunk::addText( lUInt32 dataIndex, lUInt32 parentIndex, const
     }
     if ( _bufsize - _bufpos < itemsize )
         return -1;
+    if (_saved)
+        modified();
     TextDataStorageItem * p = (TextDataStorageItem*)(_buf + _bufpos);
     p->sizeDiv16 = (lUInt16)(itemsize >> 4);
     p->dataIndex = dataIndex;
@@ -3770,6 +3794,8 @@ int ldomTextStorageChunk::addElem(lUInt32 dataIndex, lUInt32 parentIndex, int ch
     }
     if ( _bufsize - _bufpos < (unsigned)itemsize )
         return -1;
+    if (_saved)
+        modified();
     ElementDataStorageItem *item = (ElementDataStorageItem *)(_buf + _bufpos);
     if ( item ) {
         item->sizeDiv16 = (lUInt16)(itemsize >> 4);
@@ -3835,6 +3861,13 @@ void ldomTextStorageChunk::modified()
     if ( !_buf ) {
         CRLog::error("Modified is called for node which is not in memory");
     }
+#if BUILD_LITE!=1
+    if (_saved) {
+        if (_index < _manager->_nextChunkToSave)
+            _manager->_nextChunkToSave = _index;
+        _manager->_owner->restartCacheSave();
+    }
+#endif
     _saved = false;
 }
 
@@ -5263,7 +5296,7 @@ bool ldomDocument::render( LVRendPageList * pages, LVDocViewCallback * callback,
             callback->OnFormatStart();
         }
         _renderedBlockCache.reduceSize(1); // Reduce size to save some checking and trashing time
-        setCacheFileStale(true); // new rendering: cache file will be updated
+        restartCacheSave(); // new rendering: cache file will be updated
         _toc_from_cache_valid = false;
         // force recalculation of page numbers (even if not computed in this
         // session, they will be when loaded from cache next session)
@@ -15338,7 +15371,7 @@ ContinuousOperationResult ldomDocument::saveChanges( CRTimerUtil & maxTime, LVDo
     if (progressCallback) progressCallback->OnSaveCacheFileStart();
 
     if (maxTime.infinite()) {
-        _mapSavingStage = 0; // all stages from the beginning
+        restartCacheSave(); // all stages from the beginning
         _cacheFile->setAutoSyncSize(0);
     } else {
         //CRLog::trace("setting autosync");
@@ -15349,6 +15382,16 @@ ContinuousOperationResult ldomDocument::saveChanges( CRTimerUtil & maxTime, LVDo
     CRLog::trace("ldomDocument::saveChanges(timeout=%d stage=%d)", maxTime.interval(), _mapSavingStage);
     setCacheFileStale(true);
 
+    // Record completed work before yielding, including when a write uses up the slice.
+    auto advance = [&](int nextStage, int percent) {
+        _mapSavingStage = nextStage;
+        if (progressCallback)
+            progressCallback->OnSaveCacheFileProgress(percent);
+        return maxTime.expired();
+    };
+    ContinuousOperationResult result;
+    constexpr int saveTocStage = 91;
+    constexpr int savePageMapStage = 92;
     switch (_mapSavingStage) {
     default:
     case 0:
@@ -15359,66 +15402,62 @@ ContinuousOperationResult ldomDocument::saveChanges( CRTimerUtil & maxTime, LVDo
 
         persist( maxTime );
         CHECK_EXPIRATION("persisting of node data")
-        if (progressCallback) progressCallback->OnSaveCacheFileProgress(0);
+        if (advance(1, 0))
+            return CR_TIMEOUT;
 
         // fall through
     case 1:
         _mapSavingStage = 1;
         CRLog::trace("ldomDocument::saveChanges() - element storage");
 
-        if ( !_elemStorage.save(maxTime) ) {
-            CRLog::error("Error while saving element data");
-            return CR_ERROR;
-        }
-        CHECK_EXPIRATION("saving element storate")
-        if (progressCallback) progressCallback->OnSaveCacheFileProgress(10);
+        result = _elemStorage.save(maxTime);
+        if (result != CR_DONE)
+            return result;
+        if (advance(2, 10))
+            return CR_TIMEOUT;
         // fall through
     case 2:
         _mapSavingStage = 2;
         CRLog::trace("ldomDocument::saveChanges() - text storage");
-        if ( !_textStorage.save(maxTime) ) {
-            CRLog::error("Error while saving text data");
-            return CR_ERROR;
-        }
-        CHECK_EXPIRATION("saving text storate")
-        if (progressCallback) progressCallback->OnSaveCacheFileProgress(20);
+        result = _textStorage.save(maxTime);
+        if (result != CR_DONE)
+            return result;
+        if (advance(3, 20))
+            return CR_TIMEOUT;
         // fall through
     case 3:
         _mapSavingStage = 3;
         CRLog::trace("ldomDocument::saveChanges() - rect storage");
 
-        if ( !_rectStorage.save(maxTime) ) {
-            CRLog::error("Error while saving rect data");
-            return CR_ERROR;
-        }
-        CHECK_EXPIRATION("saving rect storate")
-        if (progressCallback) progressCallback->OnSaveCacheFileProgress(30);
+        result = _rectStorage.save(maxTime);
+        if (result != CR_DONE)
+            return result;
+        if (advance(41, 30))
+            return CR_TIMEOUT;
         // fall through
     case 41:
         _mapSavingStage = 41;
         CRLog::trace("ldomDocument::saveChanges() - blob storage data");
 
-        if ( _blobCache.saveToCache(maxTime) == CR_ERROR ) {
-            CRLog::error("Error while saving blob storage data");
-            return CR_ERROR;
-        }
+        result = _blobCache.saveToCache(maxTime);
+        if (result != CR_DONE)
+            return result;
         if (!maxTime.infinite())
             _cacheFile->flush(false, maxTime); // intermediate flush
-        CHECK_EXPIRATION("saving blob storage data")
-        if (progressCallback) progressCallback->OnSaveCacheFileProgress(35);
+        if (advance(4, 35))
+            return CR_TIMEOUT;
         // fall through
     case 4:
         _mapSavingStage = 4;
         CRLog::trace("ldomDocument::saveChanges() - node style storage");
 
-        if ( !_styleStorage.save(maxTime) ) {
-            CRLog::error("Error while saving node style data");
-            return CR_ERROR;
-        }
+        result = _styleStorage.save(maxTime);
+        if (result != CR_DONE)
+            return result;
         if (!maxTime.infinite())
             _cacheFile->flush(false, maxTime); // intermediate flush
-        CHECK_EXPIRATION("saving node style storage")
-        if (progressCallback) progressCallback->OnSaveCacheFileProgress(40);
+        if (advance(5, 40))
+            return CR_TIMEOUT;
         // fall through
     case 5:
         _mapSavingStage = 5;
@@ -15433,8 +15472,8 @@ ContinuousOperationResult ldomDocument::saveChanges( CRTimerUtil & maxTime, LVDo
         }
         if (!maxTime.infinite())
             _cacheFile->flush(false, maxTime); // intermediate flush
-        CHECK_EXPIRATION("saving props data")
-        if (progressCallback) progressCallback->OnSaveCacheFileProgress(45);
+        if (advance(6, 45))
+            return CR_TIMEOUT;
         // fall through
     case 6:
         _mapSavingStage = 6;
@@ -15449,8 +15488,8 @@ ContinuousOperationResult ldomDocument::saveChanges( CRTimerUtil & maxTime, LVDo
         }
         if (!maxTime.infinite())
             _cacheFile->flush(false, maxTime); // intermediate flush
-        CHECK_EXPIRATION("saving ID data")
-        if (progressCallback) progressCallback->OnSaveCacheFileProgress(50);
+        if (advance(7, 50))
+            return CR_TIMEOUT;
         // fall through
     case 7:
         _mapSavingStage = 7;
@@ -15465,21 +15504,20 @@ ContinuousOperationResult ldomDocument::saveChanges( CRTimerUtil & maxTime, LVDo
         }
         if (!maxTime.infinite())
             _cacheFile->flush(false, maxTime); // intermediate flush
-        CHECK_EXPIRATION("saving page data")
-        if (progressCallback) progressCallback->OnSaveCacheFileProgress(60);
+        if (advance(8, 60))
+            return CR_TIMEOUT;
         // fall through
     case 8:
         _mapSavingStage = 8;
 
         CRLog::trace("ldomDocument::saveChanges() - node data");
-        if ( !saveNodeData() ) {
-            CRLog::error("Error while node instance data");
-            return CR_ERROR;
-        }
+        result = saveNodeData(maxTime);
+        if (result != CR_DONE)
+            return result;
         if (!maxTime.infinite())
             _cacheFile->flush(false, maxTime); // intermediate flush
-        CHECK_EXPIRATION("saving node data")
-        if (progressCallback) progressCallback->OnSaveCacheFileProgress(70);
+        if (advance(9, 70))
+            return CR_TIMEOUT;
         // fall through
     case 9:
         _mapSavingStage = 9;
@@ -15496,8 +15534,10 @@ ContinuousOperationResult ldomDocument::saveChanges( CRTimerUtil & maxTime, LVDo
         }
         CRLog::info("Saving render properties: styleHash=%x, stylesheetHash=%x, docflags=%x, width=%x, height=%x, nodeDisplayStyleHash=%x",
                     _hdr.render_style_hash, _hdr.stylesheet_hash, _hdr.render_docflags, _hdr.render_dx, _hdr.render_dy, _hdr.node_displaystyle_hash);
-        if (progressCallback) progressCallback->OnSaveCacheFileProgress(73);
-
+        if (advance(saveTocStage, 73))
+            return CR_TIMEOUT;
+        // fall through
+    case saveTocStage:
         CRLog::trace("ldomDocument::saveChanges() - TOC");
         {
             SerialBuf tocbuf(0,true);
@@ -15509,8 +15549,10 @@ ContinuousOperationResult ldomDocument::saveChanges( CRTimerUtil & maxTime, LVDo
                 return CR_ERROR;
             }
         }
-        if (progressCallback) progressCallback->OnSaveCacheFileProgress(76);
-
+        if (advance(savePageMapStage, 76))
+            return CR_TIMEOUT;
+        // fall through
+    case savePageMapStage:
         CRLog::trace("ldomDocument::saveChanges() - PageMap");
         {
             SerialBuf pagemapbuf(0,true);
@@ -15524,8 +15566,8 @@ ContinuousOperationResult ldomDocument::saveChanges( CRTimerUtil & maxTime, LVDo
         }
         if (!maxTime.infinite())
             _cacheFile->flush(false, maxTime); // intermediate flush
-        CHECK_EXPIRATION("saving TOC data")
-        if (progressCallback) progressCallback->OnSaveCacheFileProgress(80);
+        if (advance(10, 80))
+            return CR_TIMEOUT;
         // fall through
     case 10:
         _mapSavingStage = 10;
@@ -15534,7 +15576,8 @@ ContinuousOperationResult ldomDocument::saveChanges( CRTimerUtil & maxTime, LVDo
             CRLog::error("Error while writing style data");
             return CR_ERROR;
         }
-        if (progressCallback) progressCallback->OnSaveCacheFileProgress(90);
+        if (advance(11, 90))
+            return CR_TIMEOUT;
         // fall through
     case 11:
         _mapSavingStage = 11;
@@ -15546,9 +15589,9 @@ ContinuousOperationResult ldomDocument::saveChanges( CRTimerUtil & maxTime, LVDo
                 CRLog::error("Error while saving embedded font data");
                 return CR_ERROR;
             }
-            CHECK_EXPIRATION("saving embedded fonts")
         }
-        if (progressCallback) progressCallback->OnSaveCacheFileProgress(95);
+        if (advance(12, 95))
+            return CR_TIMEOUT;
         // fall through
     case 12:
         _mapSavingStage = 12;
@@ -15559,7 +15602,6 @@ ContinuousOperationResult ldomDocument::saveChanges( CRTimerUtil & maxTime, LVDo
                 CRLog::error("Error while updating index of cache file");
                 return CR_ERROR;
             }
-            CHECK_EXPIRATION("flushing")
         }
         if (progressCallback) progressCallback->OnSaveCacheFileProgress(100);
         // fall through
@@ -17430,6 +17472,7 @@ void ldomNode::setText( lString32 str )
     case NT_PTEXT:
         {
             // convert persistent text to mutable
+            getDocument()->rewindNodePersistence(_handle._dataIndex);
             lUInt32 parentIndex = getDocument()->_textStorage.getParent(_data._ptext_addr);
             getDocument()->_textStorage.freeNode( _data._ptext_addr );
             _data._text_ptr = new ldomTextNode( parentIndex, UnicodeToUtf8(str) );
@@ -17462,6 +17505,7 @@ void ldomNode::setText8( lString8 utf8 )
     case NT_PTEXT:
         {
             // convert persistent text to mutable
+            getDocument()->rewindNodePersistence(_handle._dataIndex);
             lUInt32 parentIndex = getDocument()->_textStorage.getParent(_data._ptext_addr);
             getDocument()->_textStorage.freeNode( _data._ptext_addr );
             _data._text_ptr = new ldomTextNode( parentIndex, utf8 );
@@ -19429,6 +19473,7 @@ ldomNode * ldomNode::modify()
     ASSERT_NODE_NOT_NULL;
 #if BUILD_LITE!=1
     if ( isPersistent() ) {
+        getDocument()->rewindNodePersistence(_handle._dataIndex);
         if ( isElement() ) {
             // PELEM->ELEM
             ElementDataStorageItem * data = getDocument()->_elemStorage.getElem(_data._pelem_addr);
@@ -19690,7 +19735,7 @@ void ldomDocument::buildAlternativeToc()
     // retrieved without any additional work or space overhead.
     m_toc.setAlternativeTocFlag();
     // cache file will have to be updated with the alt TOC
-    setCacheFileStale(true);
+    restartCacheSave();
     _toc_from_cache_valid = false; // to force update of page numbers
 }
 

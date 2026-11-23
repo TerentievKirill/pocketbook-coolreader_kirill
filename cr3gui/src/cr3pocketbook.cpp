@@ -727,8 +727,10 @@ void CRPocketBookWindowManager::updateCache()
     }
     LVPerfScope timing("cache.save-slice");
     CRTimerUtil timeout(20);
-    if (CR_TIMEOUT == main_win->getDocView()->updateCache(timeout))
-        scheduleCacheSwap(250);
+    if (CR_TIMEOUT == main_win->getDocView()->updateCache(timeout)) {
+        // Allow input between slices without waiting a full quarter-second per slice.
+        scheduleCacheSwap(80);
+    }
 }
 
 static void cache_timer()

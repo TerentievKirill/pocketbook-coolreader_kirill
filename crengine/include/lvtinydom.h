@@ -260,6 +260,7 @@ class ldomBlobCache
     CacheFile * _cacheFile;
     LVPtrVector<ldomBlobItem> _list;
     bool _changed;
+    int _nextBlobToSave = 0;
     bool loadIndex();
     bool saveIndex();
 public:
@@ -284,12 +285,15 @@ protected:
     lUInt32 _chunkSize;
     char _type;       /// type, to show in log
     bool _maxSizeReachedWarned;
+#if BUILD_LITE!=1
+    int _nextChunkToSave = 0;
+#endif
     ldomTextStorageChunk * getChunk( lUInt32 address );
 public:
     /// type
     lUInt16 cacheType();
     /// saves all unsaved chunks to cache file
-    bool save( CRTimerUtil & maxTime );
+    ContinuousOperationResult save( CRTimerUtil & maxTime );
     /// load chunk index from cache file
     bool load();
     /// sets cache file
@@ -441,6 +445,7 @@ class tinyNodeCollection
     friend struct ldomNode;
     friend class tinyElement;
     friend class ldomDocument;
+    friend class ldomTextStorageChunk;
 private:
     int _textCount;
     lUInt32 _textNextFree;
@@ -464,6 +469,14 @@ protected:
     bool _mapped;
     bool _maperror;
     int  _mapSavingStage;
+    int _nextElementToPersist = 1;
+    int _nextTextToPersist = 1;
+    int _nextElementPartToSave = 0;
+    int _nextTextPartToSave = 0;
+
+    void restartCacheSave();
+    void rewindNodePersistence(lUInt32 index);
+    static bool persistNodes(ldomNode **list, int count, int &next, CRTimerUtil &maxTime);
 
     img_scaling_options_t _imgScalingOptions;
     int  _spaceWidthScalePercent;
@@ -509,8 +522,9 @@ protected:
     bool loadStylesData();
     bool updateLoadedStyles( bool enabled );
     lUInt32 calcStyleHash(bool already_rendered);
-    bool saveNodeData();
-    bool saveNodeData( lUInt16 type, ldomNode ** list, int nodecount );
+    ContinuousOperationResult saveNodeData(CRTimerUtil &maxTime);
+    ContinuousOperationResult saveNodeData(lUInt16 type, ldomNode **list, int nodecount,
+                                           int &nextPart, CRTimerUtil &maxTime);
     bool loadNodeData();
     bool loadNodeData( lUInt16 type, ldomNode ** list, int nodecount );
 
@@ -573,7 +587,10 @@ public:
     }
 
     /// add named BLOB data to document
-    bool addBlob(lString32 name, const lUInt8 * data, int size) { _cacheFileStale = true ; return _blobCache.addBlob(data, size, name); }
+    bool addBlob(lString32 name, const lUInt8 * data, int size) {
+        restartCacheSave();
+        return _blobCache.addBlob(data, size, name);
+    }
     /// get BLOB by name
     LVStreamRef getBlob(lString32 name) { return _blobCache.getBlob(name); }
 
