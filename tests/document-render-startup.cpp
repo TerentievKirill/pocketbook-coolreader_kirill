@@ -14,6 +14,60 @@ lString32 pbSkinFileName;
 lString32 openedCacheFile;
 lString32 currentCacheDir;
 DECL_DEF_CR_FONT_SIZES;
+
+static int testPageLookup() {
+    const auto linearLookup = [](const LVRendPageList &pages, int y, int direction) {
+        for (int i = 0; i < pages.length(); ++i) {
+            const auto *page = pages[i];
+            if (y < page->start)
+                return i > 0 && direction < 0 ? i - 1 : i;
+            if (y < page->start + page->height) {
+                if (i + 1 < pages.length() && direction > 0)
+                    return i + 1;
+                return i > 0 && direction < 0 ? i - 1 : i;
+            }
+        }
+        return pages.empty() ? 0 : pages.length() - 1;
+    };
+    const auto matches = [&](LVRendPageList &pages) {
+        for (int y = -10; y <= 120; ++y)
+            for (int direction : {-1, 0, 1})
+                if (pages.FindNearestPage(y, direction) != linearLookup(pages, y, direction))
+                    return false;
+        return true;
+    };
+
+    LVRendPageList pages;
+    CHECK(matches(pages));
+    pages.add(new LVRendPageInfo(12)); // Cover.
+    CHECK(matches(pages));
+    pages.add(new LVRendPageInfo(14, 8, pages.length()));
+    pages.add(new LVRendPageInfo(20, 24, pages.length()));
+    auto *continuedNote = new LVRendPageInfo(44, 0, pages.length());
+    continuedNote->footnotes.add(LVPageFootNoteInfo(100, 10));
+    pages.add(continuedNote);
+    pages.add(new LVRendPageInfo(44, 0, pages.length()));
+    pages.add(new LVRendPageInfo(50, 20, pages.length()));
+    pages.add(new LVRendPageInfo(56, 5, pages.length()));
+    pages.add(new LVRendPageInfo(42, 10, pages.length()));
+    pages.add(new LVRendPageInfo(82, 12, pages.length()));
+    CHECK(matches(pages));
+
+    SerialBuf saved(0, true);
+    CHECK(pages.serialize(saved));
+    const int count = pages.length();
+    pages.clear();
+    CHECK(matches(pages));
+    for (int i = 0; i < count; ++i)
+        pages.add(new LVRendPageInfo(i * 10 + 5, 8, i));
+    CHECK(matches(pages));
+    saved.setPos(0);
+    CHECK(pages.deserialize(saved));
+    CHECK(pages.length() == count && pages[3]->footnotes.length() == 1 && matches(pages));
+    puts("PASS: page lookup directions, gaps, overlapping pages, footnote continuations, and deserialization");
+    return 0;
+}
+
 static lvRect inkBounds(LVDrawBuf *buf) {
     lvRect ink(buf->GetWidth(), buf->GetHeight(), 0, 0);
     lUInt32 paper = buf->GetPixel(0, 0);
@@ -328,6 +382,7 @@ static int testRendering(const char *defaultsFile, const char *epubFile, const c
 }
 int main(int argc, char **argv) {
     setbuf(stdout, NULL);
+    CHECK(testPageLookup() == 0);
     // Every packed pixel lane, gray appearing/disappearing, black/white only.
     for (int a = 0; a < 256; ++a) for (int b = 0; b < 256; ++b) {
         bool expected = false;

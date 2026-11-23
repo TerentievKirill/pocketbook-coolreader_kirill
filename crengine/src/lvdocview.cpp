@@ -2141,7 +2141,7 @@ void LVDocView::drawPageHeader(LVDrawBuf * drawbuf, const lvRect & headerRc,
 	drawbuf->SetTextColor(getTextColor());
 }
 
-void LVDocView::drawPageTo(LVDrawBuf * drawbuf, LVRendPageInfo & page,
+void LVDocView::drawPageTo(LVDrawBuf * drawbuf, const LVRendPageInfo & page,
 		lvRect * pageRect, int pageCount, int basePage) {
 	int start = page.start;
 	int height = page.height;
@@ -2899,7 +2899,7 @@ LVRef<ldomXRange> LVDocView::getPageDocumentRange(int pageIndex) {
         if (pageIndex < 0 || pageIndex >= m_pages.length())
             pageIndex = getCurPage();
         if (pageIndex >= 0 && pageIndex < m_pages.length()) {
-            LVRendPageInfo * page = m_pages[pageIndex];
+			const LVRendPageInfo * page = m_pages[pageIndex];
             if (page->flags & RN_PAGE_TYPE_COVER)
                 return res;
             start_y = page->start;
@@ -5505,7 +5505,7 @@ ldomXPointer LVDocView::getCurrentPageMiddleParagraph() {
 		if (pageIndex < 0 || pageIndex >= m_pages.length())
 			pageIndex = getCurPage();
 		if (pageIndex >= 0 && pageIndex < m_pages.length()) {
-			LVRendPageInfo *page = m_pages[pageIndex];
+			const LVRendPageInfo *page = m_pages[pageIndex];
 			if (page->flags & RN_PAGE_TYPE_NORMAL)
 				ptr = m_doc->createXPointer(lvPoint(0, page->start + page->height / 2));
 		}
@@ -5533,7 +5533,7 @@ ldomXPointer LVDocView::getBookmark( bool precise ) {
 				// could resolve back to the previous page. We need to check for that
 				// and increase y until we find a coherent one.
 				// (In the following, we always want to find the first logical word/char.)
-				LVRendPageInfo * page = m_pages[_page];
+				const LVRendPageInfo * page = m_pages[_page];
 				bool found = false;
 				ldomXPointer fallback_ptr;
 				if (precise) {

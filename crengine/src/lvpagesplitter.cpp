@@ -30,6 +30,7 @@
 #include "../include/lvtinydom.h"
 #include "../include/crlog.h"
 #include "../include/serialbuf.h"
+#include <algorithm>
 #include <time.h>
 
 // Uncomment for debugging page splitting algorithm:
@@ -37,28 +38,38 @@
 // (Also change '#if 0' around 'For debugging lvpagesplitter.cpp'
 // to '#if 1' in src/lvdocview.cpp to get a summary of pages.
 
+void LVRendPageList::add(LVRendPageInfo *page)
+{
+    // A lookup stops at the first page whose start or end is greater than y.
+    // Prefix maxima preserve that choice even for overlapping pages, repeated
+    // starts and footnote-only pages with no main text height.
+    lInt64 end = lInt64(page->start) + std::max(0, int(page->height));
+    if (!_lookupEnds.empty())
+        end = std::max(end, _lookupEnds[_lookupEnds.length() - 1]);
+    _lookupEnds.add(end);
+    LVPtrVector<LVRendPageInfo>::add(page);
+}
+
+void LVRendPageList::clear()
+{
+    _lookupEnds.clear();
+    LVPtrVector<LVRendPageInfo>::clear();
+}
+
 int LVRendPageList::FindNearestPage( int y, int direction )
 {
-    if (!length())
+    const int count = length();
+    if (count == 0)
         return 0;
-    for (int i=0; i<length(); i++)
-    {
-        const LVRendPageInfo * pi = ((*this)[i]);
-        if (y<pi->start) {
-            if (i==0 || direction>=0)
-                return i;
-            else
-                return i-1;
-        } else if (y<pi->start+pi->height) {
-            if (i<length()-1 && direction>0)
-                return i+1;
-            else if (i==0 || direction>=0)
-                return i;
-            else
-                return i-1;
-        }
-    }
-    return length()-1;
+    const lInt64 *ends = _lookupEnds.get();
+    const int page = y < ends[0] ? 0 : std::upper_bound(ends + 1, ends + count, lInt64(y)) - ends;
+    if (page == count)
+        return count - 1;
+    if (direction < 0 && page > 0)
+        return page - 1;
+    if (direction > 0 && page + 1 < count && y >= get(page)->start)
+        return page + 1;
+    return page;
 }
 
 static LVRendPageContext * main_context = NULL;
@@ -868,12 +879,12 @@ bool LVRendPageList::deserialize( SerialBuf & buf )
         return false;
     if ( !buf.checkMagic( pagelist_magic ) )
         return false;
-    clear();
     int pos = buf.pos();
     lUInt32 len;
     buf >> len;
     clear();
     reserve(len);
+    _lookupEnds.reserve(len);
     for (lUInt32 i = 0; i < len; i++) {
         LVRendPageInfo * item = new LVRendPageInfo();
         item->deserialize( buf );

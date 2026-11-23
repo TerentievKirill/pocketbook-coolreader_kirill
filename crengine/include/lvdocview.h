@@ -914,7 +914,7 @@ public:
     LVStreamRef getDocumentFileStream( lString32 filePath );
 
     /// draws page to image buffer
-    void drawPageTo( LVDrawBuf * drawBuf, LVRendPageInfo & page, lvRect * pageRect, int pageCount, int basePage);
+    void drawPageTo( LVDrawBuf * drawBuf, const LVRendPageInfo & page, lvRect * pageRect, int pageCount, int basePage);
     /// draws coverpage to image buffer
     void drawCoverTo( LVDrawBuf * drawBuf, lvRect & rc );
     /// returns cover page image source, if any
