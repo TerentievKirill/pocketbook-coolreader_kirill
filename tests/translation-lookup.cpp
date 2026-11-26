@@ -31,6 +31,7 @@ int main(int argc, char **argv) {
             translator.add(lString8(key), lString8("translated"));
         }
         translator.sort();
+        CHECK(!strcmp(translator.getText(NULL), ""));
         CHECK(!strcmp(translator.getText(""), ""));
         for (int i = 0; i <= count * 2 + 1; ++i) {
             char key[20];
