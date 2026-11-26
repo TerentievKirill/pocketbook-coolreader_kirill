@@ -276,14 +276,16 @@ static int checkRussianSettings(const char *skin,const char *ruMo) {
     props->setInt(PROP_FONT_SIZE,42);
     CRSettingsMenu *settings=makeMenu(wm,props);
     CHECK(settings->getLabel()==Utf8ToUnicode("Настройки"));
-    CHECK(settings->getItems().length()==7);
+    CHECK(settings->getItems().length()==8);
+    CHECK(settings->getItems()[5]->getLabel()==Utf8ToUnicode("Читалка по умолчанию"));
     wm.update(true,true);
     CRMenu *fontMenu=child(settings,0);
     wm.activateWindow(fontMenu);
     wm.update(true,true);
     CHECK(fontMenu->onCommand(DCMD_BUTTON_PRESSED, BTN_CLOSE));
     CHECK(wm.getTopVisibleWindow()==settings);
-    CRMenu *advancedMenu=child(settings,3);
+    CRMenu *advancedMenu=child(settings,4);
+    CHECK(advancedMenu->getLabel()==Utf8ToUnicode("Дополнительно"));
     wm.activateWindow(advancedMenu);
     wm.update(true,true);
     CHECK(advancedMenu->onCommand(DCMD_BUTTON_PRESSED, BTN_CLOSE));
