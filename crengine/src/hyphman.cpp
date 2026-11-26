@@ -40,6 +40,9 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <map>
+#include <string>
+#include <vector>
 #include "../include/lvxmlparsercallback.h"
 #include "../include/lvxmlparser.h"
 
@@ -54,6 +57,7 @@
 #include "../include/lvfnt.h"
 #include "../include/lvstring.h"
 #include "../include/lvstring32collection.h"
+#include "../include/serialbuf.h"
 
 #include "../include/crlog.h"
 #include "../include/textlang.h"
@@ -221,7 +225,7 @@ void HyphMan::uninit()
     */
 }
 
-bool HyphMan::initDictionaries(lString32 dir, bool clear)
+bool HyphMan::initDictionaries(lString32 dir, bool clear, const lString32 &metadataCache)
 {
     if (clear && _dictList)
         delete _dictList;
@@ -229,7 +233,7 @@ bool HyphMan::initDictionaries(lString32 dir, bool clear)
         _dictList = new HyphDictionaryList();
     if (NULL == _dataLoader)
         _dataLoader = new HyphDataLoaderFromFile;
-    if (_dictList->open(dir, clear)) {
+    if (_dictList->open(dir, clear, metadataCache)) {
 		if ( !_dictList->activate( lString32(DEF_HYPHENATION_DICT) ) )
     			_dictList->activate( lString32(HYPH_DICT_ID_ALGORITHM) );
 		return true;
@@ -586,7 +590,76 @@ static int HyphDictionary_comparator(const HyphDictionary ** item1, const HyphDi
     return (int)((*item1)->getType() - (*item2)->getType());
 }
 
-bool HyphDictionaryList::open(lString32 hyphDirectory, bool clear)
+namespace {
+const char hyphCacheMagic[] = "CR3HYPH1";
+const int hyphCacheMaxSize = 256 * 1024;
+const int hyphCacheMaxEntries = 1024;
+
+struct HyphMetadata {
+    lString8 stamp;
+    lString32 title;
+    lString32 langTag;
+};
+using HyphMetadataEntries = std::map<std::string, HyphMetadata>;
+
+HyphMetadataEntries loadHyphMetadata(const lString32 &path)
+{
+    LVStreamRef file = LVOpenFileStream(path.c_str(), LVOM_READ);
+    if (file.isNull() || file->GetSize() < sizeof(hyphCacheMagic) - 1 + 8 ||
+        file->GetSize() > hyphCacheMaxSize)
+        return {};
+
+    std::vector<lUInt8> bytes(file->GetSize());
+    lvsize_t size = 0;
+    if (file->Read(bytes.data(), bytes.size(), &size) != LVERR_OK || size != bytes.size())
+        return {};
+    SerialBuf data(bytes.data(), size);
+    const int payloadSize = size - sizeof(lUInt32);
+    data.setPos(payloadSize);
+    if (!data.checkCRC(payloadSize))
+        return {};
+    data.reset();
+    if (!data.checkMagic(hyphCacheMagic))
+        return {};
+
+    lUInt32 count = 0;
+    data >> count;
+    if (count > hyphCacheMaxEntries)
+        return {};
+    HyphMetadataEntries entries;
+    for (lUInt32 i = 0; i < count; ++i) {
+        lString8 filename;
+        HyphMetadata metadata;
+        data >> filename >> metadata.stamp >> metadata.title >> metadata.langTag;
+        if (data.error() || filename.empty() || metadata.stamp.empty() ||
+            metadata.title.empty() != metadata.langTag.empty() ||
+            !entries.emplace(filename.c_str(), metadata).second)
+            return {};
+    }
+    if (data.pos() != payloadSize)
+        return {};
+    return entries;
+}
+
+void saveHyphMetadata(const lString32 &path, const HyphMetadataEntries &entries)
+{
+    if (entries.size() > hyphCacheMaxEntries)
+        return;
+    SerialBuf data(4096);
+    data.putMagic(hyphCacheMagic);
+    data << static_cast<lUInt32>(entries.size());
+    for (const auto &entry : entries) {
+        data << lString8(entry.first.c_str()) << entry.second.stamp
+             << entry.second.title << entry.second.langTag;
+        if (data.error() || data.pos() > hyphCacheMaxSize - (int)sizeof(lUInt32))
+            return;
+    }
+    data.putCRC(data.pos());
+    LVWriteFileAtomic(path, LVCreateMemoryStream(data.buf(), data.pos()), false);
+}
+}
+
+bool HyphDictionaryList::open(lString32 hyphDirectory, bool clear, const lString32 &metadataCache)
 {
     CRLog::info("HyphDictionaryList::open(%s)", LCSTR(hyphDirectory) );
     if (clear) {
@@ -610,6 +683,10 @@ bool HyphDictionaryList::open(lString32 hyphDirectory, bool clear)
         int len = container->GetObjectCount();
         int count = 0;
         CRLog::info("%d items found in hyph directory", len);
+        const bool cacheHeaders = !metadataCache.empty() && stream.isNull();
+        const HyphMetadataEntries stored = cacheHeaders ? loadHyphMetadata(metadataCache) : HyphMetadataEntries();
+        HyphMetadataEntries current;
+        size_t cacheHits = 0;
         for (int i = 0; i < len; i++) {
             const LVContainerItemInfo* item = container->GetObjectInfo(i);
             lString32 name = item->GetName();
@@ -630,6 +707,18 @@ bool HyphDictionaryList::open(lString32 hyphDirectory, bool clear)
                 langTag = id.substr(0, 2);
             } else if (name.endsWith(".pattern")) {
                 t = HDT_DICT_TEX;
+                const lString8 path = cacheHeaders ? UnicodeToUtf8(filename) : lString8();
+                const lString8 stamp = cacheHeaders ? LVFileMetadataFingerprint(path) : lString8();
+                const auto previous = stamp.empty() ? stored.end() : stored.find(path.c_str());
+                if (previous != stored.end() && previous->second.stamp == stamp) {
+                    const HyphMetadata &metadata = previous->second;
+                    if (!metadata.title.empty())
+                        _list.add(new HyphDictionary(t, metadata.title, id, metadata.langTag, filename));
+                    current.emplace(previous->first, metadata);
+                    ++cacheHits;
+                    ++count;
+                    continue;
+                }
                 LVStreamRef hyphStream = LVOpenFileStream(filename.c_str(), LVOM_READ);
                 if (hyphStream.isNull()) {
                     CRLog::error("Failed to open hyphenation dictionary: %s\n", LCSTR(filename));
@@ -637,15 +726,17 @@ bool HyphDictionaryList::open(lString32 hyphDirectory, bool clear)
                 }
                 HyphPatternReader reader;
                 LVXMLParser parser(hyphStream, &reader);
-                if (parser.CheckFormat()) {
-                    if (parser.Parse()) {
-                        if (reader.isValid()) {
-                            title = reader.GetTitle();
-                            langTag = reader.GetLangTag();
-                        } else {
-                            CRLog::error("Invalid/incomplete hyphenation dictionary in file \"%s\"!", LCSTR(name));
-                        }
+                if (parser.CheckFormat() && parser.Parse()) {
+                    if (reader.isValid()) {
+                        title = reader.GetTitle();
+                        langTag = reader.GetLangTag();
+                    } else {
+                        CRLog::error("Invalid/incomplete hyphenation dictionary in file \"%s\"!", LCSTR(name));
                     }
+                    // Old shipped patterns can lack metadata. Remember their rejection too.
+                    if (!stamp.empty() && title.length() <= 1024 && langTag.length() <= 256 &&
+                        stamp == LVFileMetadataFingerprint(path))
+                        current.emplace(path.c_str(), HyphMetadata{stamp, title, langTag});
                 }
             } else
                 continue;
@@ -653,6 +744,8 @@ bool HyphDictionaryList::open(lString32 hyphDirectory, bool clear)
                 _list.add(new HyphDictionary(t, title, id, langTag, filename));
             count++;
         }
+        if (cacheHeaders && (current.size() != stored.size() || cacheHits != current.size()))
+            saveHyphMetadata(metadataCache, current);
         _list.sort(HyphDictionary_comparator);
         CRLog::info("%d dictionaries added to list", _list.length());
         return true;

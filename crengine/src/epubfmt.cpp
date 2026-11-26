@@ -32,6 +32,8 @@
 #include "../include/lvstreamutils.h"
 #include "../include/lvxmlparser.h"
 #include "../include/lvhtmlparser.h"
+#include "../include/lvhashtable.h"
+#include "../include/lvperf.h"
 #include "../include/lvxmlutils.h"
 
 
@@ -40,33 +42,21 @@ public:
     lString32 href;
     lString32 mediaType;
     lString32 id;
-    lString32 title;
-    bool nonlinear;
-    EpubItem()
-    { }
-    EpubItem( const EpubItem & v )
-        : href(v.href), mediaType(v.mediaType), id(v.id)
-    { }
-    EpubItem & operator = ( const EpubItem & v )
-    {
-        href = v.href;
-        mediaType = v.mediaType;
-        id = v.id;
-        return *this;
-    }
+    bool nonlinear = false;
 };
 
-class EpubItems : public LVPtrVector<EpubItem> {
+class EpubItems {
+    LVPtrVector<EpubItem> _items;
+    LVHashTable<lString32, EpubItem *> _byId{16};
 public:
-    EpubItem * findById( const lString32 & id )
-    {
-        if ( id.empty() )
-            return NULL;
-        for ( int i=0; i<length(); i++ )
-            if ( get(i)->id == id )
-                return get(i);
-        return NULL;
+    void add(EpubItem *item) {
+        _items.add(item);
+        // The first manifest entry wins when a malformed book repeats an ID.
+        if (!_byId.get(item->id))
+            _byId.set(item->id, item);
     }
+    bool empty() const { return _items.empty(); }
+    EpubItem *findById(const lString32 &id) const { return _byId.get(id); }
 };
 
 //static void dumpZip( LVContainerRef arc ) {
@@ -157,13 +147,12 @@ static int markFlibustaFootnoteTargets( ldomDocument * doc, ldomNode * node, int
     return marked;
 }
 
-bool DetectEpubFormat( LVStreamRef stream )
+LVContainerRef OpenEpubArchive( LVStreamRef stream )
 {
-
-
+    LVPerfScope detectTiming("epub.detect");
     LVContainerRef m_arc = LVOpenArchieve( stream );
     if ( m_arc.isNull() )
-        return false; // not a ZIP archive
+        return LVContainerRef();
 
     //dumpZip( m_arc );
 
@@ -188,8 +177,13 @@ bool DetectEpubFormat( LVStreamRef stream )
     }
 
     if ( mimeType != U"application/epub+zip" )
-        return false;
-    return true;
+        return LVContainerRef();
+    return m_arc;
+}
+
+bool DetectEpubFormat( LVStreamRef stream )
+{
+    return !OpenEpubArchive(stream).isNull();
 }
 
 void ReadEpubNcxToc( ldomDocument * doc, ldomNode * mapRoot, LVTocItem * baseToc, ldomDocumentFragmentWriter & appender ) {
@@ -996,7 +990,15 @@ public:
 
 bool ImportEpubDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCallback * progressCallback, CacheLoadingCallback * formatCallback, bool metadataOnly )
 {
-    LVContainerRef arc = LVOpenArchieve( stream );
+    return ImportEpubDocument(stream, m_doc, progressCallback, formatCallback, metadataOnly, LVContainerRef());
+}
+
+bool ImportEpubDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCallback * progressCallback,
+                         CacheLoadingCallback * formatCallback, bool metadataOnly, LVContainerRef arc )
+{
+    LVPerfScope importTiming("epub.import");
+    if ( arc.isNull() )
+        arc = LVOpenArchieve(stream);
     if ( arc.isNull() )
         return false; // not a ZIP archive
 
@@ -1018,7 +1020,7 @@ bool ImportEpubDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCall
         return true;
     }
 
-    m_doc->setContainer(m_arc);
+    m_doc->setContainer(m_arc, true);
 
     if ( progressCallback )
         progressCallback->OnLoadFileProgress(1);
@@ -1055,7 +1057,9 @@ bool ImportEpubDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCall
     // reading content stream
     {
         CRLog::debug("Parsing opf");
+        LVPerfScope opfTiming("epub.opf");
         ldomDocument * doc = LVParseXMLStream( content_stream );
+        opfTiming.finish();
         if ( !doc )
             return false;
 
@@ -1144,7 +1148,10 @@ bool ImportEpubDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCall
         // key if any.
         if (!metadataOnly) {
             CRLog::debug("Trying loading from cache");
-            if ( m_doc->openFromCache(formatCallback, progressCallback) ) {
+            const auto cacheStart = LVPerfScope::timestamp();
+            const bool fromCache = m_doc->openFromCache(formatCallback, progressCallback);
+            LVPerfScope::logElapsed(fromCache ? "epub.cache.hit" : "epub.cache.miss", cacheStart);
+            if (fromCache) {
                 CRLog::debug("Loaded from cache");
                 // Cached EPUB DOMs bypass the import path below. The earliest
                 // Flibusta patch also stored inline hints with STALE computed
@@ -1317,11 +1324,17 @@ bool ImportEpubDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCall
             progressCallback->OnLoadFileProgress(2);
 
         // items
+        LVPerfScope manifestTiming("epub.manifest");
         CRLog::debug("opf: reading items");
-        for ( size_t i=1; i<=EPUB_ITEM_MAX_ITER; i++ ) {
-            ldomNode * item = doc->nodeFromXPath(lString32("package/manifest/item[") << fmt::decimal(i) << "]");
-            if ( !item )
-                break;
+        ldomNode *manifest = doc->nodeFromXPath(U"package/manifest");
+        const int manifestChildren = manifest ? manifest->getChildCount() : 0;
+        const lUInt16 itemId = doc->getElementNameIndex(U"item");
+        unsigned remainingItems = EPUB_ITEM_MAX_ITER;
+        for (int i = 0; i < manifestChildren && remainingItems; ++i) {
+            ldomNode *item = manifest->getChildNode(i);
+            if (!item->isElement() || item->getNodeId() != itemId)
+                continue;
+            --remainingItems;
             lString32 href = item->getAttributeValue("href");
             lString32 mediaType = item->getAttributeValue("media-type");
             lString32 id = item->getAttributeValue("id");
@@ -1349,7 +1362,7 @@ bool ImportEpubDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCall
                 epubItem->href = href;
                 epubItem->id = id;
                 epubItem->mediaType = mediaType;
-                epubItems.add( epubItem );
+                epubItems.add(epubItem);
 
                 if ( isEpub3 && navHref.empty() ) {
                     lString32 properties = item->getAttributeValue("properties");
@@ -1385,12 +1398,14 @@ bool ImportEpubDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCall
             }
         }
         CRLog::debug("opf: reading items done.");
+        manifestTiming.finish();
 
         if ( progressCallback )
             progressCallback->OnLoadFileProgress(4);
 
         // spine == itemrefs
-        if ( epubItems.length()>0 ) {
+        if ( !epubItems.empty() ) {
+            LVPerfScope spineTiming("epub.spine");
             CRLog::debug("opf: reading spine");
             ldomNode * spine = doc->nodeFromXPath( cs32("package/spine") );
             if ( spine ) {
@@ -1403,10 +1418,14 @@ bool ImportEpubDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCall
                 if ( page_map!=NULL )
                     pageMapHref = LVCombinePaths(codeBase, page_map->href);
 
-                for ( size_t i=1; i<=EPUB_ITEM_MAX_ITER; i++ ) {
-                    ldomNode * item = doc->nodeFromXPath(lString32("package/spine/itemref[") << fmt::decimal(i) << "]");
-                    if ( !item )
-                        break;
+                const int spineChildren = spine->getChildCount();
+                const lUInt16 itemrefId = doc->getElementNameIndex(U"itemref");
+                unsigned remainingRefs = EPUB_ITEM_MAX_ITER;
+                for (int i = 0; i < spineChildren && remainingRefs; ++i) {
+                    ldomNode *item = spine->getChildNode(i);
+                    if (!item->isElement() || item->getNodeId() != itemrefId)
+                        continue;
+                    --remainingRefs;
                     EpubItem * epubItem = epubItems.findById( item->getAttributeValue("idref") );
                     if ( epubItem ) {
                         epubItem->nonlinear = lString32(item->getAttributeValue("linear")).lowercase() == U"no";
@@ -1432,7 +1451,6 @@ bool ImportEpubDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCall
 
     lUInt32 saveFlags = m_doc->getDocFlags();
     m_doc->setDocFlags( saveFlags );
-    m_doc->setContainer( m_arc );
 
     ldomDocumentWriter writer(m_doc);
 #if 0

@@ -74,11 +74,12 @@ static int check(const char *skin,const char *out) {
     original->setInt(PROP_INTERLINE_SPACE,100);
     CRPropRef staged=LVClonePropsContainer(original);
     CRSettingsMenu *root=makeMenu(wm,staged);
-    CHECK(root->isSettingsEditor() && !root->isActionMenu() && root->getItems().length()==7);
+    CHECK(root->isSettingsEditor() && !root->isActionMenu() && root->getItems().length()==8);
     CHECK(root->getItems()[0]->getLabel()=="Font & text");
-    CHECK(root->getItems()[5]->getLabel()=="Dictionaries");
-    CHECK(root->getItems()[6]->getLabel()=="About & updates");
-    CHECK(child(root,6)->getItems().length()==3);
+    CHECK(root->getItems()[5]->getLabel()=="Default reader");
+    CHECK(root->getItems()[6]->getLabel()=="Dictionaries");
+    CHECK(root->getItems()[7]->getLabel()=="About & updates");
+    CHECK(child(root,7)->getItems().length()==3);
     CHECK(!root->settingsChanged());
     for (int rotated=0;rotated<2;++rotated) {
         wm.reconfigure(rotated?1448:1072,rotated?1072:1448,rotated?CR_ROTATE_ANGLE_90:CR_ROTATE_ANGLE_0);
@@ -89,6 +90,44 @@ static int check(const char *skin,const char *out) {
         CHECK(root->getTitleRect(header) && root->getClientRect(client) && root->getScrollRect(footer));
         CHECK(header.bottom==client.top && client.bottom==footer.top);
         preview(screen,std::string(out)+(rotated?"/grouped-landscape.pgm":"/grouped-portrait.pgm"));
+        CRMenu *defaults = child(root, 5);
+        CHECK(defaults->onSelect() == 1 && wm.getTopVisibleWindow() == defaults);
+        wm.update(true, true);
+        CHECK(defaults->getItems().length() == 7);
+        CHECK(defaults->getItems()[0]->getLabel() == "All supported formats");
+        CHECK(defaults->getItems()[1]->getLabel() == "FictionBook");
+        CHECK(defaults->getItems()[2]->getLabel() == "EPUB");
+        using Check = CRMenuItem::CheckState;
+        auto checkState = [&](int item) { return defaults->getItems()[item]->getCheckState(); };
+        CHECK(checkState(0) == Check::Unchecked && checkState(1) == Check::Unchecked);
+        lvRect formats;
+        CHECK(defaults->getClientRect(formats));
+        int epubY = formats.top + 2 * defaults->getItemHeight() + defaults->getItemHeight() / 2;
+        defaults->onTouchEvent(formats.left + 70, epubY, CRTOUCH_DOWN);
+        defaults->onTouchEvent(formats.left + 70, epubY, CRTOUCH_UP);
+        wm.processPostedEvents();
+        CHECK(defaults->onCommand(MCMD_SELECT_2));
+        CHECK(wm.getTopVisibleWindow() == defaults);
+        CHECK(checkState(0) == Check::Mixed && checkState(1) == Check::Checked &&
+              checkState(2) == Check::Checked && checkState(3) == Check::Unchecked);
+        wm.update(true, true);
+        preview(screen, std::string(out) + (rotated ? "/default-reader-landscape.pgm" : "/default-reader-portrait.pgm"));
+        CHECK(defaults->onCommand(MCMD_SELECT_1));
+        for (int item = 0; item < defaults->getItems().length(); ++item)
+            CHECK(checkState(item) == Check::Checked);
+        CHECK(defaults->onCommand(MCMD_SELECT_3));
+        CHECK(checkState(0) == Check::Mixed && checkState(2) == Check::Unchecked);
+        CHECK(defaults->onCommand(MCMD_SELECT_1));
+        CHECK(checkState(0) == Check::Checked && checkState(2) == Check::Checked);
+        CHECK(defaults->onCommand(MCMD_SELECT_1));
+        for (int item = 0; item < defaults->getItems().length(); ++item)
+            CHECK(checkState(item) == Check::Unchecked);
+        CHECK(defaults->onCommand(MCMD_SELECT_2));
+        CHECK(defaults->onCommand(DCMD_BUTTON_PRESSED, BTN_CLOSE));
+        CHECK(wm.getTopVisibleWindow() == root && !root->settingsChanged() && wm.applied == 0);
+        CHECK(defaults->onSelect() == 1 && checkState(1) == Check::Unchecked);
+        CHECK(defaults->onCommand(DCMD_BUTTON_PRESSED, BTN_SETTINGS_DONE));
+        CHECK(wm.getTopVisibleWindow() == root && wm.applied == 0);
         CRMenu *fonts=child(root,0);
         CHECK(fonts->getItems().length()==6);
         wm.activateWindow(fonts); wm.update(true,true);

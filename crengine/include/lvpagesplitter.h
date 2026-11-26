@@ -251,11 +251,18 @@ public:
     bool deserialize( SerialBuf & buf );
 };
 
-class LVRendPageList : public LVPtrVector<LVRendPageInfo>
+class LVRendPageList : private LVPtrVector<LVRendPageInfo>
 {
     bool has_nonlinear_flows;
+    LVArray<lInt64> _lookupEnds;
 public:
     LVRendPageList() : has_nonlinear_flows(false) {}
+    using LVPtrVector<LVRendPageInfo>::empty;
+    using LVPtrVector<LVRendPageInfo>::length;
+    const LVRendPageInfo *operator[](int index) const { return get(index); }
+    // Takes ownership. Page geometry must be final before appending.
+    void add(LVRendPageInfo *page);
+    void clear();
     int FindNearestPage( int y, int direction );
     void setHasNonLinearFlows() { has_nonlinear_flows=true; }
     bool hasNonLinearFlows() { return has_nonlinear_flows; }

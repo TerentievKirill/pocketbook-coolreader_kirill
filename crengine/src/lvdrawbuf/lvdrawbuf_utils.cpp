@@ -102,25 +102,6 @@ lUInt32 DitherNBitColor( lUInt32 color, lUInt32 x, lUInt32 y, int bits )
     return cl & mask;
 }
 
-// NOTE: For more accurate (but slightly more costly) conversions, see:
-//       stb does (lUInt8) (((r*77) + (g*150) + (b*29)) >> 8) (That's roughly the Rec601Luma algo)
-//       Qt5 does (lUInt8) (((r*11) + (g*16) + (b*5)) >> 5) (That's closer to Rec601Luminance or Rec709Luminance IIRC)
-lUInt32 rgbToGray( lUInt32 color )
-{
-    lUInt32 r = (0xFF0000 & color) >> 16;
-    lUInt32 g = (0x00FF00 & color) >> 8;
-    lUInt32 b = (0x0000FF & color) >> 0;
-    return ((r + g + g + b)>>2) & 0xFF;
-}
-
-lUInt8 rgbToGray( lUInt32 color, int bpp )
-{
-    lUInt32 r = (0xFF0000 & color) >> 16;
-    lUInt32 g = (0x00FF00 & color) >> 8;
-    lUInt32 b = (0x0000FF & color) >> 0;
-    return (lUInt8)(((r + g + g + b)>>2) & (((1<<bpp)-1)<<(8-bpp)));
-}
-
 lUInt8 rgbToGrayMask( lUInt32 color, int bpp )
 {
     switch ( bpp ) {
@@ -145,19 +126,6 @@ lUInt8 rgbToGrayMask( lUInt32 color, int bpp )
         return (lUInt8)color;
     }
     return (lUInt8)color;
-}
-
-void ApplyAlphaRGB( lUInt32 &dst, lUInt32 src, lUInt32 alpha )
-{
-    if ( alpha == 0 ) {
-        dst = src;
-    } else if ( alpha < 255 ) {
-        src &= 0xFFFFFF;
-        lUInt32 opaque = alpha ^ 0xFF;
-        lUInt32 n1 = (((dst & 0xFF00FF) * alpha + (src & 0xFF00FF) * opaque) >> 8) & 0xFF00FF;
-        lUInt32 n2 = (((dst & 0x00FF00) * alpha + (src & 0x00FF00) * opaque) >> 8) & 0x00FF00;
-        dst = n1 | n2;
-    }
 }
 
 void ApplyAlphaRGB565( lUInt16 &dst, lUInt16 src, lUInt32 alpha )

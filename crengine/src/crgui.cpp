@@ -1097,6 +1097,15 @@ void CRMenu::drawTitleBar() {
         CRGUIWindowBase::drawTitleBar();
         return;
     }
+    drawReaderHeader(_label, _menu ? _menu->getLabel() : settingsRoot()->_settingsScope,
+                     settingsFont(), settingsFont(true),
+                     lString32((_menu || isActionMenu()) ? _("Back") : _("Cancel")),
+                     lString32(isActionMenu() ? _("Read") : _("Done")), BTN_SETTINGS_DONE);
+}
+
+void CRGUIWindowBase::drawReaderHeader(const lString32 &title, const lString32 &context,
+                                      LVFontRef titleFont, LVFontRef buttonFont,
+                                      const lString32 &left, const lString32 &right, int rightButton) {
     LVDrawBuf &buf = *_wm->getScreen()->getCanvas();
     CRRectSkinRef skin = getSkin()->getTitleSkin();
     lvRect header;
@@ -1104,9 +1113,8 @@ void CRMenu::drawTitleBar() {
     lUInt32 ink = skin->getTextColor(), paper = skin->getBackgroundColor();
     buf.FillRect(header, paper);
     buf.FillRect(header.left, header.bottom-2, header.right, header.bottom, ink);
-    LVFontRef font = settingsFont(true);
-    lString32 left = (_menu || isActionMenu()) ? lString32(_("Back")) : lString32(_("Cancel"));
-    lString32 done(isActionMenu() ? _("Read") : _("Done"));
+    LVFontRef font = buttonFont;
+    const lString32 &done = right;
     int width = std::max(header.height()*3/2, (int)font->getTextWidth(left.c_str(),left.length())+32);
     width = std::max(width, (int)font->getTextWidth(done.c_str(),done.length())+32);
     width = std::min(width, header.width()/3);
@@ -1121,13 +1129,13 @@ void CRMenu::drawTitleBar() {
     backSkin->drawButton(buf,back); doneSkin->drawButton(buf,apply);
     if (!_controlsCreated) {
         addControl(new CRSettingsButtonControl(this,back,backSkin,DCMD_BUTTON_PRESSED,BTN_CLOSE));
-        addControl(new CRSettingsButtonControl(this,apply,doneSkin,DCMD_BUTTON_PRESSED,BTN_SETTINGS_DONE));
+        addControl(new CRSettingsButtonControl(this,apply,doneSkin,DCMD_BUTTON_PRESSED,rightButton));
     }
-    lvRect context(caption);
-    context.bottom = context.top + font->getHeight() + 8;
-    settingsText(buf,context,_menu ? _menu->getLabel() : settingsRoot()->_settingsScope,font,ink,true);
-    caption.top = context.bottom;
-    settingsText(buf,caption,_label,settingsFont(),ink,true);
+    lvRect scope(caption);
+    scope.bottom = scope.top + font->getHeight() + 8;
+    settingsText(buf,scope,context,font,ink,true);
+    caption.top = scope.bottom;
+    settingsText(buf,caption,title,titleFont,ink,true);
 }
 
 void CRMenu::invalidateSettingsValues() {
@@ -1175,12 +1183,22 @@ void CRMenu::drawSettingsItem(CRMenuItem &item, LVDrawBuf &buf, lvRect rc, bool 
     rc.shrinkBy(lvRect(pad,6,pad,6));
     if (selected) buf.FillRect(rc.left-pad,rc.top+8,rc.left-pad+4,rc.bottom-8,ink);
     bool choices = !_propName.empty() && !item.isSubmenu();
-    if (choices) {
+    const auto check = item.getCheckState();
+    if (choices || check != CRMenuItem::CheckState::None) {
         int size = settingsFont(true)->getHeight();
         lvRect mark(rc.left,rc.top+(rc.height()-size)/2,rc.left+size,rc.top+(rc.height()+size)/2);
         buf.DrawFrame(mark,ink,2);
-        if (_props->getStringDef(UnicodeToUtf8(_propName).c_str()) == item.getPropValue()) {
+        if (choices && _props->getStringDef(UnicodeToUtf8(_propName).c_str()) == item.getPropValue()) {
             mark.shrinkBy(lvRect(7,7,7,7)); buf.FillRect(mark,ink);
+        } else if (check == CRMenuItem::CheckState::Checked) {
+            const int start = size/4, bend = size*7/16, stroke = std::max(2, size/10);
+            for (int x = start; x < size-start; ++x) {
+                const int y = size*9/16 + (x < bend ? x-start : bend-start - (x-bend)*2);
+                buf.FillRect(mark.left+x, mark.top+y, mark.left+x+stroke, mark.top+y+stroke, ink);
+            }
+        } else if (check == CRMenuItem::CheckState::Mixed) {
+            const int y = mark.top + size/2;
+            buf.FillRect(mark.left+size/4, y-1, mark.right-size/4, y+2, ink);
         }
         rc.left += size+pad;
     }
@@ -2447,7 +2465,7 @@ bool CRMenu::onCommand( int command, int params )
         }
         if ((command == DCMD_BUTTON_PRESSED || command == DCMD_BUTTON_PRESSED_LONG) && params == BTN_SETTINGS_DONE) {
             CRMenu *root=settingsRoot();
-            closeAllMenu(root->getId(),0);
+            closeAllMenu(root->isActionMenu() ? 0 : root->getId(),0);
             return true;
         }
         if (command == DCMD_BUTTON_PRESSED && params == BTN_CLOSE && !_menu) {

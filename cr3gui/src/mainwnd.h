@@ -172,7 +172,7 @@ public:
         _docview->propsUpdateDefaults( _props );
     }
 
-    V3DocViewWin( CRGUIWindowManager * wm, lString32 dataDir );
+    V3DocViewWin( CRGUIWindowManager * wm, lString32 dataDir, bool noDefaultDocument = false );
 
     void applySettings();
 

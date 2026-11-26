@@ -8,11 +8,12 @@ from targets import DEFAULT_TARGET, load_target, target_evidence, firmware_path,
 from runtime_compatibility import runtime_fingerprint
 
 REQUIRED_TESTS = {
-    'shared-device-profiles',
+    'shared-device-profiles', 'translation-lookup', 'reader-screens', 'quick-menu-icons',
     'frontlight-status', 'ota-ui', 'ota-package', 'reference-initialization', 'css-null-ancestor', 'skin-language-symbol',
     'dependency-compatibility', 'web-tls', 'standby-frontlight',
-    'gray-buffer-copy',
+    'gray-buffer-copy', 'image-scaling', 'hyphenation-metadata',
     'performance-caches', 'reader-checkpoint', 'settings-editor',
+    'fb2-embedded-binaries', 'in-book-search', 'file-associations', 'document-directory', 'ordered-list-numbering',
     'document-render', 'reading-state-migration', 'dictionary-browser', 'dictionary-safety', 'native-dictionary-api', 'dictionary-download', 'stardict', 'history-persistence', 'archive-boundaries', 'atomic-faults',
 }
 

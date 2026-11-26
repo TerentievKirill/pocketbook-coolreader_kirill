@@ -330,6 +330,8 @@ class LVDocView : public CacheLoadingCallback
 {
     friend class LVDrawThread;
 private:
+    void updatePageNumbers(LVTocItem *item, LVTocSectionIndex *sections);
+
     int m_bitsPerPixel;
     int m_dx;
     int m_dy;
@@ -706,6 +708,10 @@ public:
     void updateBookMarksRanges();
     /// get page document range, -1 for current page
     LVRef<ldomXRange> getPageDocumentRange( int pageIndex=-1 );
+    /// Find and highlight the next matching page. Origin 0 includes the current
+    /// page, 1 skips it, and -1 searches the other side of the current page.
+    /// A previous match can anchor navigation on either page of the visible spread.
+    int searchPages(const lString32 &pattern, int origin, int direction, int fromPage = -1);
     /// get page text, -1 for current page
     lString32 getPageText( bool wrapWords, int pageIndex=-1 );
     /// returns number of non-space characters on current page
@@ -910,7 +916,7 @@ public:
     LVStreamRef getDocumentFileStream( lString32 filePath );
 
     /// draws page to image buffer
-    void drawPageTo( LVDrawBuf * drawBuf, LVRendPageInfo & page, lvRect * pageRect, int pageCount, int basePage);
+    void drawPageTo( LVDrawBuf * drawBuf, const LVRendPageInfo & page, lvRect * pageRect, int pageCount, int basePage);
     /// draws coverpage to image buffer
     void drawCoverTo( LVDrawBuf * drawBuf, lvRect & rc );
     /// returns cover page image source, if any

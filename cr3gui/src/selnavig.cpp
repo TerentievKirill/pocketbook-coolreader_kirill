@@ -15,17 +15,12 @@
 void CRSelNavigationDialog::moveBy( int delta )
 {
 #if CR_POCKETBOOK==1
-    int pageIndex = -1;
-    if ( delta==1 ) {
-        // forward
-        pageIndex = _mainwin->findPagesText(_pattern, 1, 1);
+    if (delta == 1 || delta == -1) {
+        int pageIndex = _mainwin->findPagesText(_pattern, 1, delta, _searchPage);
         if (pageIndex == -1)
-            pageIndex = _mainwin->findPagesText(_pattern, -1, 1);
-    } else if ( delta==-1 ) {
-        // backward
-        pageIndex = _mainwin->findPagesText(_pattern, 1, -1);
-        if (pageIndex == -1)
-            pageIndex = _mainwin->findPagesText(_pattern, -1, -1);
+            pageIndex = _mainwin->findPagesText(_pattern, -1, delta, _searchPage);
+        if (pageIndex >= 0)
+            _searchPage = pageIndex;
     }
 #else
     if ( delta==1 ) {
@@ -49,8 +44,9 @@ void CRSelNavigationDialog::moveBy( int delta )
     _mainwin->setDirty();
 }
 
-CRSelNavigationDialog::CRSelNavigationDialog(  CRGUIWindowManager * wm, CRViewDialog * mainwin, lString32 pattern )
-: BackgroundFitWindow(  wm, mainwin ), _mainwin(mainwin), _pattern(pattern)
+CRSelNavigationDialog::CRSelNavigationDialog(CRGUIWindowManager *wm, CRViewDialog *mainwin,
+                                             lString32 pattern, int searchPage)
+    : BackgroundFitWindow(wm, mainwin), _mainwin(mainwin), _pattern(pattern), _searchPage(searchPage)
 {
     _rect = _wm->getScreen()->getRect();
     _rect.top = _rect.bottom; // null height

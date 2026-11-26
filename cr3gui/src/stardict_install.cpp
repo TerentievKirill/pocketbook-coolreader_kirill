@@ -1,3 +1,4 @@
+#include "cri18n.h"
 #include "stardict_install.h"
 #include "stardict.h"
 #include <crengine.h>
@@ -37,26 +38,26 @@ bool StarDictInstallation::poll() {
     if(!s.started) {
         s.started=true;
         s.archive=LVOpenArchieve(LVOpenFileStream(s.archivePath.c_str(),LVOM_READ));
-        if(s.archive.isNull()||s.archive->GetObjectCount()>128)return s.fail("This StarDict download is not a supported ZIP archive.");
+        if(s.archive.isNull()||s.archive->GetObjectCount()>128)return s.fail(_("This StarDict download is not a supported ZIP archive."));
         uint64_t total=0;std::set<std::string> names;unsigned ifos=0;
         for(int i=0;i<s.archive->GetObjectCount();++i) {
             auto *info=s.archive->GetObjectInfo(i);std::string path=UnicodeToUtf8(lString32(info->GetName())).c_str();
-            if(!safePath(path))return s.fail("The dictionary archive contains an unsafe filename.");
+            if(!safePath(path))return s.fail(_("The dictionary archive contains an unsafe filename."));
             if(path.back()=='/')continue;
             std::string name=path.substr(path.find_last_of('/')==std::string::npos?0:path.find_last_of('/')+1);
             bool accepted=false;for(const char *ext:{".ifo",".idx",".idx.gz",".dict",".dict.dz",".syn",".syn.gz"})if(suffix(name,ext))accepted=true;
             if(!accepted)continue;
-            if(!names.insert(name).second||name.size()>240)return s.fail("The dictionary archive contains conflicting filenames.");
+            if(!names.insert(name).second||name.size()>240)return s.fail(_("The dictionary archive contains conflicting filenames."));
             if(suffix(name,".ifo"))++ifos;
-            uint64_t n=info->GetSize();if(n>256*1024*1024)return s.fail("A dictionary file is too large for this reader.");
-            total+=n;if(total>512*1024*1024)return s.fail("The unpacked dictionary is too large for this reader.");
+            uint64_t n=info->GetSize();if(n>256*1024*1024)return s.fail(_("A dictionary file is too large for this reader."));
+            total+=n;if(total>512*1024*1024)return s.fail(_("The unpacked dictionary is too large for this reader."));
             s.files.emplace_back(i,name);
         }
-        if(ifos!=1||s.files.size()<3)return s.fail("The archive must contain one complete StarDict dictionary.");
+        if(ifos!=1||s.files.size()<3)return s.fail(_("The archive must contain one complete StarDict dictionary."));
         struct statvfs space;
         std::string parent=s.target.substr(0,s.target.find_last_of('/'));
-        if(statvfs(parent.c_str(),&space)||uint64_t(space.f_bavail)*space.f_frsize<total+1024*1024)return s.fail("Not enough free storage to unpack this dictionary.");
-        if(!removeStage(s.stage)||mkdir(s.stage.c_str(),0755))return s.fail("Could not prepare the dictionary folder.");
+        if(statvfs(parent.c_str(),&space)||uint64_t(space.f_bavail)*space.f_frsize<total+1024*1024)return s.fail(_("Not enough free storage to unpack this dictionary."));
+        if(!removeStage(s.stage)||mkdir(s.stage.c_str(),0755))return s.fail(_("Could not prepare the dictionary folder."));
         s.ownsStage=true;
     }
     unsigned char buffer[65536];size_t budget=1024*1024;
@@ -64,25 +65,25 @@ bool StarDictInstallation::poll() {
         if(!s.output) {
             auto *info=s.archive->GetObjectInfo(s.files[s.index].first);
             s.input=s.archive->OpenStream(info->GetName(),LVOM_READ);
-            if(s.input.isNull()||s.input->GetSize()!=info->GetSize())return s.fail("Could not unpack the dictionary.");
+            if(s.input.isNull()||s.input->GetSize()!=info->GetSize())return s.fail(_("Could not unpack the dictionary."));
             s.remaining=s.input->GetSize();s.output=fopen((s.stage+"/"+s.files[s.index].second).c_str(),"wb");
-            if(!s.output)return s.fail("Could not save dictionary files. Check the reader's storage.");
+            if(!s.output)return s.fail(_("Could not save dictionary files. Check the reader's storage."));
         }
         if(s.remaining) {
             lvsize_t n=0,wanted=std::min(lvsize_t(std::min(sizeof(buffer),budget)),s.remaining);
-            if(s.input->Read(buffer,wanted,&n)!=LVERR_OK||!n||n>wanted||fwrite(buffer,1,n,s.output)!=n)return s.fail("The dictionary archive is incomplete or could not be saved.");
+            if(s.input->Read(buffer,wanted,&n)!=LVERR_OK||!n||n>wanted||fwrite(buffer,1,n,s.output)!=n)return s.fail(_("The dictionary archive is incomplete or could not be saved."));
             s.remaining-=n;budget-=n;
         }
         if(!s.remaining) {
             bool ok=!fflush(s.output)&&!fsync(fileno(s.output));if(fclose(s.output))ok=false;s.output=NULL;s.input.Clear();
-            if(!ok)return s.fail("Could not finish saving dictionary files.");
+            if(!ok)return s.fail(_("Could not finish saving dictionary files."));
             ++s.index;
         }
     }
     if(s.index<s.files.size())return false;
     auto entries=stardict::discover(s.stage);stardict::Dictionary dictionary;
-    if(entries.size()!=1||!dictionary.open(entries[0].path))return s.fail("This StarDict dictionary is incomplete or uses an unsupported format.");
-    struct stat64 existing;if(!lstat64(s.target.c_str(),&existing))return s.fail("This dictionary is already installed. Your existing files have been kept.");
-    if(rename(s.stage.c_str(),s.target.c_str()))return s.fail("Could not finish installing the dictionary.");
+    if(entries.size()!=1||!dictionary.open(entries[0].path))return s.fail(_("This StarDict dictionary is incomplete or uses an unsupported format."));
+    struct stat64 existing;if(!lstat64(s.target.c_str(),&existing))return s.fail(_("This dictionary is already installed. Your existing files have been kept."));
+    if(rename(s.stage.c_str(),s.target.c_str()))return s.fail(_("Could not finish installing the dictionary."));
     s.ownsStage=false;s.success=s.done=true;return true;
 }

@@ -3,6 +3,7 @@
 import copy
 import importlib.util
 import json
+import subprocess
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase, main
@@ -33,8 +34,9 @@ class SharedPackage(TestCase):
         candidates = json.loads((ROOT / 'config/firmware-candidates.json').read_text())['devices']
         expected = {candidate['software_version'] for candidate in candidates}
         expected.add(profile['firmware']['version'])
-        self.assertEqual({device['firmware'] for device in registry['devices']}, expected)
-        self.assertEqual(len(registry['devices']), 4)
+        self.assertEqual({device['firmware'] for device in registry['devices'] if device['firmware']}, expected)
+        self.assertEqual(sum(bool(device['firmware']) for device in registry['devices']), 5)
+        self.assertEqual(len(registry['devices']), 22)
         text = generator.generate(registry)
         for version in expected:
             self.assertIn(version, text)
@@ -42,6 +44,41 @@ class SharedPackage(TestCase):
         duplicate['devices'].append(duplicate['devices'][0])
         with self.assertRaises(ValueError):
             generator.generate(duplicate)
+
+    def test_runtime_admission_for_all_profiles(self):
+        registry = json.loads((ROOT / 'config/pocketbook-devices.json').read_text())
+        with TemporaryDirectory() as directory:
+            folder = Path(directory)
+            (folder / 'pb_device_data.h').write_text(generator.generate(registry))
+            checks = []
+            for device in registry['devices']:
+                model = device['model']
+                firmware = device['firmware'] or ('U' + model + '.6.10.1')
+                for description in (model, 'PB' + model, 'PocketBook ' + model,
+                                    'PocketBook ' + device['name'] + ' (PB' + model + ')'):
+                    checks.append('assert(pbdevice::supported(%s, %s));' %
+                                  (json.dumps(description), json.dumps(firmware)))
+                checks.append('assert(!pbdevice::supported(%s, "U%s.6.9.1"));' %
+                              (json.dumps(model), model))
+            descriptor = ('CR3-OTA-SHARED-2\npocketbook-armv7-softfp\n1.0.8\n' + 'a' * 64 + '\n' +
+                          ''.join(d['model'] + ' ' + str(d['minimum_api']) + '\n' for d in registry['devices']))
+            checks += ['cr3ota::SharedRelease release;',
+                       'assert(cr3ota::parseSharedRelease(%s, release));' % json.dumps(descriptor)]
+            for device in registry['devices']:
+                checks.append('assert(cr3ota::compatible(release, "pocketbook-armv7-softfp", %s, "U.6.10.1"));' % json.dumps(device['model']))
+            checks += ['assert(pbdevice::modelNumber("PB740-2") == "7402");',
+                       'assert(pbdevice::modelNumber("PocketBook InkPad 3 Pro (PB740-3)") == "7403");',
+'assert(!pbdevice::supported("PB1030", "U1030.6.11.1"));',
+                       'assert(!pbdevice::supported("PB1042", "U1042.6.11.1"));',
+                       'assert(!pbdevice::supported("PB629K3", "U629K3.6.11.1"));',
+                       'assert(!pbdevice::supported("PB634K3", nullptr));']
+            source = folder / 'profiles.cpp'
+            source.write_text('#include <cassert>\n#include "pb_device_profile.h"\n#include "ota_version.h"\nint main() {\n' +
+                              '\n'.join(checks) + '\n}\n')
+            binary = folder / 'profiles'
+            subprocess.run(['c++', '-std=c++11', '-I' + str(folder),
+                            '-I' + str(ROOT / 'cr3gui/src'), str(source), '-o', str(binary)], check=True)
+            subprocess.run([str(binary)], check=True)
 
     def test_missing_or_stale_firmware_evidence_blocks_packaging(self):
         profile = load_target('pocketbook-armv7-softfp')

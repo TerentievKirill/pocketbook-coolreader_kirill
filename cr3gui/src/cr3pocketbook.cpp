@@ -3,6 +3,8 @@
  */
 #include <ctime>
 #include <cmath>
+#include <cstdlib>
+#include <cstring>
 #include <crengine.h>
 #include <crgui.h>
 #include "viewdlg.h"
@@ -28,6 +30,9 @@
 #include "pbcheckpoint.h"
 #include "lvperf.h"
 #include "pb_device_profile.h"
+#if defined(POCKETBOOK_PRO) && !defined(POCKETBOOK_PRO_PRO2)
+#include "pbquickmenu.h"
+#endif
 #ifdef POCKETBOOK_FW6
 #include "pbstandbyfrontlight.h"
 #include <signal.h>
@@ -521,6 +526,10 @@ class CRPocketBookWindowManager : public CRGUIWindowManager
 {
 private:
     bool m_incommand;
+    bool _startLogoPending = false;
+#if defined(POCKETBOOK_PRO) && !defined(POCKETBOOK_PRO_PRO2)
+    PBQuickMenuIcons _quickMenuIcons;
+#endif
 protected:
     LVHashTable<lString8, int> _pbTable;
 
@@ -530,6 +539,9 @@ protected:
         }
     }
 public:
+#if defined(POCKETBOOK_PRO) && !defined(POCKETBOOK_PRO_PRO2)
+    PBQuickMenuIcons &quickMenuIcons() { return _quickMenuIcons; }
+#endif
     /// translate string by key, return default value if not found
     virtual lString32 translateString( const char * key, const char * defValue )
     {
@@ -594,14 +606,27 @@ public:
     {
         if (_orientation != storedOrientation)
             reconfigure(ScreenWidth(), ScreenHeight(), (cr_rotate_angle_t)storedOrientation);
-        const lChar32 * imgname =
-                ( _orientation &1 ) ? U"cr3_logo_screen_landscape.png" : U"cr3_logo_screen.png";
-        LVImageSourceRef img = getSkin()->getImage(imgname);
-        if ( !img.isNull() ) {
-            _screen->getCanvas()->Draw(img, 0, 0, _screen->getWidth(), _screen->getHeight());
-        } else {
-            _screen->getCanvas()->Clear(0xFFFFFF);
+        _startLogoPending = true;
+    }
+
+    void finishStartup()
+    {
+        _startLogoPending = false;
+    }
+
+    void showWaitIcon(lString32 filename, int progressPercent) override
+    {
+        if (_startLogoPending && !getSkin()->getImage(filename).isNull()) {
+            _startLogoPending = false;
+            LVPerfScope timing("startup.progress-background");
+            const lChar32 *imgname = (_orientation & 1) ? U"cr3_logo_screen_landscape.png" : U"cr3_logo_screen.png";
+            LVImageSourceRef img = getSkin()->getImage(imgname);
+            if (!img.isNull())
+                _screen->getCanvas()->Draw(img, 0, 0, _screen->getWidth(), _screen->getHeight());
+            else
+                _screen->getCanvas()->Clear(0xFFFFFF);
         }
+        CRGUIWindowManager::showWaitIcon(filename, progressPercent);
     }
 
     // runs event loop
@@ -702,8 +727,10 @@ void CRPocketBookWindowManager::updateCache()
     }
     LVPerfScope timing("cache.save-slice");
     CRTimerUtil timeout(20);
-    if (CR_TIMEOUT == main_win->getDocView()->updateCache(timeout))
-        scheduleCacheSwap(250);
+    if (CR_TIMEOUT == main_win->getDocView()->updateCache(timeout)) {
+        // Allow input between slices without waiting a full quarter-second per slice.
+        scheduleCacheSwap(80);
+    }
 }
 
 static void cache_timer()
@@ -775,6 +802,7 @@ static void scheduleCoverPreparation();
 static void coverPreparationTimer();
 static void scheduleReaderCheckpoint();
 static void schedulePagePrefetch();
+static unsigned long long startupPerfStart;
 #endif
 
 static int link_altParm = 0;
@@ -796,6 +824,8 @@ ibitmap* LVImageSourceRef_to_ibitmab(LVImageSourceRef &img) {
     if( !img.isNull() ) {
 
         ibitmap *bmp = NewBitmap(img->GetWidth(), img->GetHeight());
+        if (!bmp)
+            return NULL;
         LVGrayDrawBuf tmpBufLock( img->GetWidth(), img->GetHeight(), bmp->depth );
 
         tmpBufLock.Draw(img, 0, 0, img->GetWidth(), img->GetHeight(), true);
@@ -843,9 +873,20 @@ void CRPocketBookScreen::flush( bool full )
         if (!_front.isNull())
             _canvas->DrawTo( _front.get(), 0, 0, 0, NULL );
     }
+#ifdef POCKETBOOK_FW6
+    const bool firstBookPaint = startupPerfStart && main_win &&
+        main_win == CRPocketBookWindowManager::instance->getTopVisibleWindow() &&
+        main_win->getDocView()->IsDrawed();
+    if (firstBookPaint)
+        LVPerfScope::logElapsed("startup.first-paint", startupPerfStart);
+#endif
     update( _updateRect, full );
     _updateRect.clear();
 #ifdef POCKETBOOK_FW6
+    if (firstBookPaint) {
+        LVPerfScope::logElapsed("startup.first-refresh", startupPerfStart);
+        startupPerfStart = 0;
+    }
     scheduleReaderCheckpoint();
     schedulePagePrefetch();
 #endif
@@ -871,12 +912,17 @@ void CRPocketBookScreen::update( const lvRect & rc2, bool full )
     else if (!_forceSoft)
         full = false;
 
-    if ( full || forceFullUpdates ) {
+    const bool refreshFull = full || forceFullUpdates;
+    if (refreshFull)
         draw(0, 0, _front->GetWidth(), _front->GetHeight());
+    else
+        draw(rc.left, rc.top, rc.width(), rc.height());
+
+    LVPerfScope refreshTiming("screen.refresh-submit");
+    if (refreshFull) {
         FullUpdate();
         resetFullUpdateCounter();
     } else {
-        draw(rc.left, rc.top, rc.width(), rc.height());
         if (!isDocWnd && rc.height() < 300) {
             if (_update_gray && !forcePartialBwUpdates) {
                 PartialUpdate(rc.left, rc.top, rc.width(), rc.height());
@@ -948,20 +994,6 @@ public:
     {
         showWindow();
     }
-};
-
-#define TM_NB_ICONS 7
-
-const char *touchMenuIcons[TM_NB_ICONS] = {
-    "home",
-    "toc",
-    // "goto",
-    // "cite",
-    "bookmarks",
-    "dictionary",
-    "search",
-    "rotate",
-    "settings"
 };
 
 class CRPocketBookQuickMenuWindow : public CRPocketBookInkViewWindow
@@ -1057,7 +1089,7 @@ public:
 
                 // Match tapped icon
                 int position = icon_space;
-                for( int i = 0; i < TM_NB_ICONS; i++ ) {
+                for( int i = 0; i < pbQuickMenuIconCount; i++ ) {
 
                     // If found icon
                     if( x >= position && x <= position + icon_width ) {
@@ -1087,7 +1119,7 @@ public:
 
                 // Match tapped icon
                 int position = icon_space;
-                for( int i = 0; i < TM_NB_ICONS; i++ ) {
+                for( int i = 0; i < pbQuickMenuIconCount; i++ ) {
 
                     // If found icon
                     if( x >= position && x <= position + icon_width ) {
@@ -1144,58 +1176,32 @@ public:
         return true;
     }
 
+    PBQuickMenuLayout iconLayout() const {
+        return {ScreenWidth(), ScreenHeight(), icon_width, icon_height, icon_space, GetOrientation()};
+    }
+
     virtual void IconTapped(int iconKey, int position, CRGUITouchEventType evType) {
         CRLog::trace("CRPocketBookQuickMenuWindow::IconTapped(%d, %d)", iconKey, position);
-
-        // Image name
-        lString32 path;
-        if( strcmp(touchMenuIcons[iconKey], "bookmarks") == 0 && main_win->getDocView()->currentPageIsBookmarked() ) {
-            path = lString32("icon_") + lString32(touchMenuIcons[iconKey]) + lString32("_alt_tap.png");
-        }
-        else {
-            path = lString32("icon_") + lString32(touchMenuIcons[iconKey]) + lString32("_tap.png");
-        }
-        CRLog::trace("CRPocketBookQuickMenuWindow::IconTapped(): [%d] %s", iconKey, UnicodeToUtf8(path).c_str());
-
-        // Get image
-        LVImageSourceRef img = CRPocketBookWindowManager::instance->getSkin()->getImage(path);
-
-        if( !img.isNull() ) {
-
-            // Convert
-            ibitmap* bmp = LVImageSourceRef_to_ibitmab(img);
-
-            // Draw
-            StretchBitmap(position, 0, icon_width, icon_height, bmp, 0);
-
-            // Shitty bug fix (some black line shows up at the right of the icons)
-            int shittyWidth = round(icon_width*0.04);
-            FillArea(position+icon_width-shittyWidth, 0, shittyWidth, icon_height, 0x00FFFFFF);
-
-            // Free memory
-            free(bmp);
-
-            // Highlight tapped icon
+        const bool bookmarked = strcmp(pbQuickMenuIconNames[iconKey], "bookmarks") == 0 &&
+                                main_win->getDocView()->currentPageIsBookmarked();
+        auto *wm = CRPocketBookWindowManager::instance;
+        if (wm->quickMenuIcons().drawPressed(wm->getSkin(), iconLayout(), bookmarked, iconKey))
             PartialUpdateBW(position, 0, icon_width, icon_height);
-        }
-        else {
-            CRLog::trace("CRPocketBookQuickMenuWindow::IconTapped(): NOT FOUND: [%d] %s", iconKey, UnicodeToUtf8(path).c_str());
-        }
 
         // Close current window
         SelfCloseNoUpdate();
 
         // Execute proper command
-        if( strcmp(touchMenuIcons[iconKey], "home") == 0 ) {
+        if( strcmp(pbQuickMenuIconNames[iconKey], "home") == 0 ) {
             executeCommand(PB_QUICK_MENU_SELECT, 1);
         }
-        else if( strcmp(touchMenuIcons[iconKey], "toc") == 0 ) {
+        else if( strcmp(pbQuickMenuIconNames[iconKey], "toc") == 0 ) {
             executeCommand(PB_QUICK_MENU_SELECT, 7);
         }
-        else if( strcmp(touchMenuIcons[iconKey], "cite") == 0 ) {
+        else if( strcmp(pbQuickMenuIconNames[iconKey], "cite") == 0 ) {
             executeCommand(MCMD_CITES_LIST, 0);
         }
-        else if( strcmp(touchMenuIcons[iconKey], "bookmarks") == 0 ) {
+        else if( strcmp(pbQuickMenuIconNames[iconKey], "bookmarks") == 0 ) {
             if( evType == CRTOUCH_UP ) {
                 executeCommand(PB_QUICK_MENU_SELECT, 3);
             }
@@ -1209,68 +1215,24 @@ public:
                 }
             }
         }
-        else if( strcmp(touchMenuIcons[iconKey], "dictionary") == 0 ) {
+        else if( strcmp(pbQuickMenuIconNames[iconKey], "dictionary") == 0 ) {
             executeCommand(PB_QUICK_MENU_SELECT, 6);
         }
-        else if( strcmp(touchMenuIcons[iconKey], "search") == 0 ) {
+        else if( strcmp(pbQuickMenuIconNames[iconKey], "search") == 0 ) {
             executeCommand(PB_QUICK_MENU_SELECT, 2);
         }
-        else if( strcmp(touchMenuIcons[iconKey], "rotate") == 0 ) {
+        else if( strcmp(pbQuickMenuIconNames[iconKey], "rotate") == 0 ) {
             executeCommand(PB_QUICK_MENU_SELECT, 5);
         }
-        else if( strcmp(touchMenuIcons[iconKey], "settings") == 0 ) {
+        else if( strcmp(pbQuickMenuIconNames[iconKey], "settings") == 0 ) {
             executeCommand(PB_QUICK_MENU_SELECT, 8);
         }
     }
 
     virtual void DrawTop(bool updateScreen) {
-        CRLog::trace("CRPocketBookQuickMenuWindow::DrawTop(%d)", updateScreen?1:0);
-
-        // Draw top background
-        FillArea(0, 0, ScreenWidth(), icon_height+2, 0x00FFFFFF);
-        FillArea(0, icon_height, ScreenWidth(), 1, 0x00000000);
-
-        // Draw top icons
-        int position = icon_space;
-        for( int i = 0; i < TM_NB_ICONS; i++ ) {
-
-
-            // Image name
-            lString32 path;
-            if( strcmp(touchMenuIcons[i], "bookmarks") == 0 && main_win->getDocView()->currentPageIsBookmarked() ) {
-                path = lString32("icon_") + lString32(touchMenuIcons[i]) + lString32("_alt.png");
-            }
-            else {
-                path = lString32("icon_") + lString32(touchMenuIcons[i]) + lString32(".png");
-            }
-            CRLog::trace("CRPocketBookQuickMenuWindow::DrawTop(): [%d] %s", i, UnicodeToUtf8(path).c_str());
-
-            // Get image
-            LVImageSourceRef img = CRPocketBookWindowManager::instance->getSkin()->getImage(path);
-
-            if( !img.isNull() ) {
-
-                // Convert
-                ibitmap* bmp = LVImageSourceRef_to_ibitmab(img);
-
-                // Draw
-                StretchBitmap(position, 0, icon_width, icon_height, bmp, 0);
-
-                // Shitty bug fix (some black line shows up at the right of the icons)
-                int shittyWidth = round(icon_width*0.04);
-                FillArea(position+icon_width-shittyWidth, 0, shittyWidth, icon_height, 0x00FFFFFF);
-
-                // Free memory
-                free(bmp);
-            }
-            else {
-                CRLog::trace("CRPocketBookQuickMenuWindow::DrawTop(): NOT FOUND: [%d] %s", i, UnicodeToUtf8(path).c_str());
-            }
-
-            // Increase position
-            position += icon_width + icon_space;
-        }
-
+        const bool bookmarked = main_win->getDocView()->currentPageIsBookmarked();
+        auto *wm = CRPocketBookWindowManager::instance;
+        wm->quickMenuIcons().drawTop(wm->getSkin(), iconLayout(), bookmarked);
         if( updateScreen ) {
             CRLog::trace("CRPocketBookQuickMenuWindow::DrawTop(): PartialUpdate(0, 0, %d, %d);", ScreenWidth(), icon_height+1);
             PartialUpdate(0, 0, ScreenWidth(), icon_height+1);
@@ -1452,6 +1414,7 @@ public:
     }
 
     virtual void OpenTouchMenu() {
+        LVPerfScope timing("quick-menu.open");
         CRLog::trace("CRPocketBookQuickMenuWindow::OpenTouchMenu()");
 
         isTouchMenuVisible = true;
@@ -1480,7 +1443,7 @@ public:
         CRLog::trace("CRPocketBookQuickMenuWindow::OpenTouchMenu(): Set class vars");
         icon_width = PanelHeight();
         icon_height = PanelHeight();
-        icon_space = (ScreenWidth() - icon_width * TM_NB_ICONS) / (TM_NB_ICONS + 1);
+        icon_space = (ScreenWidth() - icon_width * pbQuickMenuIconCount) / (pbQuickMenuIconCount + 1);
 
         bottomH = icon_height*2+1;
         bottomY = ScreenHeight()-PanelHeight()-bottomH;
@@ -2422,7 +2385,7 @@ public:
 #endif
     static CRPocketBookDocView * instance;
     CRPocketBookDocView( CRGUIWindowManager * wm, lString32 dataDir )
-        : V3DocViewWin( wm, dataDir ), _bm3x3(NULL), _toc(NULL), _tocLength(0), _dictDlg(NULL), _rotatetimerset(false),
+        : V3DocViewWin(wm, dataDir, /*noDefaultDocument=*/true), _bm3x3(NULL), _toc(NULL), _tocLength(0), _dictDlg(NULL), _rotatetimerset(false),
         _lastturn(true), _pauseRotationTimer(false), m_goToPage(-1), _restore_globOrientation(false), m_skipEvent(false),
         m_bmFromSkin(false)
     {
@@ -2437,6 +2400,9 @@ public:
             SetGlobalOrientation(-1);
             _restore_globOrientation = false;
         }
+        // InitDoc can destroy this window before a book has opened.
+        if (!getDocView()->isDocumentOpened())
+            return;
         V3DocViewWin::closing();
         pbGlobals->saveState(getDocView()->getCurPage(), getDocView()->getPageCount());
         if (!exiting) {
@@ -2522,7 +2488,7 @@ public:
                 if (pageIndex == -1)
                     pageIndex = findPagesText( _searchPattern, -1, 1 );
                 if ( pageIndex != -1 ) {
-                    CRSelNavigationDialog * dlg = new CRSelNavigationDialog( _wm, this, _searchPattern );
+                    CRSelNavigationDialog * dlg = new CRSelNavigationDialog(_wm, this, _searchPattern, pageIndex);
                     _wm->activateWindow( dlg );
                 } else
                     Message(ICON_INFORMATION, const_cast<char*>("@Search"), const_cast<char*>("@No_more_matches"), 2000);
@@ -2858,7 +2824,7 @@ public:
         }
         else {
             CRLog::trace("showFrontLight(): Front light isn't supported! You shouldn't be able to get here.");
-            Message(ICON_WARNING,  const_cast<char*>("CoolReader"), "Couldn't find the front light binary  @ "PB_FRONT_LIGHT_BIN, 2000);
+            Message(ICON_WARNING,  const_cast<char*>("CoolReader"), (lString8(_("Couldn't find the front light binary  @")) + " " + PB_FRONT_LIGHT_BIN).c_str(), 2000);
         }
     }
 
@@ -4552,14 +4518,31 @@ void launchBrowser(lString32 url) {
     }
     else {
         CRLog::trace("launchBrowser(): The browser binary is not present @ %s", PB_BROWSER_BINARY);
-        Message(ICON_WARNING,  const_cast<char*>("CoolReader"), "Couldn't find the browser binary @ "PB_BROWSER_BINARY, 2000);
+        Message(ICON_WARNING,  const_cast<char*>("CoolReader"), (lString8(_("Couldn't find the browser binary @")) + " " + PB_BROWSER_BINARY).c_str(), 2000);
     }
 #endif
 }
 
 
+static void loadPocketBookTranslation(const char *lang) {
+    if (!lang || !lang[0]) return;
+    // set translator
+    CRLog::info("Current language is %s, looking for translation file", lang);
+    lString32 mofilename = USERDATA"/share/cr3/i18n/" + lString32(lang) + ".mo";
+    lString32 mofilename2 = USERDATA2"/share/cr3/i18n/" + lString32(lang) + ".mo";
+    CRMoFileTranslator * t = new CRMoFileTranslator();
+    if ( t->openMoFile( mofilename2 ) || t->openMoFile( mofilename ) ) {
+        CRLog::info("translation file %s.mo found", lang);
+        CRI18NTranslator::setTranslator( t );
+    } else {
+        CRLog::info("translation file %s.mo not found", lang);
+        delete t;
+    }
+}
+
 int InitDoc(const char *exename, char *fileName)
 {
+    LVPerfScope initTiming("startup.init-document");
 #ifdef POCKETBOOK_FW6
     fprintf(stderr, "[cr3-fw6-r5] InitDoc: logging\n");
 #endif
@@ -4567,7 +4550,9 @@ int InitDoc(const char *exename, char *fileName)
 
 #if defined(POCKETBOOK_FW6)
     CRLog::setStderrLogger();
-    CRLog::setLogLevel(CRLog::LL_TRACE);
+    const char *startupTrace = std::getenv("CR3_STARTUP_TRACE");
+    CRLog::setLogLevel(startupTrace && std::strcmp(startupTrace, "1") == 0
+                           ? CRLog::LL_TRACE : CRLog::LL_WARN);
 #elif defined(__i386__)
     CRLog::setStdoutLogger();
     CRLog::setLogLevel(CRLog::LL_TRACE);
@@ -4586,18 +4571,7 @@ int InitDoc(const char *exename, char *fileName)
         const char *lang = pbGlobals->getLang();
 
         if ( lang && lang[0] ) {
-            // set translator
-            CRLog::info("Current language is %s, looking for translation file", lang);
-            lString32 mofilename = USERDATA"/share/cr3/i18n/" + lString32(lang) + ".mo";
-            lString32 mofilename2 = USERDATA2"/share/cr3/i18n/" + lString32(lang) + ".mo";
-            CRMoFileTranslator * t = new CRMoFileTranslator();
-            if ( t->openMoFile( mofilename2 ) || t->openMoFile( mofilename ) ) {
-                CRLog::info("translation file %s.mo found", lang);
-                CRI18NTranslator::setTranslator( t );
-            } else {
-                CRLog::info("translation file %s.mo not found", lang);
-                delete t;
-            }
+            loadPocketBookTranslation(lang);
             sprintf( manual_file, USERDATA"/share/cr3/manual/cr3-manual-%s.fb2", lang );
             if ( !LVFileExists( lString32(manual_file).c_str() ) )
                 sprintf( manual_file, USERDATA2"/share/cr3/manual/cr3-manual-%s.fb2", lang );
@@ -4755,7 +4729,11 @@ int InitDoc(const char *exename, char *fileName)
             return 0;
         }
         loadPocketBookKeyMaps(*wm);
-        HyphMan::initDictionaries(lString32(USERDATA"/share/cr3/hyph/"));
+        {
+            LVPerfScope timing("startup.hyphenation");
+            HyphMan::initDictionaries(lString32(USERDATA"/share/cr3/hyph/"), true,
+                                      lString32(STATEPATH"/cr3/hyphenation-metadata.bin"));
+        }
 
         bool skinSet = false;
         CRSkinList &skins = wm->getSkinList();
@@ -5185,7 +5163,7 @@ bool pbNetwork(const char *action) {
     }
     else {
         CRLog::error("pbNetwork(): Network isn't supported! You shouldn't be able to get here.");
-        Message(ICON_WARNING,  const_cast<char*>("CoolReader"), "Couldn't find the network binary  @ "PB_NETWORK_BIN, 2000);
+        Message(ICON_WARNING,  const_cast<char*>("CoolReader"), (lString8(_("Couldn't find the network binary  @")) + " " + PB_NETWORK_BIN).c_str(), 2000);
     }
 
     bool connected = pbNetworkConnected();
@@ -5510,7 +5488,7 @@ int main_handler(int type, int par1, int par2)
         fprintf(stderr, "[cr3] Unsupported model/firmware: model=%s firmware=%s\n",
                 GetDeviceModel() ? GetDeviceModel() : "(unknown)",
                 GetSoftwareVersion() ? GetSoftwareVersion() : "(unknown)");
-        Message(ICON_WARNING, "CoolReader", "Unknown model or unsupported firmware API. See the included guide.", 3000);
+        Message(ICON_WARNING, "CoolReader", _("Unknown model or unsupported firmware API. See the included guide."), 3000);
         CloseApp();
         return 0;
     }
@@ -5560,6 +5538,7 @@ int main_handler(int type, int par1, int par2)
 #endif
 
         CRPocketBookWindowManager::instance->update(true);
+        CRPocketBookWindowManager::instance->finishStartup();
         pbGlobals->BookReady();
 
         // CRLog::trace("COVER_OFF_SAVE");
@@ -6106,6 +6085,7 @@ static void installStartupFaultHandler() {
 int main(int argc, char **argv)
 {
 #ifdef POCKETBOOK_FW6
+    startupPerfStart = LVPerfScope::timestamp();
     fprintf(stderr, "[cr3-fw6-r5] main entered, argc=%d\n", argc);
     fprintf(stderr, "[cr3] CREngine %s (%s)\n", CR_ENGINE_VERSION, CR_ENGINE_BUILD_DATE);
 #endif
@@ -6137,7 +6117,9 @@ int main(int argc, char **argv)
     fprintf(stderr, "[cr3] selected firmware API=%u\n", pbfirmware::apiLevel(GetSoftwareVersion()));
 #endif
     if (argc < 2 || strlen(argv[1]) == 0 ) {
-        Message(ICON_WARNING,  const_cast<char*>("CoolReader"), const_cast<char*>("No book to open!"), 2000);
+        CRPocketBookGlobals startupGlobals(argv[0]);
+        loadPocketBookTranslation(startupGlobals.getLang());
+        Message(ICON_WARNING,  const_cast<char*>("CoolReader"), const_cast<char*>(_("No book to open!")), 2000);
         printf("No book to open!\n");
         return 1;
     }
@@ -6152,7 +6134,8 @@ int main(int argc, char **argv)
     fprintf(stderr, "[cr3-fw6-r5] document ready, header_font=%p\n", (void *)header_font);
     if (header_font)
         header_font->color = WHITE;
-    CRLog::setLogLevel(CRLog::LL_WARN);
+    if (CRLog::getLogLevel() != CRLog::LL_WARN)
+        CRLog::setLogLevel(CRLog::LL_WARN);
     fprintf(stderr, "[cr3-fw6-r5] entering InkView event loop\n");
 #else
     header_font->color = WHITE;

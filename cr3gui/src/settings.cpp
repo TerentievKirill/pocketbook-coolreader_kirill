@@ -1,3 +1,4 @@
+#include "reader_ui.h"
 
 // C++ Implementation: settings
 //
@@ -27,6 +28,9 @@
 #include "ota_menu.h"
 #include "dictionary_download.h"
 #endif
+#endif
+#ifdef POCKETBOOK_FW6
+#include "pb_file_associations.h"
 #endif
 
 #include <cri18n.h>
@@ -306,9 +310,12 @@ public:
         CRFullScreenMenu( parentMenu->getWindowManager(), id,  label, 1, rc ),
         _propertyName(propName), _props(props)
     {
-        setSkinName(lString32("#tapSettings"));
+        _menu = parentMenu;
+        CRMenu::_props = props;
+        setSkinName(lString32("#settings"));
         setAccelerators(parentMenu->getAccelerators());
         _actionsMenu = new CRActionsMenu(this, _props, rc);
+        addItem(_actionsMenu);
         for ( int i=0; availableActions[i].action_id; i++ ) {
 
             #ifdef CR_POCKETBOOK
@@ -379,9 +386,9 @@ public:
     }
     int onSelect()
     {
-        CRTapZoneSettings *menu = new CRTapZoneSettings(_menu, mm_touchScreenZones, getLabel(), _props,
-                                                        _propName, _rect );
-        _wm->activateWindow(menu);
+        if (_items.empty())
+            addItem(new CRTapZoneSettings(_menu, mm_touchScreenZones, getLabel(), _props, _propName, _rect));
+        _wm->activateWindow(static_cast<CRMenu *>(_items[0]));
         return 1;
     }
 };
@@ -453,29 +460,37 @@ void CRTapZoneSettings::drawClient()
     if ( !clientSkin.isNull() ) {
         clientSkin->draw( buf, rc );
         cl = clientSkin->getTextColor();
+        if (isSettingsEditor()) {
+            CRRectSkinRef textSkin(new CRRectSkin());
+            textSkin->setFontFace(clientSkin->getFontFace());
+            textSkin->setFontSize(settingsFont(true)->getHeight());
+            textSkin->setTextColor(cl);
+            textSkin->setTextAlign(SKIN_HALIGN_CENTER | SKIN_VALIGN_CENTER);
+            clientSkin = textSkin;
+        }
         x0 = rc.left;
         x1 = x0 + rc.width() * _props->getIntDef(PROP_TAP_ZONE_WIDTH_1, 33) / 100;
         x2 = x1 + rc.width() * _props->getIntDef(PROP_TAP_ZONE_WIDTH_2, 33) / 100;
-        x3 = rc.width();
+        x3 = rc.right;
         int y = rc.top;
         int y1 = y + rc.height() * _props->getIntDef(PROP_TAP_ZONE_HEIGHT_1, 33) / 100;
         int y2 = y1 + rc.height() * _props->getIntDef(PROP_TAP_ZONE_HEIGHT_2, 33) / 100;
-        if ( x1 > x0 && x1 < rc.width() )
+        if ( x1 > x0 && x1 < rc.right )
             buf.FillRect(x1, rc.top, x1+1, rc.bottom, cl);
-        if ( x2 > x1 && x2 < rc.width() )
+        if ( x2 > x1 && x2 < rc.right )
             buf.FillRect(x2, rc.top, x2+1, rc.bottom, cl);
         if ( y1 > y ) {
-            if ( y1 < rc.height() )
+            if ( y1 < rc.bottom )
                 buf.FillRect(rc.left, y1, rc.right, y1+1, cl);
             drawTapZonesRow(buf, clientSkin, 0, y, y1);
         }
         if ( y2 > y1 ) {
-            if ( y2 < rc.height())
+            if ( y2 < rc.bottom)
                 buf.FillRect(rc.left, y2, rc.right, y2+1, cl);
             drawTapZonesRow(buf, clientSkin, 1, y1, y2);
         }
-        if (y2 < rc.height()) {
-            drawTapZonesRow(buf, clientSkin, 2, y2, rc.height());
+        if (y2 < rc.bottom) {
+            drawTapZonesRow(buf, clientSkin, 2, y2, rc.bottom);
         }
     } else {
         buf.FillRect(rc, 0xFFFFFF);
@@ -533,6 +548,10 @@ CRControlsMenuItem::CRControlsMenuItem( CRControlsMenu * menu, int id, int key, 
 
 void CRControlsMenuItem::Draw( LVDrawBuf & buf, lvRect & rc, CRRectSkinRef skin, CRRectSkinRef valueSkin, bool selected )
 {
+    if (_menu && _menu->isSettingsEditor()) {
+        CRMenuItem::Draw(buf, rc, skin, valueSkin, selected);
+        return;
+    }
     // lvRect itemBorders = skin->getBorderWidths();
     skin->draw( buf, rc );
     buf.SetTextColor( skin->getTextColor() );
@@ -1081,6 +1100,100 @@ public:
     virtual int onSelect() { getWindowManager()->activateWindow(this); return 1; }
 };
 
+#ifdef POCKETBOOK_FW6
+class CRDefaultReaderItem : public CRMenuItem {
+    const unsigned &_selection;
+    lString32 _formats;
+public:
+    CRDefaultReaderItem(CRMenu *menu, const unsigned &selection, pbassoc::Group group,
+                        const char *label, const char *formats)
+        : CRMenuItem(menu, static_cast<int>(group), label, LVImageSourceRef(), LVFontRef()),
+          _selection(selection), _formats(formats) {}
+    lString32 getSubmenuValue() override { return _formats; }
+    CheckState getCheckState() const override
+    {
+        const auto group = static_cast<unsigned>(_id);
+        const unsigned selected = _selection & group;
+        if (selected == group)
+            return CheckState::Checked;
+        return selected ? CheckState::Mixed : CheckState::Unchecked;
+    }
+};
+
+class CRDefaultReaderMenu : public CRSettingsGroupMenu {
+    unsigned _selection = 0;
+
+    bool onItemSelect(int item, int) override
+    {
+        if (item < 0 || item >= getItems().length())
+            return false;
+        const auto group = static_cast<unsigned>(getItems()[item]->getId());
+        if (group == pbassoc::Group::All)
+            _selection = _selection == group ? 0u : group;
+        else
+            _selection ^= group;
+        requestFullRedraw();
+        return true;
+    }
+
+    void applySelection()
+    {
+        if (!_selection) {
+            closeMenu(0);
+            return;
+        }
+        const auto result = pbassoc::makeDefault(_selection,
+            lString32(U"/mnt/ext1/system/config/extensions.cfg"),
+            lString32(U"/ebrmain/config/extensions.cfg"));
+        switch (result) {
+        case pbassoc::Result::Updated:
+            Message(ICON_INFORMATION, "CoolReader", _("CoolReader is now the default for the selected formats."), 2500);
+            break;
+        case pbassoc::Result::AlreadyDefault:
+            Message(ICON_INFORMATION, "CoolReader", _("CoolReader is already the default for the selected formats."), 2500);
+            break;
+        case pbassoc::Result::Error:
+            Message(ICON_WARNING, "CoolReader", _("Could not save file associations."), 3000);
+            requestFullRedraw();
+            return;
+        }
+        closeMenu(0);
+    }
+public:
+    int onSelect() override
+    {
+        _selection = 0;
+        return CRSettingsGroupMenu::onSelect();
+    }
+    bool onCommand(int command, int params) override
+    {
+        if (command == MCMD_OK ||
+            ((command == DCMD_BUTTON_PRESSED || command == DCMD_BUTTON_PRESSED_LONG) &&
+             params == BTN_SETTINGS_DONE)) {
+            applySelection();
+            return true;
+        }
+        return CRMenu::onCommand(command, params);
+    }
+
+    CRDefaultReaderMenu(CRMenu *parent, int id, LVFontRef valueFont)
+        : CRSettingsGroupMenu(parent->getWindowManager(), parent, id,
+            _("Default reader"), _("Choose which formats open in CoolReader"), valueFont)
+    {
+        using pbassoc::Group;
+        setSkinName(lString32("#settings"));
+        setAccelerators(parent->getAccelerators());
+        addItem(new CRDefaultReaderItem(this, _selection, Group::All, _("All supported formats"), ""));
+        addItem(new CRDefaultReaderItem(this, _selection, Group::FictionBook, _("FictionBook"), "FB2, FB3, FB2.ZIP, FBZ"));
+        addItem(new CRDefaultReaderItem(this, _selection, Group::Epub, _("EPUB"), ""));
+        addItem(new CRDefaultReaderItem(this, _selection, Group::Documents, _("Office documents"), "DOC, DOCX, ODT, RTF"));
+        addItem(new CRDefaultReaderItem(this, _selection, Group::Web, _("Web and help"), "HTM, HTML, XHTML, CHM"));
+        addItem(new CRDefaultReaderItem(this, _selection, Group::Palm, _("Mobipocket and Palm"), "MOBI, PRC, PDB"));
+        addItem(new CRDefaultReaderItem(this, _selection, Group::Text, _("Plain text"), "TXT, TCR, PML"));
+    }
+};
+#endif
+
 class CRSettingsFontSample : public CRMenuItem {
     CRPropRef _preferences;
 public:
@@ -1145,7 +1258,7 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
 
     _fullscreen = true;
 #ifdef POCKETBOOK_FW6
-    enableSettingsEditor(props, scope.empty() ? lString32(_("Reader defaults")) : scope);
+    enableSettingsEditor(props, scope.empty() ? lString32(_("Reader defaults")) : scope, readerUiDpi());
 #endif
 
     item_def_t antialiasing_modes[] = {
@@ -2004,6 +2117,7 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
     if (controlSettingsMenu) mainMenu->addItem(controlSettingsMenu);
     mainMenu->addItem(advancedMenu);
 #ifdef POCKETBOOK_FW6
+    mainMenu->addItem(new CRDefaultReaderMenu(mainMenu, _menuItemId++, valueFont));
     mainMenu->addItem(pbCreateDictionaryDownloadsMenu(mainMenu, _menuItemId++));
 #endif
     mainMenu->addItem(aboutMenu);

@@ -44,6 +44,12 @@
 #ifndef __LV_TINYDOM_H_INCLUDED__
 #define __LV_TINYDOM_H_INCLUDED__
 
+#include <atomic>
+#include <functional>
+#include <memory>
+#include <mutex>
+#include <unordered_map>
+
 #include "lvmemman.h"
 #include "lvstring.h"
 #include "lstridmap.h"
@@ -62,6 +68,7 @@
 #include "serialbuf.h"
 #include "lvstring32hashedcollection.h"
 #include "lvdocviewcallback.h"
+#include <vector>
 
 #if MATHML_SUPPORT==1
 #include "mathml.h"
@@ -255,6 +262,7 @@ class ldomBlobCache
     CacheFile * _cacheFile;
     LVPtrVector<ldomBlobItem> _list;
     bool _changed;
+    int _nextBlobToSave = 0;
     bool loadIndex();
     bool saveIndex();
 public:
@@ -279,12 +287,15 @@ protected:
     lUInt32 _chunkSize;
     char _type;       /// type, to show in log
     bool _maxSizeReachedWarned;
+#if BUILD_LITE!=1
+    int _nextChunkToSave = 0;
+#endif
     ldomTextStorageChunk * getChunk( lUInt32 address );
 public:
     /// type
     lUInt16 cacheType();
     /// saves all unsaved chunks to cache file
-    bool save( CRTimerUtil & maxTime );
+    ContinuousOperationResult save( CRTimerUtil & maxTime );
     /// load chunk index from cache file
     bool load();
     /// sets cache file
@@ -436,6 +447,7 @@ class tinyNodeCollection
     friend struct ldomNode;
     friend class tinyElement;
     friend class ldomDocument;
+    friend class ldomTextStorageChunk;
 private:
     int _textCount;
     lUInt32 _textNextFree;
@@ -459,6 +471,14 @@ protected:
     bool _mapped;
     bool _maperror;
     int  _mapSavingStage;
+    int _nextElementToPersist = 1;
+    int _nextTextToPersist = 1;
+    int _nextElementPartToSave = 0;
+    int _nextTextPartToSave = 0;
+
+    void restartCacheSave();
+    void rewindNodePersistence(lUInt32 index);
+    static bool persistNodes(ldomNode **list, int count, int &next, CRTimerUtil &maxTime);
 
     img_scaling_options_t _imgScalingOptions;
     int  _spaceWidthScalePercent;
@@ -504,8 +524,9 @@ protected:
     bool loadStylesData();
     bool updateLoadedStyles( bool enabled );
     lUInt32 calcStyleHash(bool already_rendered);
-    bool saveNodeData();
-    bool saveNodeData( lUInt16 type, ldomNode ** list, int nodecount );
+    ContinuousOperationResult saveNodeData(CRTimerUtil &maxTime);
+    ContinuousOperationResult saveNodeData(lUInt16 type, ldomNode **list, int nodecount,
+                                           int &nextPart, CRTimerUtil &maxTime);
     bool loadNodeData();
     bool loadNodeData( lUInt16 type, ldomNode ** list, int nodecount );
 
@@ -568,7 +589,10 @@ public:
     }
 
     /// add named BLOB data to document
-    bool addBlob(lString32 name, const lUInt8 * data, int size) { _cacheFileStale = true ; return _blobCache.addBlob(data, size, name); }
+    bool addBlob(lString32 name, const lUInt8 * data, int size) {
+        restartCacheSave();
+        return _blobCache.addBlob(data, size, name);
+    }
     /// get BLOB by name
     LVStreamRef getBlob(lString32 name) { return _blobCache.getBlob(name); }
 
@@ -837,6 +861,8 @@ private:
     /// add child
     void addChild( lInt32 childNodeIndex );
 
+    void invalidateDecodedBinarySize();
+
     /// call to invalidate cache if persistent node content is modified
     void modified();
 
@@ -1090,8 +1116,8 @@ public:
     /// replace node with r/w implementation
     ldomNode * modify();
 
-    /// for display:list-item node, get marker
-    bool getNodeListMarker( int & counterValue, lString32 & marker, int & markerWidth );
+    /// Get a list item's marker and the widest marker width in its list.
+    bool getNodeListMarker(lString32 &marker, int &markerWidth);
     /// is node a floating floatBox
     bool isFloatingBox() const;
     /// is node an inlineBox that has not been re-inlined by having
@@ -1363,7 +1389,6 @@ protected:
     lUInt16       _nextUnknownNsId;      // Next Id for unknown namespace
     lString32HashedCollection _attrValueTable;
     LVHashTable<lUInt32,lInt32> _idNodeMap; // id to data index map
-    LVHashTable<lString32,LVImageSourceRef> _urlImageMap; // url to image source map
     lUInt16 _idAttrId; // Id for "id" attribute name
     lUInt16 _nameAttrId; // Id for "name" attribute name
 
@@ -1866,6 +1891,8 @@ public:
     }
 };
 
+using ldomWordFilter = std::function<bool(const ldomWord &)>;
+
 /// DOM range
 class ldomXRange {
     ldomXPointerEx _start;
@@ -1985,7 +2012,7 @@ public:
     };
 
     /// searches for specified text inside range
-    bool findText( lString32 pattern, bool caseInsensitive, bool reverse, LVArray<ldomWord> & words, int maxCount, int maxHeight, int maxHeightCheckStartY = -1, bool checkMaxFromStart = false );
+    bool findText( lString32 pattern, bool caseInsensitive, bool reverse, LVArray<ldomWord> & words, int maxCount, int maxHeight, int maxHeightCheckStartY = -1, bool checkMaxFromStart = false, const ldomWordFilter &accept = {} );
 };
 
 class ldomMarkedText
@@ -2156,8 +2183,17 @@ public:
 
 class LVTocItem;
 class LVDocView;
+class LVDecodedImageCache;
 
 /// TOC item
+// Temporary lookup for a bulk TOC update, while the DOM stays fixed.
+class LVTocSectionIndex
+{
+    friend class ldomDocument;
+    std::unordered_map<ldomNode *, std::vector<ldomNode *>> _sections;
+    ldomNode *find(ldomNode *parent, int ordinal);
+};
+
 class LVTocItem
 {
     friend class LVDocView;
@@ -2179,6 +2215,7 @@ private:
     //====================================================
     void setPage( int n ) { _page = n; }
     void setPercent( int n ) { _percent = n; }
+    ldomXPointer getXPointer(LVTocSectionIndex *sections);
 public:
     /// serialize to byte array (pointer will be incremented by number of bytes written)
     bool serialize( SerialBuf & buf );
@@ -2200,7 +2237,7 @@ public:
     ldomXPointer getXPointer();
     /// set position pointer (for cases where we need to create a LVTocItem as a container, but
     /// we'll know the xpointer only later, mostly always the same xpointer as its first child)
-    void setXPointer(ldomXPointer xp) { _position = xp; }
+    void setXPointer(ldomXPointer xp);
     /// returns position path
     lString32 getPath();
     /// returns Y position
@@ -2216,12 +2253,12 @@ public:
     {
         LVTocItem * item = new LVTocItem( ptr, path, name );
         addChild( item );
+        invalidatePageNumbers();
         return item;
     }
-    void clear() { _children.clear(); }
+    void clear();
     // root node constructor
-    LVTocItem( ldomDocument * doc ) : _parent(NULL), _doc(doc), _level(0), _index(0), _page(0) { }
-    ~LVTocItem() { clear(); }
+    LVTocItem( ldomDocument * doc ) : _parent(NULL), _doc(doc), _level(0), _index(0), _page(0), _percent(0) { }
 
     /// For use on the root toc item only (_page, otherwise unused, can be used to store this flag)
     void setAlternativeTocFlag() { if (_level==0) _page = 1; }
@@ -2229,8 +2266,8 @@ public:
 
     /// When page numbers have been calculated, LVDocView::updatePageNumbers()
     /// sets the root toc item _percent to -1. So let's use it to know that fact.
-    bool hasValidPageNumbers() { return _level==0 && _percent == -1; }
-    void invalidatePageNumbers() { if (_level==0) _percent = 0; }
+    bool hasValidPageNumbers() const { return _level==0 && _percent == -1; }
+    void invalidatePageNumbers();
 };
 
 /// PageMapItem
@@ -2367,22 +2404,12 @@ class ldomNavigationHistory
         }
 };
 
-class ListNumberingProps
-{
-public:
-    int maxCounter;
-    int maxWidth;
-    ListNumberingProps( int c, int w )
-        : maxCounter(c), maxWidth(w)
-    {
-    }
-};
-typedef LVRef<ListNumberingProps> ListNumberingPropsRef;
-
 class ldomDocument : public lxmlDocBase
 {
+    friend struct ldomNode;
     friend class ldomDocumentWriter;
     friend class ldomDocumentWriterFilter;
+    friend class LVTocItem;
 private:
     LVTocItem m_toc;
     LVPageMap m_pagemap;
@@ -2405,7 +2432,50 @@ private:
 
     LVContainerRef _container;
 
-    LVHashTable<lUInt32, ListNumberingPropsRef> lists;
+    // Transient information for text-only embedded binaries, keyed by node index.
+    struct EmbeddedBinaryInfo {
+        lvsize_t size = 0;
+        LVImageMetadata image;
+    };
+#if CR_USE_THREADS==1
+    std::mutex _decodedBinarySizeMutex;
+#endif
+    std::unique_ptr<LVHashTable<lUInt32, EmbeddedBinaryInfo>> _decodedBinarySizes;
+    std::atomic<bool> _hasDecodedBinarySizes{false};
+    void clearDecodedBinarySizes();
+
+#if BUILD_LITE!=1
+    friend class NodeImageProxy;
+    bool _cacheArchiveImageMetadata = false;
+    LVHashTable<lString32, LVImageMetadata> _archiveImageMetadata{32};
+    std::unique_ptr<LVDecodedImageCache> _decodedImages;
+    lString32 _imageCodeBase;
+    lString32 _imageBookName;
+    ldomNode *findImageBinary(const lString32 &name);
+    bool syncArchiveImageCache(const lString32 &name);
+    // Called with the image and binary metadata lock held.
+    bool getCachedImageMetadata(const lString32 &name, LVImageMetadata &metadata, lUInt32 *binaryIndex = nullptr);
+    bool getObjectImageMetadata(const lString32 &name, LVImageMetadata &metadata);
+    bool decodeObjectImage(const lString32 &name, LVImageDecoderCallback *callback);
+
+    LVHashTable<lUInt32, int> _listMarkerWidths{100};
+    LVHashTable<lUInt32, lInt64> _listOrdinals{16};
+    int measureListMarkers(ldomNode *parent);
+
+    struct ChapterPaintGroup {
+        int endChild;
+        lInt64 top;
+        lInt64 bottom;
+    };
+    ldomNode *_indexedChapterBody = nullptr;
+    std::vector<ChapterPaintGroup> _chapterPaintGroups;
+    bool _chapterPointLookupSafe = false;
+    void invalidateChapterPaintIndex(ldomNode *changed = nullptr);
+    void indexChapterPaintGroups(ldomNode *body, int format);
+    bool ensureChapterPaintIndex(ldomNode *body);
+    std::vector<ChapterPaintGroup>::const_iterator firstChapterGroup(lInt64 y) const;
+    int firstChapterForPoint(ldomNode *body, int y);
+#endif
 
     LVEmbeddedFontList _fontList;
 
@@ -2423,7 +2493,8 @@ private:
     /// create XPointer from a non-normalized string made by toStringV1()
     ldomXPointer createXPointerV1( ldomNode * baseNode, const lString32 & xPointerStr );
     /// create XPointer from a normalized string made by toStringV2()
-    ldomXPointer createXPointerV2( ldomNode * baseNode, const lString32 & xPointerStr );
+    ldomXPointer createXPointerV2( ldomNode * baseNode, const lString32 & xPointerStr,
+                                 LVTocSectionIndex *sections = nullptr );
 protected:
 
 #if BUILD_LITE!=1
@@ -2440,9 +2511,8 @@ public:
         _rendered = false;
     }
 
-    ListNumberingPropsRef getNodeNumberingProps( lUInt32 nodeDataIndex );
-    void setNodeNumberingProps( lUInt32 nodeDataIndex, ListNumberingPropsRef v );
-    void resetNodeNumberingProps();
+    void resetNodeNumberingProps() override;
+    void getChapterPaintRange(ldomNode *body, int y, int height, int &first, int &end);
 #endif
 
 #if BUILD_LITE!=1
@@ -2500,7 +2570,7 @@ public:
 
 
     LVContainerRef getContainer() { return _container; }
-    void setContainer( LVContainerRef cont ) { _container = cont; }
+    void setContainer(LVContainerRef cont, bool cacheImageMetadata = false);
 
 #if BUILD_LITE!=1
     void clearRendBlockCache() { _renderedBlockCache.clear(); }
@@ -2580,7 +2650,7 @@ public:
     /// get rendered block cache object
     CVRendBlockCache & getRendBlockCache() { return _renderedBlockCache; }
 
-    bool findText( lString32 pattern, bool caseInsensitive, bool reverse, int minY, int maxY, LVArray<ldomWord> & words, int maxCount, int maxHeight, int maxHeightCheckStartY = -1 );
+    bool findText( lString32 pattern, bool caseInsensitive, bool reverse, int minY, int maxY, LVArray<ldomWord> & words, int maxCount, int maxHeight, int maxHeightCheckStartY = -1, const ldomWordFilter &accept = {} );
 #endif
 };
 
@@ -2595,6 +2665,8 @@ class ldomElementWriter
     ldomNode * _element;
     LVTocItem * _tocItem;
     lString32 _path;
+    int _lastSectionChild = 0;
+    int _sectionsBeforeLastSection = 0;
     const css_elem_def_props_t * _typeDef;
     bool _allowText;
     bool _isBlock;
@@ -2615,6 +2687,7 @@ class ldomElementWriter
         return _element;
     }
     lString32 getPath();
+    lString32 getSectionPathSegment();
     void onText( const lChar32 * text, int len, lUInt32 flags, bool insert_before_last_child=false );
     void addAttribute( lUInt16 nsid, lUInt16 id, const lChar32 * value );
     //lxmlElementWriter * pop( lUInt16 id );

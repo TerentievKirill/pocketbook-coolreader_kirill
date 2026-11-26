@@ -24,6 +24,7 @@
 #include "lvdrawbuf_utils.h"
 #include "lvimg.h"
 
+#include <algorithm>
 #include <stdlib.h>
 #include <string.h>
 
@@ -76,7 +77,7 @@ int * LVImageScaledDrawCallback::GenMap(int src_len, int dst_len)
     int  * map = new int[ dst_len ];
     for (int i=0; i<dst_len; i++)
     {
-        map[ i ] = i * src_len / dst_len;
+        map[ i ] = (lInt64)i * src_len / dst_len;
     }
     return map;
 }
@@ -140,12 +141,8 @@ LVImageScaledDrawCallback::LVImageScaledDrawCallback(LVBaseDrawBuf *dstbuf, LVIm
         else if (!smoothscale)
             xmap = GenMap( src_dx, dst_dx );
     }
-    if ( src_dy != dst_dy || isNinePatch) {
-        if (isNinePatch)
-            ymap = GenNinePatchMap(src_dy, dst_dy, ninePatch.top, ninePatch.bottom);
-        else if (!smoothscale)
-            ymap = GenMap( src_dy, dst_dy );
-    }
+    if (isNinePatch)
+        ymap = GenNinePatchMap(src_dy, dst_dy, ninePatch.top, ninePatch.bottom);
     // If we have a smoothscale post-processing pass, we'll need to build a buffer of the *full* decoded image.
     if (smoothscale) {
         // Byte-sized buffer, we're 32bpp, so, 4 bytes per pixel.
@@ -170,6 +167,8 @@ void LVImageScaledDrawCallback::OnStartDecode(LVImageSource *)
 bool LVImageScaledDrawCallback::OnLineDecoded(LVImageSource *, int y, lUInt32 *data)
 {
     //fprintf( stderr, "l_%d ", y );
+    if (y < 0 || y >= src_dy)
+        return true;
     if (isNinePatch) {
         if (y == 0 || y == src_dy-1) // ignore first and last lines
             return true;
@@ -194,23 +193,17 @@ bool LVImageScaledDrawCallback::OnLineDecoded(LVImageSource *, int y, lUInt32 *d
         }
         if (yy == -1)
             return true;
+    } else if (src_dy != dst_dy) {
+        // Invert floor(row * src_dy / dst_dy), the map used by GenMap.
+        // The row covers [ceil(y * dst_dy / src_dy), ceil((y+1) * dst_dy / src_dy)).
+        yy = ((lInt64)y * dst_dy + src_dy - 1) / src_dy;
+        yy2 = ((lInt64)(y + 1) * dst_dy + src_dy - 1) / src_dy;
+        if (yy == yy2)
+            return true;
     } else {
         yy = y;
         yy2 = y+1;
     }
-    //        if ( ymap )
-    //        {
-    //            int yy0 = (y - 1) * dst_dy / src_dy;
-    //            yy = y * dst_dy / src_dy;
-    //            yy2 = (y+1) * dst_dy / src_dy;
-    //            if ( yy == yy0 )
-    //            {
-    //                //fprintf( stderr, "skip_dup " );
-    //                //return true; // skip duplicate drawing
-    //            }
-    //            if ( yy2 > dst_dy )
-    //                yy2 = dst_dy;
-    //        }
     lvRect clip;
     dst->GetClipRect( &clip );
     for ( ;yy<yy2; yy++ )
@@ -299,18 +292,14 @@ bool LVImageScaledDrawCallback::OnLineDecoded(LVImageSource *, int y, lUInt32 *d
         else if ( bpp > 2 ) // 3,4,8 bpp
         {
             lUInt8 * row = (lUInt8 *)dst->GetScanLine( yy + dst_y );
-            row += dst_x;
-            for (int x=0; x<dst_dx; x++)
+            const int firstX = std::max(0, clip.left - dst_x);
+            const int endX = std::min(dst_dx, clip.right - dst_x);
+            for (int x = firstX; x < endX; ++x)
             {
                 int srcx = xmap ? xmap[x] : x;
                 lUInt32 cl = data[srcx];
-                int xx = x + dst_x;
+                lUInt8 &pixel = row[x + dst_x];
                 lUInt32 alpha = (cl >> 24)&0xFF;
-                
-                if ( xx<clip.left || xx>=clip.right ) {
-                    // OOB, don't plot it!
-                    continue;
-                }
                 
                 if ( alpha == 0xFF ) {
                     // Transparent, don't plot it...
@@ -321,7 +310,7 @@ bool LVImageScaledDrawCallback::OnLineDecoded(LVImageSource *, int y, lUInt32 *d
                         continue;
                     }
                 } else if ( alpha != 0 ) {
-                    lUInt8 origLuma = row[x];
+                    lUInt8 origLuma = pixel;
                     // Expand lower bitdepths to Y8
                     if ( bpp == 3 ) {
                         origLuma = origLuma & 0xE0;
@@ -349,8 +338,7 @@ bool LVImageScaledDrawCallback::OnLineDecoded(LVImageSource *, int y, lUInt32 *d
                 } else {
                     dcl = rgbToGray( cl, bpp );
                 }
-                row[ x ] = dcl ^ gray_invert;
-                // ApplyAlphaGray( row[x], dcl, alpha, bpp );
+                pixel = dcl ^ gray_invert;
             }
         }
         else if ( bpp == 2 )

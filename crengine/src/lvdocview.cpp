@@ -827,7 +827,12 @@ public:
 	virtual void run()
 	{
 		//CRLog::trace("LVDrawThread::run() offset==%d", _offset);
+#if CR_USE_THREADS == 1
 		_view->Draw( *_drawbuf, _offset, _page, true );
+#else
+		// Synchronous draws already have a fresh buffer sized by cachePageImage().
+		_view->Draw( *_drawbuf, _offset, _page, true, false );
+#endif
 		//_drawbuf->Rotate( _view->GetRotateAngle() );
 	}
 };
@@ -931,17 +936,15 @@ void dumpSection(ldomNode * elem) {
 }
 
 LVTocItem * LVDocView::getToc() {
-	if (!m_doc)
-		return NULL;
-        // When just loaded from cache, TocItems are missing their _position
-        // properties (a XPointer object), but all other properties (_path,
-        // _page, _percent) are valid and enough to display TOC.
-        // Avoid calling updatePageNumbers() in that case (as it is expensive
-        // and would delay book opening when loaded from cache - it will be
-        // called when it is really needed: after next full rendering)
-        if (!m_doc->isTocFromCacheValid() || !m_doc->getToc()->hasValidPageNumbers())
-            updatePageNumbers(m_doc->getToc());
-	return m_doc->getToc();
+    LVLock lock(getMutex());
+    if (!m_doc)
+        return NULL;
+    // A pending reflow can invalidate the page numbers.
+    checkRender();
+    LVTocItem *toc = m_doc->getToc();
+    if (!toc->hasValidPageNumbers())
+        updatePageNumbers(toc);
+    return toc;
 }
 
 static lString32 getSectionHeader(ldomNode * section) {
@@ -1020,31 +1023,33 @@ int getSectionPage(ldomNode * section, LVRendPageList & pages) {
  */
 
 /// update page numbers for items
-void LVDocView::updatePageNumbers(LVTocItem * item) {
-	if (!item->getXPointer().isNull()) {
-		lvPoint p = item->getXPointer().toPoint();
-		int y = p.y;
-		int h = GetFullHeight();
-		int page = getBookmarkPage(item->_position);
-		if (page >= 0 && page < getPageCount())
-			item->_page = page;
-		else
-			item->_page = -1;
-		if (y >= 0 && y < h && h > 0)
-			item->_percent = (int) ((lInt64) y * 10000 / h); // % * 100
-		else
-			item->_percent = -1;
-	} else {
-		//CRLog::error("Page position is not found for path %s", LCSTR(item->getPath()) );
-		// unknown position
-                // Don't update _page of root toc item, as it carries the alternative TOC flag
-                if (item->_level > 0)
-                    item->_page = -1;
-		item->_percent = -1;
-	}
-	for (int i = 0; i < item->getChildCount(); i++) {
-		updatePageNumbers(item->getChild(i));
-	}
+void LVDocView::updatePageNumbers(LVTocItem *item) {
+    LVTocSectionIndex sections;
+    const bool indexSections = m_doc && getDocFormat() == doc_format_fb2 &&
+            m_doc->getDOMVersionRequested() >= DOM_VERSION_WITH_NORMALIZED_XPOINTERS;
+    updatePageNumbers(item, indexSections ? &sections : nullptr);
+}
+
+void LVDocView::updatePageNumbers(LVTocItem *item, LVTocSectionIndex *sections) {
+    if (item->_level > 0) {
+        const ldomXPointer position = item->getXPointer(sections);
+        item->_page = -1;
+        item->_percent = -1;
+        if (!position.isNull()) {
+            const int y = position.toPoint().y;
+            const int height = GetFullHeight();
+            const int page = getBookmarkPage(position);
+            if (page >= 0 && page < getPageCount())
+                item->_page = page;
+            if (y >= 0 && y < height)
+                item->_percent = (int)((lInt64)y * 10000 / height);
+        }
+    }
+    for (int i = 0; i < item->getChildCount(); i++)
+        updatePageNumbers(item->getChild(i), sections);
+    // The root stores the validity marker and the alternative TOC flag.
+    if (item->_level == 0)
+        item->_percent = -1;
 }
 
 LVPageMap * LVDocView::getPageMap() {
@@ -2141,7 +2146,7 @@ void LVDocView::drawPageHeader(LVDrawBuf * drawbuf, const lvRect & headerRc,
 	drawbuf->SetTextColor(getTextColor());
 }
 
-void LVDocView::drawPageTo(LVDrawBuf * drawbuf, LVRendPageInfo & page,
+void LVDocView::drawPageTo(LVDrawBuf * drawbuf, const LVRendPageInfo & page,
 		lvRect * pageRect, int pageCount, int basePage) {
 	int start = page.start;
 	int height = page.height;
@@ -2899,7 +2904,7 @@ LVRef<ldomXRange> LVDocView::getPageDocumentRange(int pageIndex) {
         if (pageIndex < 0 || pageIndex >= m_pages.length())
             pageIndex = getCurPage();
         if (pageIndex >= 0 && pageIndex < m_pages.length()) {
-            LVRendPageInfo * page = m_pages[pageIndex];
+			const LVRendPageInfo * page = m_pages[pageIndex];
             if (page->flags & RN_PAGE_TYPE_COVER)
                 return res;
             start_y = page->start;
@@ -2958,6 +2963,74 @@ LVRef<ldomXRange> LVDocView::getPageDocumentRange(int pageIndex) {
         return res;
     res = LVRef<ldomXRange> (new ldomXRange(start, end));
     return res;
+}
+
+int LVDocView::searchPages(const lString32 &pattern, int origin, int direction, int fromPage)
+{
+    if (pattern.empty() || origin < -1 || origin > 1 || (direction != -1 && direction != 1))
+        return -1;
+    LVLock lock(getMutex());
+    if (!m_doc)
+        return -1;
+    checkRender();
+    if (m_pages.empty())
+        return -1;
+
+    const int visiblePage = getCurPage();
+    const int current = fromPage >= visiblePage && fromPage < visiblePage + getVisiblePageCount() &&
+                        fromPage < m_pages.length() ? fromPage : visiblePage;
+    const bool reverse = direction < 0;
+    int first = 0;
+    int last = m_pages.length() - 1;
+    if (origin == -1) {
+        if (reverse)
+            first = current + 1;
+        else
+            last = current - 1;
+    } else if (reverse) {
+        last = current - origin;
+    } else {
+        first = current + origin;
+    }
+    if (first > last)
+        return -1;
+
+    const int top = m_pages[first]->start;
+    const int bottom = m_pages[last]->start + m_pages[last]->height;
+    if (top >= bottom)
+        return -1;
+    const auto startsOnPage = [](int y, const LVRendPageInfo &page) {
+        return (page.flags & RN_PAGE_TYPE_NORMAL) && y >= page.start && y < page.start + page.height;
+    };
+    int foundPage = -1;
+    LVArray<ldomWord> words;
+    if (!m_doc->findText(pattern, true, reverse, top, bottom, words, 1, 0, -1,
+            [&](const ldomWord &word) {
+                const int y = word.getStartXPointer().toPoint().y;
+                if (y < top || y >= bottom)
+                    return false;
+                const int page = m_pages.FindNearestPage(y, 0);
+                if (page < first || page > last || !startsOnPage(y, *m_pages[page]))
+                    return false;
+                foundPage = page;
+                return true;
+            }))
+        return -1;
+
+    // Collect highlights in reading order even when navigation is backward.
+    // A match may span a page boundary, but belongs to the page where it starts.
+    const ldomWord firstMatch = words[0];
+    const LVRendPageInfo &page = *m_pages[foundPage];
+    words.clear();
+    if (!m_doc->findText(pattern, true, false, page.start, page.start + page.height,
+            words, 200, 0, -1, [&](const ldomWord &word) {
+                return startsOnPage(word.getStartXPointer().toPoint().y, page);
+            }))
+        words.add(firstMatch);
+
+    goToPage(foundPage);
+    selectWords(words);
+    return foundPage;
 }
 
 /// returns number of non-space characters on current page
@@ -3368,7 +3441,7 @@ bool LVDocView::goLink(lString32 link, bool savePos) {
 			lString32 arcname =
 					m_doc_props->getStringDef(DOC_PROP_ARC_NAME, "");
 			if (arcname.empty()) {
-				container = LVOpenDirectory(dir.c_str());
+				container = LVOpenDirectoryForLookup(dir);
 				if (container.isNull())
 					return false;
 			} else {
@@ -4227,7 +4300,9 @@ bool LVDocView::LoadDocument(const lChar32 * fname, bool metadataOnly) {
 	if (!fname || !fname[0])
 		return false;
 
+	LVPerfScope openTiming("document.open");
 	Clear();
+	LVPerfScope sourceTiming("document.source.open");
 
     CRLog::debug("LoadDocument(%s) textMode=%s", LCSTR(lString32(fname)), getTextFormatOptions()==txt_format_pre ? "pre" : "autoformat");
 
@@ -4257,6 +4332,7 @@ bool LVDocView::LoadDocument(const lChar32 * fname, bool metadataOnly) {
 			return false;
 		}
 		stream = m_container->OpenStream(arcItemPathName.c_str(), LVOM_READ);
+		sourceTiming.finish();
 		if (stream.isNull()) {
 			CRLog::error("Cannot open archive file item stream %s", LCSTR(
 					filename32));
@@ -4272,7 +4348,10 @@ bool LVDocView::LoadDocument(const lChar32 * fname, bool metadataOnly) {
 		m_doc_props->setString(DOC_PROP_FILE_SIZE, lString32::itoa(
 				(int) stream->GetSize()));
 		m_doc_props->setString(DOC_PROP_FILE_NAME, arcItemPathName);
-		m_doc_props->setHex(DOC_PROP_FILE_CRC32, stream->getcrc32());
+		{
+			LVPerfScope checksumTiming("document.source.checksum");
+			m_doc_props->setHex(DOC_PROP_FILE_CRC32, stream->getcrc32());
+		}
 		CRFileHistRecord* record = m_hist.getRecord( filename32, stream->GetSize() );
         if (loadDocumentWithHistory(stream, record, metadataOnly)) {
             m_filename = lString32(fname);
@@ -4309,16 +4388,20 @@ bool LVDocView::LoadDocument(const lChar32 * fname, bool metadataOnly) {
 #endif
 
 	m_doc_props->setString(DOC_PROP_FILE_PATH, dir);
-	m_container = LVOpenDirectory(dir.c_str());
+	m_container = LVOpenDirectoryForLookup(dir);
 	if (m_container.isNull())
 		return false;
 	LVStreamRef stream = m_container->OpenStream(fn.c_str(), LVOM_READ);
+	sourceTiming.finish();
 	if (!stream)
 		return false;
 	m_doc_props->setString(DOC_PROP_FILE_NAME, fn);
 	m_doc_props->setString(DOC_PROP_FILE_SIZE, lString32::itoa(
 			(int) stream->GetSize()));
-	m_doc_props->setHex(DOC_PROP_FILE_CRC32, stream->getcrc32());
+	{
+		LVPerfScope checksumTiming("document.source.checksum");
+		m_doc_props->setHex(DOC_PROP_FILE_CRC32, stream->getcrc32());
+	}
 
 	CRFileHistRecord* record = m_hist.getRecord( filename32, stream->GetSize() );
     if (loadDocumentWithHistory(stream, record, metadataOnly)) {
@@ -4608,7 +4691,8 @@ bool LVDocView::loadDocumentInt(LVStreamRef stream, bool metadataOnly) {
         }
 
 
-		if ( DetectEpubFormat( m_stream ) ) {
+		LVContainerRef epubArchive = OpenEpubArchive(m_stream);
+		if ( !epubArchive.isNull() ) {
 			// EPUB
 			CRLog::info("EPUB format detected");
 			createEmptyDocument();
@@ -4618,7 +4702,7 @@ bool LVDocView::loadDocumentInt(LVStreamRef stream, bool metadataOnly) {
 			if ( m_callback )
                 m_callback->OnLoadFileFormatDetected(doc_format_epub);
             updateDocStyleSheet();
-            bool res = ImportEpubDocument( m_stream, m_doc, m_callback, this, metadataOnly );
+            bool res = ImportEpubDocument(m_stream, m_doc, m_callback, this, metadataOnly, epubArchive);
 			if ( !res ) {
 				setDocFormat( doc_format_none );
                 createDefaultDocument( cs32("ERROR: Error reading EPUB format"), cs32("Cannot open document") );
@@ -5426,7 +5510,7 @@ ldomXPointer LVDocView::getCurrentPageMiddleParagraph() {
 		if (pageIndex < 0 || pageIndex >= m_pages.length())
 			pageIndex = getCurPage();
 		if (pageIndex >= 0 && pageIndex < m_pages.length()) {
-			LVRendPageInfo *page = m_pages[pageIndex];
+			const LVRendPageInfo *page = m_pages[pageIndex];
 			if (page->flags & RN_PAGE_TYPE_NORMAL)
 				ptr = m_doc->createXPointer(lvPoint(0, page->start + page->height / 2));
 		}
@@ -5454,7 +5538,7 @@ ldomXPointer LVDocView::getBookmark( bool precise ) {
 				// could resolve back to the previous page. We need to check for that
 				// and increase y until we find a coherent one.
 				// (In the following, we always want to find the first logical word/char.)
-				LVRendPageInfo * page = m_pages[_page];
+				const LVRendPageInfo * page = m_pages[_page];
 				bool found = false;
 				ldomXPointer fallback_ptr;
 				if (precise) {

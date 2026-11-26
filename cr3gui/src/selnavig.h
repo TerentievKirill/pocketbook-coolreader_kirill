@@ -20,9 +20,10 @@ class CRSelNavigationDialog : public BackgroundFitWindow
 protected:
     CRViewDialog * _mainwin;
     lString32 _pattern;
+    int _searchPage;
     void moveBy( int delta );
 public:
-    CRSelNavigationDialog(  CRGUIWindowManager * wm, CRViewDialog * mainwin, lString32 pattern );
+    CRSelNavigationDialog(CRGUIWindowManager *wm, CRViewDialog *mainwin, lString32 pattern, int searchPage = -1);
 
     /// returns true if command is processed
     virtual bool onCommand( int command, int params );

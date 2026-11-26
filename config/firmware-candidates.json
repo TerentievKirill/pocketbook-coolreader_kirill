@@ -45,6 +45,21 @@
         "sha256": "6c42fba30c5b934ab1d665a119518533e02da98b152a8ce4b7455909544c4fb7"
       },
       "release_notes": "https://support.pocketbook-int.com/fw/743G/u/6.11.1683/rn/ww/RN_PB_InkPad_4_EN.pdf"
+    },
+    {
+      "id": "pb629",
+      "label": "Verse",
+      "model": "629",
+      "version": "6.11.2020",
+      "software_version": "U629.6.11.2020",
+      "source_api": "https://pocketbook.ch/front-api/api/en-ch/product?product_id=2019",
+      "retrieved_on": "2026-11-17",
+      "archive": {
+        "filename": "sw_20260902_U629_6.11.2020_user.zip",
+        "url": "https://download.pocketbook-int.com/fw/Liangyan/629/user/20260902/sw_20260902_U629_6.11.2020_user.zip",
+        "sha256": "357c2e586b965ef349d9b9f8c9768377e1f2863b822a1d84973176c6380b7bbd"
+      },
+      "release_notes": "https://support.pocketbook-int.com/fw/629/u/6.11.2020/rn/ww/RN_PB_Verse_EN.pdf"
     }
   ]
 }

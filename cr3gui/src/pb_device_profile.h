@@ -24,6 +24,8 @@ inline std::string modelNumber(const char *description) {
     if (model.compare(0, 10, "PocketBook") == 0) model.erase(0, 10);
     if (model.compare(0, 2, "PB") == 0) model.erase(0, 2);
     std::transform(model.begin(), model.end(), model.begin(), [](unsigned char ch) { return std::toupper(ch); });
+    // Keep OTA identifiers alphanumeric for compatibility with installed clients.
+    if (model == "740-2" || model == "740-3") model.erase(3, 1);
     return model;
 }
 

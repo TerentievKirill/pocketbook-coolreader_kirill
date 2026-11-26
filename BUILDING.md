@@ -56,7 +56,7 @@ network/UI callbacks; physical-reader Wi-Fi and touch testing remain separate.
 
 Build families are declared in `config/targets/*.json`: `pb632-fw6` retains the
 Touch HD 3 configuration; `pocketbook-armv7-softfp` produces one experimental
-shared package for four known models with separately pinned validation firmware. See
+shared package for five known models with separately pinned validation firmware. See
 [device candidates and admission checks](DEVICE-SUPPORT.md) for expansion status.
 
 ```sh
@@ -65,7 +65,7 @@ CR3_REVISION=local bash tools/docker-build-pocketbook.sh pb632-fw6
 ```
 
 This selects the SDK, compiler flags, firmware runtime and package assets from
-the profile. A firmware dependency/ABI check and the twenty-four ARM regressions
+the profile. A firmware dependency/ABI check and the twenty-six ARM regressions
 must pass before packaging. Reports include target identity and the complete
 profile is embedded in `system/share/cr3/metadata/build-info.json`. Different profiles use separate build
 directories and Docker input caches. The first profiled build recompiles objects;
@@ -76,12 +76,12 @@ The original PB632 commands and output names below remain supported.
 Build the shared package with:
 
 ```sh
-CR3_RELEASE_VERSION=1.0.7 CR3_REVISION=shared-ota bash tools/docker-build-pocketbook.sh pocketbook-armv7-softfp
+CR3_RELEASE_VERSION=1.0.8 CR3_REVISION=shared-ota bash tools/docker-build-pocketbook.sh pocketbook-armv7-softfp
 ```
 
 This uses the independent `coolreader-pocketbook-armv7-softfp-work` volume and
 the existing host download cache. The first setup also verifies/downloads the
-three pinned candidate firmware archives (about 1.4 GB in addition to the primary
+four pinned candidate firmware archives (about 1.4 GB in addition to the primary
 SDK/firmware inputs). Extraction caches under `work/qualification` are reused.
 Before producing `dist/coolreader-pocketbook-armv7-softfp-<revision>.zip`, it runs
 thirteen software probes per additional firmware, verifies eager-bound startup
@@ -109,7 +109,7 @@ From the repository root:
 CR3_REVISION=local bash tools/docker-build-touch-hd3.sh
 ```
 
-This builds the PocketBook ARM executable, runs all twenty-four ARM/QEMU regression
+This builds the PocketBook ARM executable, runs all twenty-six ARM/QEMU regression
 groups and package checks, and writes the ZIP, SHA-256 file, test report and
 separate debug symbols into `dist/`. It does not install or publish the build.
 

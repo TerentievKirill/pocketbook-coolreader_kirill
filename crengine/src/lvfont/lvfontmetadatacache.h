@@ -7,7 +7,6 @@
 #include <map>
 #include <string>
 #include <vector>
-#include <sys/stat.h>
 #include <cstdio>
 #include <cstring>
 
@@ -36,25 +35,6 @@ class LVFontMetadataCache {
     }
 public:
     LVFontMetadataCache() : _old(LVCreatePropsContainer()), _next(LVCreatePropsContainer()) {}
-    static lString8 fingerprint(const lString8 &path) {
-#if defined(__linux__) || defined(__APPLE__)
-        struct stat info;
-        if (stat(path.c_str(), &info) || !S_ISREG(info.st_mode)) return lString8();
-#ifdef __APPLE__
-        long mns = info.st_mtimespec.tv_nsec, cns = info.st_ctimespec.tv_nsec;
-#else
-        long mns = info.st_mtim.tv_nsec, cns = info.st_ctim.tv_nsec;
-#endif
-        char stamp[256];
-        snprintf(stamp, sizeof(stamp), "%llu:%llu:%lld:%lld:%ld:%lld:%ld",
-                 (unsigned long long)info.st_dev, (unsigned long long)info.st_ino,
-                 (long long)info.st_size, (long long)info.st_mtime, mns,
-                 (long long)info.st_ctime, cns);
-        return lString8(stamp);
-#else
-        return lString8();
-#endif
-    }
     void begin(lString32 filename, lString8 schema) {
         _old = LVCreatePropsContainer(); _next = LVCreatePropsContainer();
         _files.clear(); _count = 0; _hits = 0; _filename = filename;

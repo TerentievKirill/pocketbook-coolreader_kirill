@@ -188,3 +188,29 @@ pickers, sample pixel changes without a global rendering-weight change, staged
 properties, Back/Cancel/Done behavior, and native menu preview images. Hardware
 capability calls and action labels are deterministic test doubles; no firmware
 dialogs or update requests are opened.
+
+Translation lookup
+------------------
+The translation-lookup group checks every hit and missing-key gap in catalogs
+of sizes 0 through 40, plus all entries and an upper-bound miss in the compiled
+Russian catalog. This guards against reading beyond the catalog when a lookup
+sorts after its final entry (the localized Settings SIGSEGV).
+
+Russian UI coverage
+-------------------
+python3 tools/test-translations.py extracts current frontend/header and engine UI
+keys, checks complete Russian coverage and validates gettext formats and $1/$2
+substitution tokens. The ARM runner performs this check before running groups.
+The dictionary-download and ota-ui groups load the real Russian catalog and
+check translated menu labels, dictionary offers, storage errors, version prompts
+and restart buttons. Internal catalog keys and filenames remain language-neutral.
+
+Reader screens
+--------------
+The reader-screens group links the application frontend objects with a separate
+test entry point and fake device identity. It opens actual Book info, Help,
+button shortcuts, bookmarks, citations and recent books. Russian metadata,
+XML-special characters, DPI-scaled typography, portrait/landscape geometry,
+paging and Back/Read behavior are checked at PB629/PB632 sizes. Full-screen
+previews are saved as book-info-*, bookmarks-* and recent-books-* in the ARM
+regression output directory.

@@ -1,4 +1,4 @@
-set(CR3_RELEASE_VERSION "1.0.7" CACHE STRING "Stable OTA version (SemVer)")
+set(CR3_RELEASE_VERSION "1.0.9" CACHE STRING "Stable OTA version (SemVer)")
 if(NOT CR3_RELEASE_VERSION MATCHES "^(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)$")
     message(FATAL_ERROR "CR3_RELEASE_VERSION must be MAJOR.MINOR.PATCH")
 endif()
@@ -60,19 +60,30 @@ if(POCKETBOOK_PRO)
     endif()
     if(POCKETBOOK_PRO_PRO2)
         add_definitions(-DPOCKETBOOK_PRO_PRO2=1)
-    elseif(POCKETBOOK_PRO_FW5)
-        # FW6 also uses these compatible InkView interfaces.
-        add_definitions(-DPOCKETBOOK_PRO_FW5=1)
+    else()
+        list(APPEND CR3_SOURCES src/pbquickmenu.cpp)
+        if(POCKETBOOK_PRO_FW5)
+            # FW6 also uses these compatible InkView interfaces.
+            add_definitions(-DPOCKETBOOK_PRO_FW5=1)
+        endif()
     endif()
 endif()
 if(BACKGROUND_CACHE_FILE_CREATION)
     add_definitions(-DBACKGROUND_CACHE_FILE_CREATION=1)
 endif()
+if(POCKETBOOK_FW6)
+    list(APPEND CR3_SOURCES src/pb_file_associations.cpp)
+endif()
 
+file(GLOB CR3_TRANSLATION_HEADERS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.h")
+set(CR3_TRANSLATION_SOURCES ${CR3_SOURCES} ${CR3_TRANSLATION_HEADERS}
+    ${CMAKE_SOURCE_DIR}/crengine/src/crgui.cpp
+    ${CMAKE_SOURCE_DIR}/crengine/src/hyphman.cpp)
 KWWidgets_CREATE_GETTEXT_TARGETS(
     DOMAIN_NAME "cr3"
     LOCALE_LIST "${LANGUAGES}"
-    SOURCES "${CR3_SOURCES}"
+    SOURCES "${CR3_TRANSLATION_SOURCES}"
+    EXTRA_GETTEXT_KEYWORDS "_8;_32"
     PO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/po
     CREATE_POT_TARGET 1
     CREATE_PO_TARGET 1

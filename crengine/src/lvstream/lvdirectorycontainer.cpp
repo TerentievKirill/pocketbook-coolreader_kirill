@@ -28,6 +28,29 @@
 
 LVStreamRef LVDirectoryContainer::OpenStream(const char32_t *fname, lvopen_mode_t mode)
 {
+    lString32 fn = m_fname;
+    fn << fname;
+    if (_listOnDemand) {
+        if ((mode & LVOM_MASK) != LVOM_READ) {
+            const auto &dir = listing();
+            return dir.isNull() ? LVStreamRef() : dir->OpenStream(fname, mode);
+        }
+#ifndef _WIN32
+        // An exact pathname lookup avoids reading the directory. POSIX open()
+        // alone would also accept a directory or block on a named pipe.
+        const lString8 path = UnicodeToUtf8(fn);
+#if defined(__linux__) && defined(_LARGEFILE64_SOURCE)
+        struct stat64 info;
+        if (stat64(path.c_str(), &info) || !S_ISREG(info.st_mode))
+#else
+        struct stat info;
+        if (stat(path.c_str(), &info) || !S_ISREG(info.st_mode))
+#endif
+            return LVStreamRef();
+#endif
+        return LVOpenFileStream(fn.c_str(), mode);
+    }
+
     int found_index = -1;
     for (int i=0; i<m_list.length(); i++) {
         if ( !lStr_cmp( fname, m_list[i]->GetName() ) ) {
@@ -39,9 +62,6 @@ LVStreamRef LVDirectoryContainer::OpenStream(const char32_t *fname, lvopen_mode_
             break;
         }
     }
-    // make filename
-    lString32 fn = m_fname;
-    fn << fname;
     //const char * fb8 = UnicodeToUtf8( fn ).c_str();
     //printf("Opening directory container file %s : %s fname=%s path=%s\n", UnicodeToUtf8( lString32(fname) ).c_str(), UnicodeToUtf8( fn ).c_str(), UnicodeToUtf8( m_fname ).c_str(), UnicodeToUtf8( m_path ).c_str());
     LVStreamRef stream( LVOpenFileStream( fn.c_str(), mode ) );
@@ -59,6 +79,31 @@ LVStreamRef LVDirectoryContainer::OpenStream(const char32_t *fname, lvopen_mode_
     return stream;
 }
 
+const LVContainerRef &LVDirectoryContainer::listing() const
+{
+    if (_listing.isNull())
+        _listing = LVContainerRef(OpenDirectory(m_fname.c_str()));
+    return _listing;
+}
+
+const LVContainerItemInfo *LVDirectoryContainer::GetObjectInfo(int index)
+{
+    if (_listOnDemand) {
+        const auto &dir = listing();
+        return dir.isNull() ? NULL : dir->GetObjectInfo(index);
+    }
+    return index >= 0 && index < m_list.length() ? m_list[index] : NULL;
+}
+
+int LVDirectoryContainer::GetObjectCount() const
+{
+    if (_listOnDemand) {
+        const auto &dir = listing();
+        return dir.isNull() ? 0 : dir->GetObjectCount();
+    }
+    return m_list.length();
+}
+
 lverror_t LVDirectoryContainer::GetSize(lvsize_t *pSize)
 {
     if (m_fname.empty())
@@ -67,8 +112,12 @@ lverror_t LVDirectoryContainer::GetSize(lvsize_t *pSize)
     return LVERR_OK;
 }
 
-LVDirectoryContainer::LVDirectoryContainer() : m_parent(NULL)
+LVDirectoryContainer::LVDirectoryContainer(lString32 path, bool listOnDemand)
+    : _listOnDemand(listOnDemand), m_parent(NULL)
 {
+    if (!path.endsWith("/") && !path.endsWith("\\"))
+        path << m_path_separator;
+    SetName(path.c_str());
 }
 
 LVDirectoryContainer::~LVDirectoryContainer()
@@ -77,25 +126,19 @@ LVDirectoryContainer::~LVDirectoryContainer()
     Clear();
 }
 
+LVDirectoryContainer *LVDirectoryContainer::OpenForLookup(const lString32 &path)
+{
+    return path.empty() ? NULL : new LVDirectoryContainer(path, true);
+}
+
 LVDirectoryContainer *LVDirectoryContainer::OpenDirectory(const char32_t *path, const char32_t *mask)
 {
     if (!path || !path[0])
         return NULL;
-    
-    
-    // container object
-    LVDirectoryContainer * dir = new LVDirectoryContainer;
-    
-    // make filename
-    lString32 fn( path );
-    lChar32 lastch = 0;
-    if ( !fn.empty() )
-        lastch = fn[fn.length()-1];
-    if ( lastch!='\\' && lastch!='/' )
-        fn << dir->m_path_separator;
-    
-    dir->SetName(fn.c_str());
-    
+
+    LVDirectoryContainer *dir = new LVDirectoryContainer(lString32(path), false);
+    lString32 fn = dir->m_fname;
+
 #if !defined(__SYMBIAN32__) && defined(_WIN32)
     // WIN32 API
     fn << mask;
@@ -199,18 +242,27 @@ LVDirectoryContainer *LVDirectoryContainer::OpenDirectory(const char32_t *path, 
 #else
     // POSIX
     lString32 p( fn );
-    p.erase( p.length()-1, 1 );
+    LVRemovePathDelimiter(p);
     lString8 p8 = UnicodeToLocal( p );
     if ( p8.empty() )
         p8 = ".";
     const char * p8s = p8.c_str();
     DIR * d = opendir(p8s);
     if ( d ) {
-        struct dirent * pde;
-        while ( (pde = readdir(d))!=NULL ) {
+#if defined(__linux__) && defined(_LARGEFILE64_SOURCE)
+        // On 32-bit builds, readdir() can reject a directory's inode or offset.
+        while (struct dirent64 *pde = readdir64(d)) {
+            lString8 fpath = p8 + "/" + pde->d_name;
+            struct stat64 st;
+            if (stat64(fpath.c_str(), &st))
+                continue;
+#else
+        while (struct dirent *pde = readdir(d)) {
             lString8 fpath = p8 + "/" + pde->d_name;
             struct stat st;
-            stat( fpath.c_str(), &st );
+            if (stat(fpath.c_str(), &st))
+                continue;
+#endif
             if ( S_ISDIR(st.st_mode) ) {
                 // dir
                 if ( strcmp(pde->d_name, ".") && strcmp(pde->d_name, "..") ) {

@@ -14,6 +14,26 @@ static time_t lastPaint = 0;
 static const char *directory = FLASHDIR "/system/dictionaries";
 static const char *temporary = FLASHDIR "/system/dictionaries/.coolreader-download.part";
 }
+static const char *dictionaryLabel(const cr3dict::Entry &entry) {
+    if (!strcmp(entry.label, "Czech definitions")) return _("Czech definitions");
+    if (!strcmp(entry.label, "Czech → English")) return _("Czech → English");
+    if (!strcmp(entry.label, "Czech → Russian")) return _("Czech → Russian");
+    if (!strcmp(entry.label, "English definitions")) return _("English definitions");
+    if (!strcmp(entry.label, "English → Czech")) return _("English → Czech");
+    if (!strcmp(entry.label, "English → Russian")) return _("English → Russian");
+    if (!strcmp(entry.label, "Russian definitions")) return _("Russian definitions");
+    if (!strcmp(entry.label, "Russian → Czech")) return _("Russian → Czech");
+    if (!strcmp(entry.label, "Russian → English")) return _("Russian → English");
+    if (!strcmp(entry.label, "Ukrainian definitions")) return _("Ukrainian definitions");
+    return entry.label;
+}
+static const char *dictionaryLanguageTitle(const char *language) {
+    if (!strcmp(language, "English")) return _("English dictionaries");
+    if (!strcmp(language, "Russian")) return _("Russian dictionaries");
+    if (!strcmp(language, "Ukrainian")) return _("Ukrainian dictionaries");
+    if (!strcmp(language, "Czech")) return _("Czech dictionaries");
+    return language;
+}
 static void dictionaryPoll();
 static void dictionaryStart();
 static void dictionaryOffer();
@@ -60,7 +80,7 @@ static void dictionaryStart() {
     dictui::state = dictui::Downloading; dictui::lastPaint = 0;
     dictui::transfer.reset(new WebTransfer());
     pbRestoreUpdateScreen();
-    OpenProgressbar(ICON_INFORMATION, _("Download dictionary"), entry.label, 0, dictionaryCancel);
+    OpenProgressbar(ICON_INFORMATION, _("Download dictionary"), dictionaryLabel(entry), 0, dictionaryCancel);
     dictui::progressOpen = true;
     if (!dictui::transfer->start(entry.url, dictui::temporary, entry.size)) {
         error = dictui::transfer->error(); dictionaryFail(error); return;
@@ -80,7 +100,7 @@ static void dictionaryOffer() {
         dictionaryReset(); dictionaryResult(ICON_INFORMATION, _("Ready to use offline. Open Dictionary, then tap its name to select this dictionary.")); return;
     }
     dictui::state = dictui::Confirming;
-    std::string text = std::string(entry.label) + "\n" + cr3dict::sizeLabel(entry.size) +
+    std::string text = std::string(dictionaryLabel(entry)) + "\n" + cr3dict::sizeLabel(entry.size) +
         "\n\n" + _("Free download. Connect to Wi-Fi to install; use offline afterwards.") +
         "\n\n" + entry.credit;
     Dialog(ICON_INFORMATION, _("Download dictionary"), text.c_str(), _("Download"), _("Cancel"), dictionaryConfirm);
@@ -98,7 +118,7 @@ static void dictionaryPoll() {
         if (!dictui::installation->succeeded()) {
             std::string error = dictui::installation->error(); dictionaryFail(error); return;
         }
-        std::string name = dictui::selected->label;
+        std::string name = dictionaryLabel(*dictui::selected);
         dictionaryReset();
         dictionaryResult(ICON_INFORMATION, name + "\n\n" +
             _("Dictionary installed. Open Dictionary and tap its name at the top to select it. No restart is needed."));
@@ -111,7 +131,7 @@ static void dictionaryPoll() {
     if (done || now != dictui::lastPaint) {
         unsigned long long bytes = dictui::transfer->received();
         int percent = static_cast<int>(bytes * 100 / entry.size);
-        std::string label = std::string(entry.label) + "\n" +
+        std::string label = std::string(dictionaryLabel(entry)) + "\n" +
             cr3dict::sizeLabel(bytes) + " / " + cr3dict::sizeLabel(entry.size);
         UpdateProgressbar(label.c_str(), percent > 100 ? 100 : percent);
         dictui::lastPaint = now;
@@ -131,7 +151,7 @@ class CRDictionaryDownloadItem : public CRMenuItem {
     const cr3dict::Entry &_entry;
 public:
     CRDictionaryDownloadItem(CRMenu *parent, int id, const cr3dict::Entry &entry)
-        : CRMenuItem(parent, id, Utf8ToUnicode(entry.label), LVImageSourceRef(), LVFontRef()), _entry(entry) {}
+        : CRMenuItem(parent, id, Utf8ToUnicode(dictionaryLabel(entry)), LVImageSourceRef(), LVFontRef()), _entry(entry) {}
     virtual lString32 getSubmenuValue() {
         return cr3dict::installed(dictui::directory, _entry) ? lString32(_("Installed")) :
             Utf8ToUnicode((std::string(_("Download")) + " · " + cr3dict::sizeLabel(_entry.size)).c_str());
@@ -149,7 +169,7 @@ public:
     CRDictionaryDownloadsMenu(CRMenu *parent,int id,const char *language=NULL,const char *format="stardict")
         : CRMenu(parent->getWindowManager(),parent,id,
                  !language ? lString32(_("Dictionaries")) : !strcmp(format,"pocketbook") ? lString32(_("PocketBook versions")) :
-                    Utf8ToUnicode((std::string(language)+" "+_("dictionaries")).c_str()), "",
+                    lString32(dictionaryLanguageTitle(language)), "",
                  LVFontRef(),parent->getValueFont(),CRPropRef()), _language(language),_format(format) {
         setSkinName(lString32("#settings")); setAccelerators(parent->getAccelerators());
         if (!language) {

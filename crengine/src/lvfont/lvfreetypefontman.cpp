@@ -1400,7 +1400,7 @@ bool LVFreeTypeFontManager::RegisterFont(lString8 name) {
                 );
     }
 #endif
-    lString8 stamp = _metadataCache.enabled() ? LVFontMetadataCache::fingerprint(fname) : lString8();
+    lString8 stamp = _metadataCache.enabled() ? LVFileMetadataFingerprint(fname) : lString8();
     std::vector<LVFontDef> definitions;
     if (_metadataCache.lookup(name, stamp, definitions)) {
         for (const LVFontDef &def : definitions) {
@@ -1509,7 +1509,7 @@ bool LVFreeTypeFontManager::RegisterFont(lString8 name) {
         }
     }
 
-    if (complete && !stamp.empty() && stamp == LVFontMetadataCache::fingerprint(fname))
+    if (complete && !stamp.empty() && stamp == LVFileMetadataFingerprint(fname))
         _metadataCache.remember(name, stamp, definitions);
     return res;
 }

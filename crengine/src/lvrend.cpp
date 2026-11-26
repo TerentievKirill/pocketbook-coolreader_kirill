@@ -2929,36 +2929,7 @@ void SplitLines( const lString32 & str, lString32Collection & lines )
 lString32 renderListItemMarker( ldomNode * enode, int & marker_width, LFormattedText * txform, int line_h, lUInt32 flags ) {
     lString32 marker;
     marker_width = 0;
-    ldomDocument* doc = enode->getDocument();
-    // The UL > LI parent-child chain may have had some of our boxing elements inserted
-    ldomNode * parent = enode->getUnboxedParent();
-    ListNumberingPropsRef listProps =  doc->getNodeNumberingProps( parent->getDataIndex() );
-    if ( listProps.isNull() ) { // no previously cached info: compute and cache it
-        // Scan all our siblings to know the widest marker width
-        int counterValue = 0;
-        int maxWidth = 0;
-        ldomNode * sibling = parent->getUnboxedFirstChild(true);
-        while ( sibling ) {
-            lString32 marker;
-            int markerWidth = 0;
-            if ( sibling->getNodeListMarker( counterValue, marker, markerWidth ) ) {
-                if ( markerWidth > maxWidth )
-                    maxWidth = markerWidth;
-            }
-            sibling = sibling->getUnboxedNextSibling(true); // skip text nodes
-        }
-        listProps = ListNumberingPropsRef( new ListNumberingProps(counterValue, maxWidth) );
-        doc->setNodeNumberingProps( parent->getDataIndex(), listProps );
-    }
-    // Note: node->getNodeListMarker() uses font->getTextWidth() without any hint about
-    // text direction, so the marker is measured LTR.. We should probably upgrade them
-    // to measureText() with the right direction, to get a correct marker_width...
-    // For now, as node->getNodeListMarker() adds some whitespace and padding, we should
-    // be fine with any small error due to different measuring with LTR vs RTL.
-    int counterValue = 0;
-    if ( enode->getNodeListMarker( counterValue, marker, marker_width ) ) {
-        if ( !listProps.isNull() )
-            marker_width = listProps->maxWidth;
+    if ( enode->getNodeListMarker(marker, marker_width) ) {
         css_style_ref_t style = enode->getStyle();
         LVFontRef font = enode->getFont();
         lUInt32 cl = getForegroundColor(style);
@@ -2973,6 +2944,7 @@ lString32 renderListItemMarker( ldomNode * enode, int & marker_width, LFormatted
                 line_h = lengthToPx(enode, style->line_height, em, em, true);
             }
             // Scale line_h according to document's _interlineScaleFactor
+            ldomDocument *doc = enode->getDocument();
             if (style->line_height.type != css_val_screen_px && doc->getInterlineScaleFactor() != INTERLINE_SCALE_FACTOR_NO_SCALE)
                 line_h = (line_h * doc->getInterlineScaleFactor()) >> INTERLINE_SCALE_FACTOR_SHIFT;
             if ( STYLE_HAS_CR_HINT(style, STRUT_CONFINED) )
@@ -3537,28 +3509,7 @@ void renderFinalBlock( ldomNode * enode, LFormattedText * txform, RenderRectAcce
             lString32 marker;
             int marker_width = 0;
 
-            ListNumberingPropsRef listProps =  enode->getDocument()->getNodeNumberingProps( enode->getParentNode()->getDataIndex() );
-            if ( listProps.isNull() ) { // no previously cached info: compute and cache it
-                // Scan all our siblings to know the widest marker width
-                int counterValue = 0;
-                int maxWidth = 0;
-                ldomNode * sibling = enode->getUnboxedParent()->getUnboxedFirstChild(true);
-                while ( sibling ) {
-                    lString32 marker;
-                    int markerWidth = 0;
-                    if ( sibling->getNodeListMarker( counterValue, marker, markerWidth ) ) {
-                        if ( markerWidth > maxWidth )
-                            maxWidth = markerWidth;
-                    }
-                    sibling = sibling->getUnboxedNextSibling(true); // skip text nodes
-                }
-                listProps = ListNumberingPropsRef( new ListNumberingProps(counterValue, maxWidth) );
-                enode->getDocument()->setNodeNumberingProps( enode->getParentNode()->getDataIndex(), listProps );
-            }
-            int counterValue = 0;
-            if ( enode->getNodeListMarker( counterValue, marker, marker_width ) ) {
-                if ( !listProps.isNull() )
-                    marker_width = listProps->maxWidth;
+            if ( enode->getNodeListMarker(marker, marker_width) ) {
                 css_list_style_position_t sp = style->list_style_position;
                 LVFontRef font = enode->getFont();
                 lUInt32 cl = getForegroundColor(style);
@@ -9099,6 +9050,47 @@ void DrawBackgroundImage(ldomNode *enode,LVDrawBuf & drawbuf,int x0,int y0,int d
     }
 }
 
+// Keep annotation clipping out of the common text-paint path.
+#if defined(__GNUC__)
+__attribute__((noinline, cold))
+#endif
+static void DrawAnnotatedText(LFormattedText &text, LVDrawBuf &drawbuf, ldomNode *enode,
+                              RenderRectAccessor &fmt, int textX, int textY,
+                              ldomMarkedRangeList *marks, ldomMarkedRangeList *bookmarks)
+{
+    lvRect rc;
+    enode->getAbsRect( rc, true );
+    if ( !RENDER_RECT_HAS_FLAG(fmt, INNER_FIELDS_SET) ) {
+        // In legacy mode, getAbsRect( ..., inner=true) did not have
+        // the inner geometry stored in fmt and computed. We need
+        // to correct it with paddings:
+        int padding_left = measureBorder(enode,3)+lengthToPx(enode, enode->getStyle()->padding[0],rc.width());
+        int padding_right = measureBorder(enode,1)+lengthToPx(enode, enode->getStyle()->padding[1],rc.width());
+        int padding_top = measureBorder(enode,0)+lengthToPx(enode, enode->getStyle()->padding[2],rc.height());
+        int padding_bottom = measureBorder(enode,2)+lengthToPx(enode, enode->getStyle()->padding[3],rc.height());
+        rc.top += padding_top;
+        rc.left += padding_left;
+        rc.right -= padding_right;
+        rc.bottom -= padding_bottom;
+    }
+    ldomMarkedRangeList *nbookmarks = NULL;
+    if ( bookmarks && !bookmarks->empty() ) {
+        nbookmarks = new ldomMarkedRangeList( bookmarks, rc );
+    }
+    if ( marks && !marks->empty() ) {
+        // Keep marks that are part of the top and bottom overflows
+        lvRect crop_rc = lvRect(rc);
+        crop_rc.top -= fmt.getTopOverflow();
+        crop_rc.bottom += fmt.getBottomOverflow();
+        ldomMarkedRangeList nmarks( marks, rc, &crop_rc );
+        text.Draw( &drawbuf, textX, textY, &nmarks, nbookmarks );
+    } else {
+        text.Draw( &drawbuf, textX, textY, NULL, nbookmarks );
+    }
+    if (nbookmarks)
+        delete nbookmarks;
+}
+
 //=======================================================================
 // Draw document
 //=======================================================================
@@ -9250,8 +9242,11 @@ void DrawDocument( LVDrawBuf & drawbuf, ldomNode * enode, int x0, int y0, int dx
         case erm_table_footer_group:
         case erm_block:
             {
-                // recursive draw all sub-blocks for blocks
+                // Retain whole paint groups when narrowing the reading body's children.
+                int first = 0;
                 int cnt = enode->getChildCount();
+                if (cnt >= 32 && enode->getNodeId() == el_body)
+                    enode->getDocument()->getChapterPaintRange(enode, doc_y, dy, first, cnt);
 
                 bool in_two_steps_drawing = true;
                 if ( draw_content && draw_background )
@@ -9259,7 +9254,7 @@ void DrawDocument( LVDrawBuf & drawbuf, ldomNode * enode, int x0, int y0, int dx
 
                 if ( in_two_steps_drawing && draw_background ) { // draw_content==false
                     // Recursively draw background only
-                    for (int i=0; i<cnt; i++) {
+                    for (int i=first; i<cnt; i++) {
                         ldomNode * child = enode->getChildNode( i );
                         // No need to draw early the background of floatboxes:
                         // it will be drawn with the content after non-floating
@@ -9355,7 +9350,7 @@ void DrawDocument( LVDrawBuf & drawbuf, ldomNode * enode, int x0, int y0, int dx
                 // and negative margins are involved, their background could be drawn
                 // over non-floating text... but that's not easy to check...)
                 bool has_floats = false;
-                for (int i=0; i<cnt; i++) {
+                for (int i=first; i<cnt; i++) {
                     ldomNode * child = enode->getChildNode( i );
                     if ( child->isFloatingBox() ) {
                         has_floats = true;
@@ -9425,7 +9420,7 @@ void DrawDocument( LVDrawBuf & drawbuf, ldomNode * enode, int x0, int y0, int dx
 
                 // Then draw over the floating nodes ignored in previous loop
                 if (has_floats) {
-                    for (int i=0; i<cnt; i++) {
+                    for (int i=first; i<cnt; i++) {
                         ldomNode * child = enode->getChildNode( i );
                         if ( !child->isFloatingBox() )
                             continue;
@@ -9543,43 +9538,12 @@ void DrawDocument( LVDrawBuf & drawbuf, ldomNode * enode, int x0, int y0, int dx
                 LFormattedTextRef txform;
                 enode->renderFinalBlock( txform, &fmt, inner_width );
                 fmt.push();
-                {
-                    lvRect rc;
-                    enode->getAbsRect( rc, true );
-                    if ( !RENDER_RECT_HAS_FLAG(fmt, INNER_FIELDS_SET) ) {
-                        // In legacy mode, getAbsRect( ..., inner=true) did not have
-                        // the inner geometry stored in fmt and computed. We need
-                        // to correct it with paddings:
-                        int padding_left = measureBorder(enode,3)+lengthToPx(enode, enode->getStyle()->padding[0],rc.width());
-                        int padding_right = measureBorder(enode,1)+lengthToPx(enode, enode->getStyle()->padding[1],rc.width());
-                        int padding_top = measureBorder(enode,0)+lengthToPx(enode, enode->getStyle()->padding[2],rc.height());
-                        int padding_bottom = measureBorder(enode,2)+lengthToPx(enode, enode->getStyle()->padding[3],rc.height());
-                        rc.top += padding_top;
-                        rc.left += padding_left;
-                        rc.right -= padding_right;
-                        rc.bottom -= padding_bottom;
-                    }
-                    ldomMarkedRangeList *nbookmarks = NULL;
-                    if ( bookmarks && bookmarks->length()) { // internal crengine bookmarked text highlights
-                        nbookmarks = new ldomMarkedRangeList( bookmarks, rc );
-                    }
-                    if ( marks && marks->length() ) { // "native highlighting" of a selection in progress
-                        // Keep marks that are part of the top and bottom overflows
-                        lvRect crop_rc = lvRect(rc);
-                        crop_rc.top -= fmt.getTopOverflow();
-                        crop_rc.bottom += fmt.getBottomOverflow();
-                        ldomMarkedRangeList nmarks( marks, rc, &crop_rc );
-                        // DrawBackgroundImage(enode, drawbuf, x0, y0, doc_x, doc_y, fmt.getWidth(), fmt.getHeight());
-                        // Draw regular text with currently marked highlights
-                        txform->Draw( &drawbuf, doc_x+x0 + padding_left, doc_y+y0 + padding_top, &nmarks, nbookmarks );
-                    } else {
-                        // DrawBackgroundImage(enode, drawbuf, x0, y0, doc_x, doc_y, fmt.getWidth(), fmt.getHeight());
-                        // Draw regular text, no marks
-                        txform->Draw( &drawbuf, doc_x+x0 + padding_left, doc_y+y0 + padding_top, marks, nbookmarks );
-                    }
-                    if (nbookmarks)
-                        delete nbookmarks;
-                }
+                const int textX = doc_x + x0 + padding_left;
+                const int textY = doc_y + y0 + padding_top;
+                if ( (marks && !marks->empty()) || (bookmarks && !bookmarks->empty()) )
+                    DrawAnnotatedText(*txform.get(), drawbuf, enode, fmt, textX, textY, marks, bookmarks);
+                else
+                    txform->Draw(&drawbuf, textX, textY);
                 #if (DEBUG_TREE_DRAW!=0)
                     drawbuf.FillRect( doc_x+x0, doc_y+y0, doc_x+x0+fmt.getWidth(), doc_y+y0+1, color );
                     drawbuf.FillRect( doc_x+x0, doc_y+y0, doc_x+x0+1, doc_y+y0+fmt.getHeight(), color );

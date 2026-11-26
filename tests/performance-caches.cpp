@@ -1,4 +1,5 @@
 #include "crengine.h"
+#include "fb2def.h"
 #include "lvdocview.h"
 #include "../crengine/src/lvfont/lvfontglyphcache.h"
 #include "../crengine/src/lvfont/lvfontmetadatacache.h"
@@ -124,6 +125,44 @@ static int pages(const char *font) {
     return 0;
 }
 
+static int nodePersistence()
+{
+    InitFontManager(lString8());
+    {
+        ldomDocument document;
+        ldomNode *root = document.getRootNode();
+        ldomNode *first = root->insertChildElement(el_section);
+        ldomNode *text = first->insertChildText(lString32(U"Original"));
+        ldomNode *last = nullptr;
+        for (int i = 0; i < 5000; ++i)
+            last = root->insertChildElement(el_section);
+
+        CRTimerUtil expired(0);
+        document.persist(expired);
+        CHECK(!first->isPersistent());
+        CRTimerUtil unlimited;
+        document.persist(unlimited);
+        CHECK(first->isPersistent() && text->isPersistent() && last->isPersistent());
+
+        text->setText(lString32(U"Edited"));
+        document.persist(unlimited);
+        CHECK(text->isPersistent() && text->getText() == U"Edited");
+        text->setText8(lString8("Edited again"));
+        document.persist(unlimited);
+        CHECK(text->isPersistent() && text->getText() == U"Edited again");
+
+        const auto freed = first->getDataIndex();
+        root->removeChild(0)->destroy();
+        ldomNode *replacement = root->insertChildElement(el_section);
+        CHECK(replacement->getDataIndex() == freed && !replacement->isPersistent());
+        document.persist(unlimited);
+        CHECK(root->isPersistent() && replacement->isPersistent());
+    }
+    ShutdownFontManager();
+    puts("PASS: node persistence deadline, earlier text edits and recycled node indices");
+    return 0;
+}
+
 static int metadata(const char *font, const char *directory) {
     lString32 path = Utf8ToUnicode(directory) + "/cached-font.ttf";
     lString32 registry = Utf8ToUnicode(directory) + "/font-metadata.ini";
@@ -150,10 +189,10 @@ static int metadata(const char *font, const char *directory) {
         CHECK(fontMan->GetFontCount() == count && fontMan->GetFontListHash(-1) == hash);
         auto face = fontMan->GetFont(32, 400, false, css_ff_sans_serif, lString8("DejaVu Sans"));
         CHECK(!face.isNull() && face->getGlyph('A'));
-        lString8 before = LVFontMetadataCache::fingerprint(UnicodeToUtf8(registry));
+        lString8 before = LVFileMetadataFingerprint(UnicodeToUtf8(registry));
         CHECK(fontMan->SaveFontMetadataCache());
         if (pass == 1 || pass == 4)
-            CHECK(before == LVFontMetadataCache::fingerprint(UnicodeToUtf8(registry)));
+            CHECK(before == LVFileMetadataFingerprint(UnicodeToUtf8(registry)));
         face.Clear(); ShutdownFontManager();
     }
     CHECK(LVDeleteFile(path));
@@ -168,6 +207,6 @@ static int metadata(const char *font, const char *directory) {
 int main(int argc, char **argv) {
     if (argc != 3) return 1;
     CHECK(glyphs() == 0); CHECK(screen() == 0);
-    CHECK(pages(argv[1]) == 0); CHECK(metadata(argv[1], argv[2]) == 0);
+    CHECK(pages(argv[1]) == 0); CHECK(nodePersistence() == 0); CHECK(metadata(argv[1], argv[2]) == 0);
     return 0;
 }

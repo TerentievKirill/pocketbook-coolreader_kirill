@@ -15,7 +15,8 @@ def generate(registry):
         if not re.fullmatch(r'[0-9]+[A-Z0-9]*', model) or model in models:
             raise ValueError('Invalid or duplicate model: ' + model)
         models.add(model)
-        if not re.fullmatch(r'U[0-9A-Za-z]+\.[0-9]+\.[0-9]+\.[0-9]+', device['firmware']):
+        # Null means an experimental profile with no qualified firmware snapshot.
+        if device['firmware'] is not None and not re.fullmatch(r'U[0-9A-Za-z]+\.[0-9]+\.[0-9]+\.[0-9]+', device['firmware']):
             raise ValueError('Invalid firmware version')
         for key in ('dpi', 'width', 'height'):
             if type(device[key]) is not int or device[key] <= 0:
@@ -24,7 +25,7 @@ def generate(registry):
             raise ValueError('Invalid minimum firmware API')
         rows.append('    {%s, %s, %d, %d, %d, %s, %s, %d},' % (
             json.dumps(model), json.dumps(device['name']), device['dpi'], device['width'], device['height'],
-            json.dumps(device['skin']), json.dumps(device['firmware']), device['minimum_api']))
+            json.dumps(device['skin']), json.dumps(device['firmware']) if device['firmware'] else 'NULL', device['minimum_api']))
     return '// Generated from config/pocketbook-devices.json; do not edit.\n' + \
         'static const Profile profiles[] = {\n' + '\n'.join(rows) + '\n};\n'
 

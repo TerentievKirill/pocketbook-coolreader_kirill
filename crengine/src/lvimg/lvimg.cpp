@@ -59,54 +59,88 @@ LVImageSourceRef LVCreateDummyImageSource( ldomNode * node, int width, int heigh
     return LVImageSourceRef( new LVDummyImageSource( node, width, height ) );
 }
 
-LVImageSourceRef LVCreateStreamImageSource( ldomNode * node, LVStreamRef stream )
+static LVImageFormat detectImageFormat(const LVStreamRef &stream)
 {
-    LVImageSourceRef ref;
-    if ( stream.isNull() )
-        return ref;
-    lUInt8 hdr[256];
+    if (stream.isNull())
+        return LVImageFormat::Unknown;
+    lUInt8 header[256];
     lvsize_t bytesRead = 0;
-    if ( stream->Read( hdr, 256, &bytesRead )!=LVERR_OK )
-        return ref;
-    stream->SetPos( 0 );
-
-
-    LVImageSource * img = NULL;
+    if (stream->Read(header, sizeof(header), &bytesRead) != LVERR_OK)
+        return LVImageFormat::Unknown;
+    stream->SetPos(0);
 #if (USE_LIBPNG==1)
-    if ( LVPngImageSource::CheckPattern( hdr, (lUInt32)bytesRead ) )
-        img = new LVPngImageSource( node, stream );
-    else
+    if (LVPngImageSource::CheckPattern(header, (lUInt32)bytesRead))
+        return LVImageFormat::Png;
 #endif
 #if (USE_LIBJPEG==1)
-    if ( LVJpegImageSource::CheckPattern( hdr, (lUInt32)bytesRead ) )
-        img = new LVJpegImageSource( node, stream );
-    else
+    if (LVJpegImageSource::CheckPattern(header, (lUInt32)bytesRead))
+        return LVImageFormat::Jpeg;
 #endif
 #if (USE_GIF==1)
-    if ( LVGifImageSource::CheckPattern( hdr, (lUInt32)bytesRead ) )
-        img = new LVGifImageSource( node, stream );
-    else
+    if (LVGifImageSource::CheckPattern(header, (lUInt32)bytesRead))
+        return LVImageFormat::Gif;
 #endif
 #if (USE_NANOSVG==1)
-    if ( LVSvgImageSource::CheckPattern( hdr, (lUInt32)bytesRead ) )
-        img = new LVSvgImageSource( node, stream );
-    else
+    if (LVSvgImageSource::CheckPattern(header, (lUInt32)bytesRead))
+        return LVImageFormat::Svg;
 #endif
-        img = new LVDummyImageSource( node, 50, 50 );
-
-    if ( !img )
-        return ref;
-    ref = LVImageSourceRef( img );
-    if ( !img->Decode( NULL ) )
-    {
-        return LVImageSourceRef();
-    }
-    return ref;
+    return LVImageFormat::Dummy;
 }
 
-LVImageSourceRef LVCreateStreamImageSource( LVStreamRef stream )
+static LVImageSourceRef createImageDecoder(ldomNode *node, const LVStreamRef &stream, LVImageFormat format)
 {
-    return LVCreateStreamImageSource( NULL, stream );
+    if (stream.isNull())
+        return LVImageSourceRef();
+    switch (format) {
+#if (USE_LIBPNG==1)
+    case LVImageFormat::Png: return LVImageSourceRef(new LVPngImageSource(node, stream));
+#endif
+#if (USE_LIBJPEG==1)
+    case LVImageFormat::Jpeg: return LVImageSourceRef(new LVJpegImageSource(node, stream));
+#endif
+#if (USE_GIF==1)
+    case LVImageFormat::Gif: return LVImageSourceRef(new LVGifImageSource(node, stream));
+#endif
+#if (USE_NANOSVG==1)
+    case LVImageFormat::Svg: return LVImageSourceRef(new LVSvgImageSource(node, stream));
+#endif
+    case LVImageFormat::Dummy: return LVCreateDummyImageSource(node, 50, 50);
+    default: return LVImageSourceRef();
+    }
+}
+
+static LVImageSourceRef probeImageSource(ldomNode *node, const LVStreamRef &stream, LVImageMetadata *metadata = NULL)
+{
+    const LVImageFormat format = detectImageFormat(stream);
+    LVImageSourceRef image = createImageDecoder(node, stream, format);
+    if (image.isNull() || !image->Decode(NULL))
+        return LVImageSourceRef();
+    if (metadata) {
+        metadata->width = image->GetWidth();
+        metadata->height = image->GetHeight();
+        metadata->format = format;
+    }
+    return image;
+}
+
+LVImageSourceRef LVCreateStreamImageSource(ldomNode *node, LVStreamRef stream)
+{
+    return probeImageSource(node, stream);
+}
+
+LVImageSourceRef LVCreateStreamImageSource(LVStreamRef stream)
+{
+    return probeImageSource(NULL, stream);
+}
+
+bool LVReadImageMetadata(LVStreamRef stream, LVImageMetadata &metadata)
+{
+    return !probeImageSource(NULL, stream, &metadata).isNull();
+}
+
+LVImageSourceRef LVCreateStreamImageDecoder(LVStreamRef stream, LVImageFormat format)
+{
+    return createImageDecoder(NULL, stream, format);
 }
 
 /// create image from node source
