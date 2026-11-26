@@ -1,5 +1,6 @@
 #include "crengine.h"
 #include "crgui.h"
+#include "cri18n.h"
 #include "testutil.h"
 #include <cstring>
 #include <cstdlib>
@@ -15,7 +16,8 @@
 #define ICON_WARNING 1
 #define ICON_ERROR 2
 #define ICON_INFORMATION 3
-#define _(s) (s)
+#undef _
+#define _(s) CRI18NTranslator::translate(s)
 lString32 pbSkinFileName, openedCacheFile, currentCacheDir, crCurrentLang;
 static std::string lastCheckUrl,lastDownloadUrl;
 static std::string device="632", firmware="U632.6.11.2001", response, result, leftButton, rightButton, payload;
@@ -89,14 +91,17 @@ static void tick() { CHECK(timerCallback);auto callback=timerCallback;timerCallb
 static void weakTick() { CHECK(weakCallback);auto callback=weakCallback;weakCallback=NULL;callback(); }
 static std::string releaseText(const std::string &version,const std::string &checksum) {
 #ifdef CR3_SHARED_PACKAGE
- return "CR3-OTA-SHARED-2\npocketbook-armv7-softfp\n"+version+"\n"+checksum+"\n632 610\n634 610\n700 610\n743G 610\n";
+ std::string text="CR3-OTA-SHARED-2\npocketbook-armv7-softfp\n"+version+"\n"+checksum+"\n";
+ for(const auto &profile : pbdevice::profiles)
+  text += std::string(profile.model)+" "+std::to_string(profile.minimum_api)+"\n";
+ return text;
 #else
  return version+"\n"+checksum+"\n";
 #endif
 }
 static void checkUpdate() { OTA_scheduleUpdate("master");tick();if(fw6ota::state==fw6ota::Checking)tick(); }
 int main(int argc,char **argv) {
- CHECK(argc==2);
+ CHECK(argc==3);
  CHECK(otaRemoveTree(FLASHDIR));CHECK(!mkdir(FLASHDIR,0755));CHECK(!mkdir(FLASHDIR "/system",0755));CHECK(!mkdir(FLASHDIR "/system/share",0755));
  response=releaseText("1.0.1",std::string(64,'a'));
  OTATestScreen screen;CRGUIWindowManager wm(&screen);
@@ -113,7 +118,7 @@ int main(int argc,char **argv) {
  CHECK(menu.onItemSelect(1,0));tick();CHECK(result=="CoolReader 1.0.1" && leftButton=="OK");
  dismissCallback(1);CHECK(restoreCallback);restoreCallback();restoreCallback=NULL;
  CHECK(menu.getItems().length()==2);
- device="631";checkUpdate();CHECK(result.find("Model: 631")!=std::string::npos && requests==1);
+ device="999";checkUpdate();CHECK(result.find("Model: 999")!=std::string::npos && requests==1);
  device="632";online=false;checkUpdate();CHECK(result.find("Wi-Fi")!=std::string::npos);online=true;
  failCheck=true;checkUpdate();CHECK(result.find("503")!=std::string::npos && progress==0);failCheck=false;
  response="<html>Error</html>";checkUpdate();CHECK(result.find("invalid release")!=std::string::npos);
@@ -190,17 +195,15 @@ int main(int argc,char **argv) {
 #ifdef CR3_SHARED_PACKAGE
  // All registered readers use the identical channel and download URL.
  CHECK(otaRemoveTree(FW6_OTA_STAGE));
- const char *models[]={"632","634","700","743G"};
- const char *firmwares[]={"U632.6.11.9999","U634.6.10.9999","U700.6.11.9999","U743G.6.12.1"};
- for(int i=0;i<4;++i) {
-  device=models[i];firmware=firmwares[i];response=releaseText("1.0.2",hex);
+ for(const auto &profile : pbdevice::profiles) {
+  device=profile.model;firmware="U"+device+".6.11.9999";response=releaseText("1.0.2",hex);
   checkUpdate();CHECK(fw6ota::state==fw6ota::Confirming);
   CHECK(lastCheckUrl==FW6_OTA_URL "ota/pocketbook-armv7-softfp-api.txt");
   dismissCallback(1);tick();
   CHECK(lastDownloadUrl==FW6_OTA_URL "downloads/coolreader-shared/1.0.2/coolreader-pocketbook-armv7-softfp.zip");
   cancelCallback(1);CHECK(fw6ota::state==fw6ota::Idle);
  }
- device="632";firmware=firmwares[0];
+ device="632";firmware="U632.6.11.9999";
  int beforeInvalidDownloads=downloads;
  response=releaseText("1.0.2",hex);response.replace(response.find("pocketbook-armv7-softfp"),std::string("pocketbook-armv7-softfp").size(),"pocketbookhf");
  checkUpdate();CHECK(fw6ota::state==fw6ota::Idle && downloads==beforeInvalidDownloads);
@@ -209,6 +212,19 @@ int main(int argc,char **argv) {
  response=releaseText("1.0.2",hex);response.replace(response.find("632 610"),strlen("632 610"),"632 612");
  checkUpdate();CHECK(fw6ota::state==fw6ota::Idle && downloads==beforeInvalidDownloads);
 #endif
+ auto *russian = new CRMoFileTranslator();
+ CHECK(russian->openMoFile(Utf8ToUnicode(lString8(argv[2]))));
+ CRI18NTranslator::setTranslator(russian);
+ CHECK(otaRemoveTree(FW6_OTA_STAGE));
+ response=releaseText("1.0.2",hex);checkUpdate();
+ CHECK(fw6ota::state==fw6ota::Confirming && leftButton=="Загрузить" && rightButton=="Отмена");
+ CHECK(result.find("Установлена: 1.0.1")!=std::string::npos && result.find("Доступна: 1.0.2")!=std::string::npos);
+ CHECK(result.find("$1")==std::string::npos && result.find("$2")==std::string::npos);
+ dismissCallback(2);
+ fw6ota::version="1.0.2";OTA_offerRestartFW6();
+ CHECK(leftButton=="Перезапустить" && rightButton=="Позже" && result.find("Версия 1.0.2")!=std::string::npos);
+ dismissCallback(2);
+ CRI18NTranslator::setTranslator(NULL);
  CHECK(otaRemoveTree(FLASHDIR));
  puts("PASS: retained menu, asynchronous check, confirmation, progress, cancel, HTTP/network/checksum errors, restart now/later, daily background checks, quiet failures, deferred/snoozed prompts, preference and standby lifecycle");
 }

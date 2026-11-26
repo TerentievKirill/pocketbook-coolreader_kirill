@@ -1,6 +1,7 @@
 #ifndef CR3_READER_MENU_H
 #define CR3_READER_MENU_H
 #include "mainwnd.h"
+#include "reader_ui.h"
 #include "cr3pocketbook.h"
 #include "cri18n.h"
 #include <set>
@@ -24,7 +25,7 @@ public:
     CRReaderMenu(CRGUIWindowManager *wm,CRMenu *parent,const char *label,const char *hint,CRGUIAcceleratorTableRef accelerators)
         : CRMenu(wm,parent,0,label,"",LVFontRef(),LVFontRef()), _hint(hint) {
         setSkinName(lString32("#settings")); setAccelerators(accelerators); setFullscreen(true);
-        if (!parent) enableActionMenu(lString32("CoolReader"));
+        if (!parent) enableActionMenu(lString32("CoolReader"), readerUiDpi());
     }
     virtual lString32 getSubmenuValue() { return _hint; }
 };

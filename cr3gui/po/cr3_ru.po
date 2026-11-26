@@ -211,7 +211,7 @@ msgstr "Язык оригинала"
 
 #: ../src/mainwnd.cpp:1087
 msgid "Book info"
-msgstr "Информация о произведении"
+msgstr "О книге"
 
 #: ../src/mainwnd.cpp:1090
 msgid "Document author"
@@ -355,7 +355,7 @@ msgstr "Ввести номер страницы:"
 
 #: ../src/bmkdlg.cpp:19
 msgid "Empty slot"
-msgstr "Нет закладок"
+msgstr "Пустая ячейка"
 
 #: ../src/bmkdlg.cpp:45
 msgid "Page $1 ($2%)"
@@ -2048,3 +2048,704 @@ msgstr "Межстрочный интервал"
 #: ../src/settings.cpp
 msgid "Font sample (scaled to fit)"
 msgstr "Образец шрифта (масштабирован)"
+
+#: cr3gui/src/settings.cpp:1759
+msgid "Show frontlight icon"
+msgstr "Показывать значок подсветки"
+
+#: cr3gui/src/settings.cpp:1761
+msgid "Show frontlight brightness"
+msgstr "Показывать яркость подсветки"
+
+#: cr3gui/src/settings.cpp:1763
+msgid "Show frontlight temperature (%)"
+msgstr "Показывать температуру подсветки (%)"
+
+#: cr3gui/src/settings.cpp:1981
+msgid "Check for updates automatically"
+msgstr "Проверять обновления автоматически"
+
+#: cr3gui/src/settings.cpp:1983
+msgid "Check for updates"
+msgstr "Проверить обновления"
+
+#: cr3gui/src/settings.cpp:1984 cr3gui/src/ota_fw6.h:32
+msgid "Version"
+msgstr "Версия"
+
+#: cr3gui/src/ota_update.cpp:133
+msgid "Could not schedule restart. Restart CoolReader manually."
+msgstr "Не удалось запланировать перезапуск. Перезапустите CoolReader вручную."
+
+#: cr3gui/src/stardict_install.cpp:41
+msgid "This StarDict download is not a supported ZIP archive."
+msgstr "Загруженный словарь StarDict не является поддерживаемым ZIP-архивом."
+
+#: cr3gui/src/stardict_install.cpp:45
+msgid "The dictionary archive contains an unsafe filename."
+msgstr "Архив словаря содержит небезопасное имя файла."
+
+#: cr3gui/src/stardict_install.cpp:50
+msgid "The dictionary archive contains conflicting filenames."
+msgstr "Архив словаря содержит конфликтующие имена файлов."
+
+#: cr3gui/src/stardict_install.cpp:52
+msgid "A dictionary file is too large for this reader."
+msgstr "Файл словаря слишком велик для этого устройства."
+
+#: cr3gui/src/stardict_install.cpp:53
+msgid "The unpacked dictionary is too large for this reader."
+msgstr "Распакованный словарь слишком велик для этого устройства."
+
+#: cr3gui/src/stardict_install.cpp:56
+msgid "The archive must contain one complete StarDict dictionary."
+msgstr "Архив должен содержать один полный словарь StarDict."
+
+#: cr3gui/src/stardict_install.cpp:59
+msgid "Not enough free storage to unpack this dictionary."
+msgstr "Недостаточно свободного места для распаковки словаря."
+
+#: cr3gui/src/stardict_install.cpp:60
+msgid "Could not prepare the dictionary folder."
+msgstr "Не удалось подготовить папку словаря."
+
+#: cr3gui/src/stardict_install.cpp:68
+msgid "Could not unpack the dictionary."
+msgstr "Не удалось распаковать словарь."
+
+#: cr3gui/src/stardict_install.cpp:70
+msgid "Could not save dictionary files. Check the reader's storage."
+msgstr "Не удалось сохранить файлы словаря. Проверьте память устройства."
+
+#: cr3gui/src/stardict_install.cpp:74
+msgid "The dictionary archive is incomplete or could not be saved."
+msgstr "Архив словаря неполон или не может быть сохранён."
+
+#: cr3gui/src/stardict_install.cpp:79
+msgid "Could not finish saving dictionary files."
+msgstr "Не удалось завершить сохранение файлов словаря."
+
+#: cr3gui/src/stardict_install.cpp:85
+msgid "This StarDict dictionary is incomplete or uses an unsupported format."
+msgstr "Этот словарь StarDict неполон или использует неподдерживаемый формат."
+
+#: cr3gui/src/stardict_install.cpp:86
+msgid "This dictionary is already installed. Your existing files have been kept."
+msgstr "Этот словарь уже установлен. Существующие файлы сохранены."
+
+#: cr3gui/src/stardict_install.cpp:87
+msgid "Could not finish installing the dictionary."
+msgstr "Не удалось завершить установку словаря."
+
+#: cr3gui/src/ota_fw6_core.h:39
+msgid "The update archive is invalid or contains unsafe paths."
+msgstr "Архив обновления повреждён или содержит небезопасные пути."
+
+#: cr3gui/src/ota_fw6_core.h:42 cr3gui/src/ota_fw6_core.h:50
+msgid "Could not read the downloaded package."
+msgstr "Не удалось прочитать загруженный пакет."
+
+#: cr3gui/src/ota_fw6_core.h:51
+msgid "Checksum mismatch. The download may be damaged. Please try again."
+msgstr "Контрольная сумма не совпадает. Возможно, файл повреждён. Повторите загрузку."
+
+#: cr3gui/src/ota_fw6_core.h:52
+msgid "Could not create staging files. Check free storage and USB storage access."
+msgstr "Не удалось создать временные файлы. Проверьте свободное место и доступ к памяти по USB."
+
+#: cr3gui/src/ota_fw6_core.h:68
+msgid "Could not create staging folders. Check free storage."
+msgstr "Не удалось создать временные папки. Проверьте свободное место."
+
+#: cr3gui/src/ota_fw6_core.h:73
+msgid "Could not write staging files. Check free storage."
+msgstr "Не удалось записать временные файлы. Проверьте свободное место."
+
+#: cr3gui/src/ota_fw6_core.h:77
+msgid "Could not unpack or save the update. Check free storage and try downloading again."
+msgstr "Не удалось распаковать или сохранить обновление. Проверьте свободное место и повторите загрузку."
+
+#: cr3gui/src/ota_fw6_core.h:80
+msgid "Could not save staging files. Check free storage."
+msgstr "Не удалось сохранить временные файлы. Проверьте свободное место."
+
+#: cr3gui/src/ota_fw6_core.h:86
+msgid "The downloaded package is for a different version or is incomplete."
+msgstr "Загруженный пакет предназначен для другой версии или неполон."
+
+#: cr3gui/src/ota_fw6_core.h:98
+msgid "The downloaded package is not compatible with this reader and firmware."
+msgstr "Загруженный пакет несовместим с этим устройством и прошивкой."
+
+#: cr3gui/src/mainwnd.cpp:649
+msgid "Could not save reading position and bookmarks. Changes may be lost."
+msgstr "Не удалось сохранить позицию чтения и закладки. Изменения могут быть потеряны."
+
+#: cr3gui/src/mainwnd.cpp:650
+msgid "Could not save settings. Changes may be lost when CoolReader closes."
+msgstr "Не удалось сохранить настройки. Изменения могут быть потеряны при закрытии CoolReader."
+
+#: cr3gui/src/dictionary_download_ui.h:18 cr3gui/src/dictionary_ui.h:122
+msgid "Czech definitions"
+msgstr "Толковый словарь чешского языка"
+
+#: cr3gui/src/dictionary_download_ui.h:19 cr3gui/src/dictionary_ui.h:122
+msgid "Czech → English"
+msgstr "Чешский → английский"
+
+#: cr3gui/src/dictionary_download_ui.h:20 cr3gui/src/dictionary_ui.h:122
+msgid "Czech → Russian"
+msgstr "Чешский → русский"
+
+#: cr3gui/src/dictionary_download_ui.h:21 cr3gui/src/dictionary_ui.h:122
+msgid "English definitions"
+msgstr "Толковый словарь английского языка"
+
+#: cr3gui/src/dictionary_download_ui.h:22 cr3gui/src/dictionary_ui.h:122
+msgid "English → Czech"
+msgstr "Английский → чешский"
+
+#: cr3gui/src/dictionary_download_ui.h:23 cr3gui/src/dictionary_ui.h:122
+msgid "English → Russian"
+msgstr "Английский → русский"
+
+#: cr3gui/src/dictionary_download_ui.h:24 cr3gui/src/dictionary_ui.h:122
+msgid "Russian definitions"
+msgstr "Толковый словарь русского языка"
+
+#: cr3gui/src/dictionary_download_ui.h:25 cr3gui/src/dictionary_ui.h:122
+msgid "Russian → Czech"
+msgstr "Русский → чешский"
+
+#: cr3gui/src/dictionary_download_ui.h:26 cr3gui/src/dictionary_ui.h:122
+msgid "Russian → English"
+msgstr "Русский → английский"
+
+#: cr3gui/src/dictionary_download_ui.h:27 cr3gui/src/dictionary_ui.h:122
+msgid "Ukrainian definitions"
+msgstr "Толковый словарь украинского языка"
+
+#: cr3gui/src/dictionary_download_ui.h:31
+msgid "English dictionaries"
+msgstr "Словари английского языка"
+
+#: cr3gui/src/dictionary_download_ui.h:32
+msgid "Russian dictionaries"
+msgstr "Словари русского языка"
+
+#: cr3gui/src/dictionary_download_ui.h:33
+msgid "Ukrainian dictionaries"
+msgstr "Словари украинского языка"
+
+#: cr3gui/src/dictionary_download_ui.h:34
+msgid "Czech dictionaries"
+msgstr "Словари чешского языка"
+
+#: cr3gui/src/dictionary_download_ui.h:43 cr3gui/src/dictionary_download_ui.h:171
+msgid "Dictionaries"
+msgstr "Словари"
+
+#: cr3gui/src/dictionary_download_ui.h:62 cr3gui/src/web_transfer.cpp:91
+msgid "Download cancelled."
+msgstr "Загрузка отменена."
+
+#: cr3gui/src/dictionary_download_ui.h:73 cr3gui/src/ota_fw6.h:150
+msgid "Couldn't connect to Wi-Fi. Check the reader's network settings and try again."
+msgstr "Не удалось подключиться к Wi-Fi. Проверьте настройки сети устройства и повторите попытку."
+
+#: cr3gui/src/dictionary_download_ui.h:78
+msgid "Could not clear the unfinished download. Check the reader's storage."
+msgstr "Не удалось удалить незавершённую загрузку. Проверьте память устройства."
+
+#: cr3gui/src/dictionary_download_ui.h:83 cr3gui/src/dictionary_download_ui.h:106
+msgid "Download dictionary"
+msgstr "Загрузить словарь"
+
+#: cr3gui/src/dictionary_download_ui.h:100
+msgid "Ready to use offline. Open Dictionary, then tap its name to select this dictionary."
+msgstr "Готов к работе без сети. Откройте словарь и нажмите на его название, чтобы выбрать этот словарь."
+
+#: cr3gui/src/dictionary_download_ui.h:104
+msgid "Free download. Connect to Wi-Fi to install; use offline afterwards."
+msgstr "Бесплатная загрузка. Для установки подключитесь к Wi-Fi; затем словарь работает без сети."
+
+#: cr3gui/src/dictionary_download_ui.h:106 cr3gui/src/dictionary_download_ui.h:157 cr3gui/src/ota_fw6.h:72
+msgid "Download"
+msgstr "Загрузить"
+
+#: cr3gui/src/dictionary_download_ui.h:124
+msgid "Dictionary installed. Open Dictionary and tap its name at the top to select it. No restart is needed."
+msgstr "Словарь установлен. Откройте словарь и нажмите на его название вверху, чтобы выбрать его. Перезапуск не требуется."
+
+#: cr3gui/src/dictionary_download_ui.h:141
+msgid "Could not download the dictionary."
+msgstr "Не удалось загрузить словарь."
+
+#: cr3gui/src/dictionary_download_ui.h:145
+msgid "Checking and installing..."
+msgstr "Проверка и установка..."
+
+#: cr3gui/src/dictionary_download_ui.h:156
+msgid "Installed"
+msgstr "Установлен"
+
+#: cr3gui/src/dictionary_download_ui.h:171
+msgid "PocketBook versions"
+msgstr "Версии для PocketBook"
+
+#: cr3gui/src/dictionary_download_ui.h:190
+msgid "Free downloads · use offline"
+msgstr "Бесплатные загрузки · работают без сети"
+
+#: cr3gui/src/dictionary_download_ui.h:191
+msgid "For other PocketBook apps too"
+msgstr "Также для других приложений PocketBook"
+
+#: cr3gui/src/dictionary_download_ui.h:191
+msgid "Free · works offline"
+msgstr "Бесплатно · работает без сети"
+
+#: cr3gui/src/dictionary_download_ui.h:200
+msgid "Downloads install immediately"
+msgstr "Загруженные словари устанавливаются сразу"
+
+#: cr3gui/src/dictionary_download_core.h:31
+msgid "Could not create the dictionary folder. Check the reader's storage."
+msgstr "Не удалось создать папку словаря. Проверьте память устройства."
+
+#: cr3gui/src/dictionary_download_core.h:34
+msgid "This dictionary is already installed. Your existing file has been kept."
+msgstr "Этот словарь уже установлен. Существующий файл сохранён."
+
+#: cr3gui/src/dictionary_download_core.h:39
+msgid "Not enough free storage. Free some space on the reader and try again."
+msgstr "Недостаточно свободного места. Освободите память устройства и повторите попытку."
+
+#: cr3gui/src/dictionary_download_core.h:70 cr3gui/src/dictionary_download_core.h:80 cr3gui/src/dictionary_download_core.h:85
+msgid "The downloaded file could not be checked."
+msgstr "Не удалось проверить загруженный файл."
+
+#: cr3gui/src/dictionary_download_core.h:77
+msgid "The dictionary download is larger than expected."
+msgstr "Размер загруженного словаря превышает ожидаемый."
+
+#: cr3gui/src/dictionary_download_core.h:89
+msgid "The dictionary download could not be verified. Please try again."
+msgstr "Не удалось проверить загруженный словарь. Повторите попытку."
+
+#: cr3gui/src/dictionary_download_core.h:95
+msgid "A dictionary with this filename already exists. Your existing file has been kept."
+msgstr "Словарь с таким именем файла уже существует. Существующий файл сохранён."
+
+#: cr3gui/src/dictionary_download_core.h:100
+msgid "Could not finish installing the dictionary. Check the reader's storage and try again."
+msgstr "Не удалось завершить установку словаря. Проверьте память устройства и повторите попытку."
+
+#: cr3gui/src/dictionary_ui.h:73
+msgid "Close"
+msgstr "Закрыть"
+
+#: cr3gui/src/dictionary_ui.h:73
+msgid "Google"
+msgstr "Google"
+
+#: cr3gui/src/dictionary_ui.h:73
+msgid "Wikipedia"
+msgstr "Википедия"
+
+#: cr3gui/src/dictionary_ui.h:73
+msgid "Entries"
+msgstr "Статьи"
+
+#: cr3gui/src/dictionary_ui.h:73
+msgid "Pick word"
+msgstr "Выбрать слово"
+
+#: cr3gui/src/dictionary_ui.h:113
+msgid "‹ Previous"
+msgstr "‹ Назад"
+
+#: cr3gui/src/dictionary_ui.h:114
+msgid "Next ›"
+msgstr "Далее ›"
+
+#: cr3gui/src/reader_menu.h:33
+msgid "Reader menu"
+msgstr "Меню чтения"
+
+#: cr3gui/src/reader_menu.h:39
+msgid "Font, page layout, controls and dictionaries"
+msgstr "Шрифт, оформление страницы, управление и словари"
+
+#: cr3gui/src/reader_menu.h:40
+msgid "Jump to a chapter"
+msgstr "Перейти к главе"
+
+#: cr3gui/src/reader_menu.h:41
+msgid "Return to a saved place"
+msgstr "Вернуться к сохранённому месту"
+
+#: cr3gui/src/reader_menu.h:42
+msgid "Look up a word"
+msgstr "Найти слово в словаре"
+
+#: cr3gui/src/reader_menu.h:43
+msgid "Find text in this book"
+msgstr "Найти текст в книге"
+
+#: cr3gui/src/reader_menu.h:44
+msgid "More tools"
+msgstr "Другие инструменты"
+
+#: cr3gui/src/reader_menu.h:44
+msgid "Pages, notes, recent books and help"
+msgstr "Страницы, заметки, недавние книги и справка"
+
+#: cr3gui/src/reader_menu.h:46
+msgid "Enter a page number"
+msgstr "Введите номер страницы"
+
+#: cr3gui/src/reader_menu.h:47
+msgid "Recent books"
+msgstr "Недавние книги"
+
+#: cr3gui/src/reader_menu.h:47
+msgid "Switch to a recently opened book"
+msgstr "Открыть недавно прочитанную книгу"
+
+#: cr3gui/src/reader_menu.h:48
+msgid "Notes and highlights"
+msgstr "Заметки и выделения"
+
+#: cr3gui/src/reader_menu.h:48
+msgid "Review saved passages"
+msgstr "Просмотреть сохранённые отрывки"
+
+#: cr3gui/src/reader_menu.h:49
+msgid "Save a passage from this page"
+msgstr "Сохранить отрывок с этой страницы"
+
+#: cr3gui/src/reader_menu.h:50
+msgid "PocketBook home"
+msgstr "Главный экран PocketBook"
+
+#: cr3gui/src/reader_menu.h:50
+msgid "Return to the device library"
+msgstr "Вернуться в библиотеку устройства"
+
+#: cr3gui/src/reader_menu.h:51
+msgid "User manual"
+msgstr "Руководство пользователя"
+
+#: cr3gui/src/reader_menu.h:51
+msgid "Help with reading and controls"
+msgstr "Справка по чтению и управлению"
+
+#: cr3gui/src/reader_menu.h:52
+msgid "About CoolReader"
+msgstr "О CoolReader"
+
+#: cr3gui/src/reader_menu.h:52
+msgid "Book and application information"
+msgstr "Сведения о книге и приложении"
+
+#: cr3gui/src/reader_menu.h:59
+msgid "Additional reader action"
+msgstr "Дополнительное действие"
+
+#: cr3gui/src/reader_menu.h:61
+msgid "Save a bookmark"
+msgstr "Сохранить закладку"
+
+#: cr3gui/src/reader_menu.h:61
+msgid "Mark the current page"
+msgstr "Отметить текущую страницу"
+
+#: cr3gui/src/reader_menu.h:62
+msgid "Save reading progress"
+msgstr "Сохранить позицию чтения"
+
+#: cr3gui/src/reader_menu.h:62
+msgid "Save the current place and bookmarks now"
+msgstr "Сохранить текущую позицию и закладки"
+
+#: cr3gui/src/reader_menu.h:63
+msgid "Prepare book for faster opening"
+msgstr "Подготовить книгу для быстрого открытия"
+
+#: cr3gui/src/reader_menu.h:63
+msgid "Keep a prepared copy for the next reading session"
+msgstr "Сохранить подготовленную копию для следующего чтения"
+
+#: cr3gui/src/reader_menu.h:64
+msgid "Button shortcuts"
+msgstr "Назначения кнопок"
+
+#: cr3gui/src/reader_menu.h:64
+msgid "See the current button assignments"
+msgstr "Посмотреть текущие назначения кнопок"
+
+#: cr3gui/src/cr3pocketbook.cpp:2860
+msgid "Couldn't find the front light binary  @"
+msgstr "Не найдена программа управления подсветкой по пути @"
+
+#: cr3gui/src/cr3pocketbook.cpp:3192
+msgid "No accessible dictionary is available. Tap the dictionary name above, then Get dictionaries to install one."
+msgstr "Нет доступных словарей. Нажмите на название словаря вверху, затем выберите «Загрузить словари» для установки."
+
+#: cr3gui/src/cr3pocketbook.cpp:3279
+msgid "Selected"
+msgstr "Выбран"
+
+#: cr3gui/src/cr3pocketbook.cpp:3279
+msgid "Offline"
+msgstr "Без сети"
+
+#: cr3gui/src/cr3pocketbook.cpp:3280
+msgid "StarDict"
+msgstr "StarDict"
+
+#: cr3gui/src/cr3pocketbook.cpp:3280
+msgid "PocketBook"
+msgstr "PocketBook"
+
+#: cr3gui/src/cr3pocketbook.cpp:3293
+msgid "Choose dictionary"
+msgstr "Выбрать словарь"
+
+#: cr3gui/src/cr3pocketbook.cpp:3304
+msgid "Get dictionaries"
+msgstr "Загрузить словари"
+
+#: cr3gui/src/cr3pocketbook.cpp:3679
+msgid "Word not found."
+msgstr "Слово не найдено."
+
+#: cr3gui/src/cr3pocketbook.cpp:3680
+msgid "Try Search to edit the word, or tap the dictionary name to try another dictionary."
+msgstr "Нажмите «Поиск», чтобы изменить слово, или нажмите на название словаря, чтобы выбрать другой."
+
+#: cr3gui/src/cr3pocketbook.cpp:3685
+msgid "No dictionaries installed."
+msgstr "Словари не установлены."
+
+#: cr3gui/src/cr3pocketbook.cpp:3686
+msgid "Tap the dictionary name above, then Get dictionaries. Downloads are free and work offline."
+msgstr "Нажмите на название словаря вверху, затем выберите «Загрузить словари». Словари бесплатны и работают без сети."
+
+#: cr3gui/src/cr3pocketbook.cpp:4554
+msgid "Couldn't find the browser binary @"
+msgstr "Не найдена программа браузера по пути @"
+
+#: cr3gui/src/cr3pocketbook.cpp:5187
+msgid "Couldn't find the network binary  @"
+msgstr "Не найдена сетевая программа по пути @"
+
+#: cr3gui/src/cr3pocketbook.cpp:5512
+msgid "Unknown model or unsupported firmware API. See the included guide."
+msgstr "Неизвестная модель или неподдерживаемый API прошивки. См. прилагаемое руководство."
+
+#: cr3gui/src/cr3pocketbook.cpp:6139
+msgid "No book to open!"
+msgstr "Нет книги для открытия!"
+
+#: cr3gui/src/ota_fw6.h:9 cr3gui/src/ota_fw6.h:61 cr3gui/src/ota_fw6.h:72
+msgid "CoolReader OTA Update"
+msgstr "Обновление CoolReader"
+
+#: cr3gui/src/ota_fw6.h:51
+msgid "Update cancelled. Your installation is unchanged."
+msgstr "Обновление отменено. Установленная версия не изменена."
+
+#: cr3gui/src/ota_fw6.h:60
+msgid "Version $1 is verified and ready.\nRestart now to install it, or choose Later to install it the next time CoolReader starts."
+msgstr "Версия $1 проверена и готова к установке.\nПерезапустите приложение для установки или выберите «Позже», чтобы установить обновление при следующем запуске CoolReader."
+
+#: cr3gui/src/ota_fw6.h:61
+msgid "Restart now"
+msgstr "Перезапустить"
+
+#: cr3gui/src/ota_fw6.h:61 cr3gui/src/ota_fw6.h:72
+msgid "Later"
+msgstr "Позже"
+
+#: cr3gui/src/ota_fw6.h:71
+msgid "Installed: $1\nAvailable: $2\nDownload this update? Your settings and reading history will be preserved. You can choose when to restart after verification."
+msgstr "Установлена: $1\nДоступна: $2\nЗагрузить обновление? Настройки и история чтения будут сохранены. После проверки вы сможете выбрать время перезапуска."
+
+#: cr3gui/src/ota_fw6.h:79
+msgid "Connecting to the download server..."
+msgstr "Подключение к серверу загрузки..."
+
+#: cr3gui/src/ota_fw6.h:83
+msgid "Could not start the download.\n"
+msgstr "Не удалось начать загрузку.\n"
+
+#: cr3gui/src/ota_fw6.h:96
+msgid "Downloading $1: $2 KB"
+msgstr "Загрузка $1: $2 КБ"
+
+#: cr3gui/src/ota_fw6.h:97
+msgid " / $1 KB ($2%)"
+msgstr " / $1 КБ ($2%)"
+
+#: cr3gui/src/ota_fw6.h:106
+msgid "Could not check for updates."
+msgstr "Не удалось проверить обновления."
+
+#: cr3gui/src/ota_fw6.h:106
+msgid "Could not download the update."
+msgstr "Не удалось загрузить обновление."
+
+#: cr3gui/src/ota_fw6.h:106 cr3gui/src/ota_fw6.h:129
+msgid "\nYour installation is unchanged."
+msgstr "\nУстановленная версия не изменена."
+
+#: cr3gui/src/ota_fw6.h:112
+msgid "The update server returned invalid release information or no compatible update for this reader. Please try again later."
+msgstr "Сервер обновлений вернул неверные сведения о версии или не нашёл совместимого обновления. Повторите попытку позже."
+
+#: cr3gui/src/ota_fw6.h:115
+msgid "You have the latest version ($1)."
+msgstr "У вас установлена последняя версия ($1)."
+
+#: cr3gui/src/ota_fw6.h:122
+msgid "Verifying and preparing the update..."
+msgstr "Проверка и подготовка обновления..."
+
+#: cr3gui/src/ota_fw6.h:134
+msgid "Could not save the staged update. Check available storage.\nYour installation is unchanged."
+msgstr "Не удалось сохранить подготовленное обновление. Проверьте свободное место.\nУстановленная версия не изменена."
+
+#: cr3gui/src/ota_fw6.h:142
+msgid "No update for this model, firmware or channel.\nModel: "
+msgstr "Нет обновления для этой модели, прошивки или канала.\nМодель: "
+
+#: cr3gui/src/ota_fw6.h:143
+msgid "\nFirmware: "
+msgstr "\nПрошивка: "
+
+#: cr3gui/src/ota_fw6.h:153
+msgid "Checking for updates..."
+msgstr "Проверка обновлений..."
+
+#: cr3gui/src/ota_fw6.h:157
+msgid "Could not check for updates.\n"
+msgstr "Не удалось проверить обновления.\n"
+
+#: cr3gui/src/pb_toc.cpp:90
+msgid "Empty TOC"
+msgstr "Оглавление пусто"
+
+#: cr3gui/src/web_transfer.cpp:13
+msgid "The server response exceeds the permitted size."
+msgstr "Размер ответа сервера превышает допустимый."
+
+#: cr3gui/src/web_transfer.cpp:18 cr3gui/src/web_transfer.cpp:40
+msgid "Could not save the download. Check free storage and storage access."
+msgstr "Не удалось сохранить загрузку. Проверьте свободное место и доступ к памяти."
+
+#: cr3gui/src/web_transfer.cpp:29
+msgid "Could not finish saving the download. Check free storage."
+msgstr "Не удалось завершить сохранение загрузки. Проверьте свободное место."
+
+#: cr3gui/src/web_transfer.cpp:38
+msgid "An insecure update URL was rejected."
+msgstr "Небезопасный адрес обновления отклонён."
+
+#: cr3gui/src/web_transfer.cpp:42
+msgid "Could not initialize the network connection."
+msgstr "Не удалось подготовить сетевое соединение."
+
+#: cr3gui/src/web_transfer.cpp:66
+msgid "Could not start the network connection."
+msgstr "Не удалось установить сетевое соединение."
+
+#: cr3gui/src/web_transfer.cpp:74
+msgid "The network request failed. Check your connection and try again."
+msgstr "Сетевой запрос не выполнен. Проверьте подключение и повторите попытку."
+
+#: cr3gui/src/web_transfer.cpp:83
+msgid "The update server returned HTTP "
+msgstr "Сервер обновлений вернул код HTTP "
+
+#: cr3gui/src/web_transfer.cpp:84
+msgid "Could not complete the secure download. Check your connection and try again."
+msgstr "Не удалось завершить защищённую загрузку. Проверьте подключение и повторите попытку."
+
+#: cr3gui/src/pb_browser_ui.h:12
+msgid "Web lookup"
+msgstr "Поиск в интернете"
+
+#: cr3gui/src/pb_browser_ui.h:22
+msgid "The PocketBook browser is not available on this device."
+msgstr "Браузер PocketBook недоступен на этом устройстве."
+
+#: cr3gui/src/pb_browser_ui.h:31
+msgid "Couldn't connect to Wi-Fi. The dictionary is still available offline."
+msgstr "Не удалось подключиться к Wi-Fi. Словарь по-прежнему доступен без сети."
+
+#: cr3gui/src/pb_browser_ui.h:37
+msgid "Couldn't open the PocketBook browser. Your dictionary is still open; please try again."
+msgstr "Не удалось открыть браузер PocketBook. Словарь остаётся открытым; повторите попытку."
+
+#: cr3gui/src/pb_browser_ui.h:42
+msgid "Select a word to look up first."
+msgstr "Сначала выберите слово для поиска."
+
+#: crengine/src/crgui.cpp:1109
+msgid "Read"
+msgstr "Читать"
+
+#: crengine/src/crgui.cpp:1294
+msgid "Choose an action"
+msgstr "Выберите действие"
+
+#: crengine/src/hyphman.cpp:565
+msgid "[Algorithmic Hyphenation]"
+msgstr "[Алгоритмические переносы]"
+
+#: crengine/src/hyphman.cpp:568
+msgid "[Soft-hyphens Hyphenation]"
+msgstr "[Переносы по мягким дефисам]"
+
+#: cr3gui/src/dictionary_download_core.h
+#, c-format
+msgid "%.1f MB"
+msgstr "%.1f МБ"
+
+msgid "CoolReader is now the default for the selected formats."
+msgstr "CoolReader назначен приложением по умолчанию для выбранных форматов."
+
+msgid "CoolReader is already the default for the selected formats."
+msgstr "CoolReader уже используется по умолчанию для выбранных форматов."
+
+msgid "Could not save file associations."
+msgstr "Не удалось сохранить ассоциации файлов."
+
+msgid "Default reader"
+msgstr "Читалка по умолчанию"
+
+msgid "Choose which formats open in CoolReader"
+msgstr "Выберите форматы для открытия в CoolReader"
+
+msgid "All supported formats"
+msgstr "Все поддерживаемые форматы"
+
+msgid "FictionBook"
+msgstr "FictionBook"
+
+msgid "EPUB"
+msgstr "EPUB"
+
+msgid "Office documents"
+msgstr "Офисные документы"
+
+msgid "Web and help"
+msgstr "Веб-страницы и справка"
+
+msgid "Mobipocket and Palm"
+msgstr "Mobipocket и Palm"
+
+msgid "Plain text"
+msgstr "Обычный текст"

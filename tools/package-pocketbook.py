@@ -111,12 +111,17 @@ manifest = {
     'automated_validation': report,
     'device_validation': {'status': 'not-performed', 'binary_sha256': sha256(binary)},
 }
+release_notes = root / 'docs/releases' / (manifest['release_version'] + '.md')
+if release_notes.is_file():
+    shutil.copy2(release_notes, documentation / 'release-notes.md')
 if target.get('device_registry'):
     registry = json.loads((root / target['device_registry']).read_text())
     # Keep primary validation separate from the shared package's compatibility
     # list; PB632-only publishing tools must not mistake this for their package.
     manifest['validation_firmware'] = manifest.pop('target_firmware')
-    manifest['qualified_firmware'] = [device['firmware'] for device in registry['devices']]
+    # Keep firmware evidence separate from API-based OTA admission.
+    qualified_devices = [device for device in registry['devices'] if device['firmware']]
+    manifest['qualified_firmware'] = [device['firmware'] for device in qualified_devices]
     manifest['compatibility'] = registry
     manifest['ota'] = {'family': registry['family'], 'channel': 'ota/' + registry['family'] + '-api.txt',
                        'legacy_channel': 'ota/' + registry['family'] + '.txt',
@@ -124,7 +129,7 @@ if target.get('device_registry'):
                        'downloads': 'downloads/coolreader-shared/', 'schema': 'CR3-OTA-SHARED-2'}
     (share / 'package-family.txt').write_text(registry['family'] + '\n')
     (share / 'firmware-compatibility.txt').write_text(''.join(
-        device['model'] + ' ' + device['firmware'] + '\n' for device in registry['devices']))
+        device['model'] + ' ' + device['firmware'] + '\n' for device in qualified_devices))
     (share / 'firmware-api-compatibility.txt').write_text(''.join(
         device['model'] + ' ' + str(device['minimum_api']) + '\n' for device in registry['devices']))
     manifest['firmware_qualification'] = firmware_reports

@@ -104,6 +104,9 @@ LVContainerRef LVOpenDirectory( const lChar32 * path, const char32_t * mask = U"
 LVContainerRef LVOpenDirectory(const lString32& path, const char32_t * mask = U"*.*" );
 LVContainerRef LVOpenDirectory(const lString8& path, const char32_t * mask = U"*.*" );
 
+/// Open named files directly and enumerate the directory only if a listing is requested.
+LVContainerRef LVOpenDirectoryForLookup(const lString32 &path);
+
 bool LVDirectoryIsEmpty(const lString8& path);
 bool LVDirectoryIsEmpty(const lString32& path);
 
@@ -121,6 +124,9 @@ bool LVDeleteDirectory( lString8 filename );
 bool LVRenameFile(lString32 oldname, lString32 newname);
 /// rename file
 bool LVRenameFile(lString8 oldname, lString8 newname);
+
+/// File identity and change times for disposable metadata caches, or empty if unavailable.
+lString8 LVFileMetadataFingerprint(const lString8 &pathname);
 
 /// Atomically replace a serialized file and retain the previous file as .bak.
 bool LVWriteFileAtomic(lString32 filename, LVStreamRef contents, bool backup = true);

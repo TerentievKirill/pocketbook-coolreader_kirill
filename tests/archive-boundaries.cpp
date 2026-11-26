@@ -5,6 +5,16 @@
 #include <cstring>
 #include <limits>
 lString32 pbSkinFileName, openedCacheFile, currentCacheDir;
+
+static bool entryEquals(const LVContainerRef &archive, const lChar32 *name, const char *expected)
+{
+    LVStreamRef stream = archive->OpenStream(name, LVOM_READ);
+    char bytes[16];
+    lvsize_t count = 0;
+    return !stream.isNull() && stream->Read(bytes, sizeof(bytes), &count) == LVERR_OK &&
+           count == strlen(expected) && !memcmp(bytes, expected, count);
+}
+
 int main(int argc, char **argv) {
     CHECK(argc == 2);
     LVStreamFragment fragment(LVCreateStringStream(lString8("ABCDE")),1,2);
@@ -32,5 +42,19 @@ int main(int argc, char **argv) {
     }
     lString32 invalid = Utf8ToUnicode(argv[1]) + lString32("/invalid-utf8.zip");
     CHECK(LVOpenArchieve(LVOpenFileStream(invalid.c_str(),LVOM_READ)).isNull());
-    puts("PASS: fragment bounds/seeks, UTF-8/legacy ZIP names and data descriptors");
+    const char *indexedArchives[] = {"indexed.zip", "indexed-local-headers.zip"};
+    for (int i = 0; i < 2; ++i) {
+        lString32 file = Utf8ToUnicode(argv[1]) + "/" + indexedArchives[i];
+        LVContainerRef archive = LVOpenArchieve(LVOpenFileStream(file.c_str(), LVOM_READ));
+        CHECK(!archive.isNull() && archive->GetObjectCount() == 154 - i);
+        CHECK(entryEquals(archive, U"Тест/章节-é.xhtml", "first"));
+        // Scan enough entries to make the following lookups use the index.
+        for (int lookup = 0; lookup < 8; ++lookup)
+            CHECK(archive->OpenStream(U"missing.xhtml", LVOM_READ).isNull());
+        CHECK(entryEquals(archive, U"/Тест/章节-é.xhtml", "first"));
+        CHECK(entryEquals(archive, U"Тест/章节-É.xhtml", "case"));
+        CHECK(archive->OpenStream(U"//Тест/章节-é.xhtml", LVOM_READ).isNull());
+        CHECK(!lStr_cmp(archive->GetObjectInfo(152)->GetName(), U"Тест/章节-é.xhtml"));
+    }
+    puts("PASS: fragment bounds, ZIP encoding, descriptors and first duplicate before and after indexing");
 }

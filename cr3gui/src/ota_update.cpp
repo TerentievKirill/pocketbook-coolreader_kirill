@@ -130,7 +130,7 @@ void OTA_DL_dialog_handler(int button) {
     char buffer[2] = "x";
     marker = fopen(OTA_RESTART_MARK, "wb");
     if (!marker) {
-        Message(ICON_ERROR, "CoolReader", "Could not schedule restart. Restart CoolReader manually.", 3000);
+        Message(ICON_ERROR, "CoolReader", _("Could not schedule restart. Restart CoolReader manually."), 3000);
         return;
     }
     fwrite(buffer, 1, 1, marker);

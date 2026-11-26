@@ -1,36 +1,38 @@
 # CoolReader for PocketBook
 
+[![Latest release](https://img.shields.io/github/v/release/dderugin/pocketbook-coolreader)](https://github.com/dderugin/pocketbook-coolreader/releases/latest)
+[![License: GPL v2](https://img.shields.io/badge/license-GPL%20v2-blue.svg)](LICENSE)
+
 CoolReader is an open-source EPUB and FB2 reader for PocketBook Linux e-readers,
 with adjustable fonts and page layouts, bookmarks, offline StarDict dictionaries
-and Wi-Fi updates. This fork supports compatible firmware on Touch HD 3, Verse
+and Wi-Fi updates. This fork supports compatible firmware on Touch HD 3, Verse, Verse
 Pro, Era and InkPad 4; see the compatibility and testing details below.
 
-[Downloads](https://readertools.eu/coolreader/downloads/) · [Installation](https://readertools.eu/coolreader/installation/) · [Manual](https://readertools.eu/coolreader/manual/) · [Release 1.0.7](https://github.com/dderugin/pocketbook-coolreader/releases/tag/v1.0.7)
+[Downloads](https://readertools.eu/coolreader/downloads/) · [Installation](https://readertools.eu/coolreader/installation/) · [Manual](https://readertools.eu/coolreader/manual/) · [Release 1.0.9](https://github.com/dderugin/pocketbook-coolreader/releases/tag/v1.0.9)
 
-Release **1.0.7** adds free dictionary downloads for English, Russian, Ukrainian
-and Czech, original StarDict support, and a clearer dictionary window with labeled
-controls and readable entry previews. Hold the centre of the page for the new
-Reader menu, with Settings first and additional tools under More tools.
+Release **1.0.9** improves EPUB and FB2 opening, search, page lookup and painting,
+reduces repeated archive, image and contents work, and adds grouped default-reader
+selection. Opening a book directly skips the welcome document.
 
-It fixes native dictionary browsing crashes, HTML appearing in suggestion rows,
-and Google/Wikipedia lookups. Downloaded dictionaries work offline; web lookups
-use PocketBook's browser over Wi-Fi. Factory-protected dictionaries may remain
-unavailable to third-party apps; free downloads provide an alternative.
-
-It retains the grouped settings, quarter-step font weights, faster page/font
-caches and more reliable saved reading state introduced in 1.0.6.
+The shared package now includes 22 Linux device profiles with automatic-update
+eligibility. The 17 added profiles remain experimental; color readers use grayscale
+rendering. See the [release notes](docs/releases/1.0.9.md) for changes and limits.
 
 It provides one shared ARMv7 Linux executable and install ZIP for
-the four models below. Firmware snapshots used for verification:
+22 Linux model profiles, including the five firmware-qualified models below.
+The additional profiles are experimental and share the OTA channel; see the
+[expanded device list and limits](DEVICE-SUPPORT.md#expanded-linux-device-profiles).
+Firmware snapshots used for verification:
 
 | Device | Firmware tested |
 | --- | --- |
 | Touch HD 3 / PB632 | U632.6.11.2001 |
+| Verse / PB629 | U629.6.11.2020 |
 | Verse Pro / PB634 | U634.6.10.3425 |
 | Era / PB700 | U700.6.10.3209 |
 | InkPad 4 / PB743G | U743g.6.11.1683 |
 
-Twenty-four ARM regression groups and thirteen
+Thirty-four ARM regression groups and thirteen
 software probes on each additional firmware pass; interactive hardware testing
 and end-to-end device OTA acceptance remain pending. Firmware builds are no
 longer restricted to this list; unknown models and API levels below 6.10 are rejected. See the [device matrix](DEVICE-SUPPORT.md) and
@@ -55,7 +57,8 @@ now record executable-stack requirements and exercise the actual startup entry
 point on all four runtimes. The reported InkPad 4 failure has no device logs yet;
 this release does not establish that its cause is resolved on hardware.
 
-Every model uses the same download and Wi-Fi update channel. **Settings → About &
+All 22 registered Linux profiles use the same download and Wi-Fi update channel.
+The additional profiles retain experimental validation status. **Settings → About &
 updates → Check for updates** checks manually; automatic checks are optional.
 **Settings → About & updates → Version**
 shows the installed release. Moving from the earlier PB632-only release requires
@@ -75,8 +78,11 @@ its existing downloads and update channel remain separate.
 
 Extract the release ZIP and merge its **system** and **applications** folders
 into the reader’s USB storage, preserving existing settings. Safely eject it,
-then open **Applications → CoolReader**. For Library’s **Open with** menu,
-follow the [file-association instructions](https://readertools.eu/coolreader/installation/#file-associations).
+then open **Applications → CoolReader**. In **Settings → Default reader**, select
+one or more groups such as **FictionBook** and **EPUB**, or choose **All supported
+formats**, then tap **Done**.
+PocketBook Library uses CoolReader for those formats and keeps the previous apps
+available under **Open with**.
 
 See [the shared guide](README-pocketbook-armv7.txt) for backups and troubleshooting.
 
@@ -252,9 +258,16 @@ retry, and valid `.bak` files recover unreadable state files without overwriting
 recovery backup with a damaged primary. Sudden power loss before a checkpoint can
 still lose the most recent page turn.
 
-For on-device timing, launch the application with `CR3_PERF=1`. Standard-error
-logs record microseconds for font initialization, document parsing/layout, page
-images, screen flushes, prefetch, cover preparation and reading-state checkpoints.
+PocketBook FW6 starts with WARN-level logging. Set `CR3_STARTUP_TRACE=1` to
+enable TRACE during startup. Logging returns to WARN when the book opens.
+
+Set `CR3_PERF=1` to collect on-device timings with either log level. Standard-error
+logs record microseconds for font initialization, file open and checksum, EPUB
+detection, OPF parsing, cache hits and misses, manifest and spine processing,
+layout, page images, screen flushes, prefetch, cover preparation and reading-state
+checkpoints. `startup.first-paint` measures from application entry to the first
+book image ready for display. `startup.first-refresh` ends when InkView returns
+from submitting that refresh. Visible e-ink completion requires a device measurement.
 Timing is off by default. `CR3_DISABLE_PAGE_PREFETCH=1` and
 `CR3_DISABLE_FONT_METADATA_CACHE=1` allow controlled comparisons with the same
 executable. Record median and slowest page turns, cold/warm opening, and input

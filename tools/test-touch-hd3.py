@@ -2,7 +2,7 @@
 """Run ARM regressions using the configured build and extracted firmware runtime."""
 from pathlib import Path
 import argparse, datetime, io, json, os, re, shlex, subprocess, zipfile
-import struct, zlib, shutil
+import struct, zlib, shutil, sys, warnings
 import http.server, ssl, threading
 from build_metadata import sha256, source_metadata
 from targets import DEFAULT_TARGET, load_target, firmware_path, tool, target_evidence, verify_build_target
@@ -15,6 +15,7 @@ parser.add_argument('--target', default=DEFAULT_TARGET)
 parser.add_argument('--build', type=Path)
 parser.add_argument('--application', type=Path)
 args = parser.parse_args()
+subprocess.run([sys.executable, str(root / 'tools/test-translations.py')], check=True)
 profile = load_target(args.target)
 build = (args.build or root / profile['build']['directory']).resolve()
 firmware = firmware_path(profile)
@@ -64,15 +65,30 @@ with zipfile.ZipFile(legacy, 'w') as z:
 # Replace a UTF-8 character with an invalid leading byte, preserving header lengths.
 bad = (out / 'utf8-stored.zip').read_bytes().replace('Т'.encode(), b'\xc0\x80')
 (out / 'invalid-utf8.zip').write_bytes(bad)
+indexed = io.BytesIO()
+with zipfile.ZipFile(indexed, 'w') as archive:
+    for i in range(150):
+        archive.writestr(f'padding/{i:03d}.txt', '')
+    archive.writestr('Тест/章节-é.xhtml', b'first', zipfile.ZIP_DEFLATED)
+    archive.writestr('Тест/章节-É.xhtml', b'case')
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', message='Duplicate name:', category=UserWarning)
+        archive.writestr('Тест/章节-é.xhtml', b'second')
+    # Local-header recovery stops at the last entry when it reaches EOF.
+    archive.writestr('tail.txt', b'tail')
+with zipfile.ZipFile(indexed) as archive:
+    central_directory = archive.start_dir
+(out / 'indexed.zip').write_bytes(indexed.getvalue())
+(out / 'indexed-local-headers.zip').write_bytes(indexed.getvalue()[:central_directory])
 # OTA fixtures cover verified extraction, corruption, traversal and release identity.
 shared_ota = profile['build']['cmake'].get('CR3_SHARED_PACKAGE') == 'ON'
-compatibility = '632 U632.6.11.2001\n634 U634.6.10.3425\n700 U700.6.10.3209\n743G U743g.6.11.1683\n'
+compatibility = '629 U629.6.11.2020\n632 U632.6.11.2001\n634 U634.6.10.3425\n700 U700.6.10.3209\n743G U743g.6.11.1683\n'
 def add_shared_identity(entries, api=False):
     if shared_ota:
         entries['package-family.txt'] = 'pocketbook-armv7-softfp\n'
         entries['firmware-compatibility.txt'] = compatibility
         if api:
-            entries['firmware-api-compatibility.txt'] = '632 610\n634 610\n700 610\n743G 610\n'
+            entries['firmware-api-compatibility.txt'] = '629 610\n632 610\n634 610\n700 610\n743G 610\n'
     return entries
 for name in ('good', 'wrong-version', 'traversal', 'missing-binary', 'wrong-family', 'wrong-firmware', 'good-api', 'wrong-api'):
     with zipfile.ZipFile(out / ('ota-' + name + '.zip'), 'w', zipfile.ZIP_DEFLATED) as archive:
@@ -93,13 +109,46 @@ with zipfile.ZipFile(out / 'ota-ui-success.zip', 'w', zipfile.ZIP_DEFLATED) as a
 def png_chunk(kind, data):
     return struct.pack('!I', len(data)) + kind + data + struct.pack('!I', zlib.crc32(kind + data) & 0xffffffff)
 pixel = b'\x89PNG\r\n\x1a\n' + png_chunk(b'IHDR', struct.pack('!2I5B', 1, 1, 8, 2, 0, 0, 0)) + png_chunk(b'IDAT', zlib.compress(b'\x00\xff\x00\x00')) + png_chunk(b'IEND', b'')
+html_dir = out / 'loose-document'
+html_cache = out / 'loose-document-cache'
+shutil.rmtree(html_cache, ignore_errors=True)
+(html_dir / 'assets' / 'styles').mkdir(parents=True, exist_ok=True)
+(html_dir / 'assets' / 'изображение.png').write_bytes(pixel)
+(html_dir / 'assets' / 'theme.css').write_text('#styled { color: #345678; }', encoding='utf-8')
+(html_dir / 'assets' / 'styles' / 'book.css').write_text('@import url(../theme.css);', encoding='utf-8')
+html_book = html_dir / 'Книга.html'
+html_book.write_text(
+    '<html><head><meta charset="UTF-8"><title>Loose document</title>'
+    '<link rel="stylesheet" type="text/css" href="assets/styles/book.css"></head>'
+    '<body><p id="styled">Stylesheet test</p><img src="assets/изображение.png" width="48" height="36">'
+    + '<p>Cold and cached page rendering in a loose document.</p>' * 2500
+    + '</body></html>', encoding='utf-8')
 epub = out / 'regression-章节.epub'
 with zipfile.ZipFile(epub, 'w', zipfile.ZIP_DEFLATED) as book:
     book.writestr('mimetype', 'application/epub+zip', compress_type=zipfile.ZIP_STORED)
     book.writestr('META-INF/container.xml', '<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>')
-    book.writestr('OPS/content.opf', '<package version="2.0" unique-identifier="id" xmlns="http://www.idpf.org/2007/opf"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>EPUB regression</dc:title><dc:language>ru</dc:language><dc:identifier id="id">regression</dc:identifier></metadata><manifest><item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/><item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/><item id="image" href="pixel.png" media-type="image/png"/></manifest><spine toc="ncx"><itemref idref="chapter"/></spine></package>')
+    book.writestr('OPS/content.opf', '''<package version="2.0" unique-identifier="id" xmlns="http://www.idpf.org/2007/opf" xmlns:extra="urn:regression">
+        <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>EPUB regression</dc:title><dc:language>ru</dc:language><dc:identifier id="id">regression</dc:identifier></metadata>
+        <manifest>
+            <item id="tail" href="tail.xhtml" media-type="application/xhtml+xml"/>
+            <extra:ignored id="ignored" href="excluded.xhtml" media-type="application/xhtml+xml"/>
+            <item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/>
+            <item id="chapter" href="excluded.xhtml" media-type="application/xhtml+xml"/>
+            <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
+            <item id="image" href="pixel.png" media-type="image/png"/>
+        </manifest>
+        <spine toc="ncx">
+            <extra:ignored idref="tail"/>
+            <itemref idref="missing"/>
+            <itemref idref="chapter"/>
+            <itemref idref="ignored"/>
+            <itemref idref="tail" linear="no"/>
+        </spine>
+    </package>''')
     book.writestr('OPS/toc.ncx', '<ncx version="2005-1" xmlns="http://www.daisy.org/z3986/2005/ncx/"><head/><docTitle><text>EPUB regression</text></docTitle><navMap><navPoint id="chapter" playOrder="1"><navLabel><text>Chapter</text></navLabel><content src="chapter.xhtml"/></navPoint></navMap></ncx>')
     book.writestr('OPS/chapter.xhtml', '<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter</title><style>p { text-indent: 1em; color: #111; }</style></head><body><h1>Проверка EPUB</h1><p>Привет! Unicode 😀.</p><img src="pixel.png" width="16" height="16"/>' + '<p>Paragraph layout and page rendering.</p>' * 40 + '</body></html>')
+    book.writestr('OPS/tail.xhtml', '<html xmlns="http://www.w3.org/1999/xhtml"><body><p>Nonlinear appendix.</p></body></html>')
+    book.writestr('OPS/excluded.xhtml', '<html xmlns="http://www.w3.org/1999/xhtml"><body><p>Excluded chapter.</p></body></html>')
     book.writestr('OPS/pixel.png', pixel)
 # Flibusta-like FB2->EPUB notes: numeric/asterisk links and span/p targets.
 flibusta_epub = out / 'flibusta-footnotes-regression.epub'
@@ -229,9 +278,19 @@ for name, sources, engine, arguments in [
     ('standby-frontlight', ['tests/standby-frontlight.cpp'], False, []),
     ('css-null-ancestor', ['tests/css-selector-null-ancestor.cpp'], True, []),
     ('gray-buffer-copy', ['tests/gray-buffer-copy.cpp'], True, []),
+    ('image-scaling', ['tests/image-scaling.cpp'], True, []),
+    ('hyphenation-metadata', ['tests/hyphenation-metadata.cpp'], True, [out]),
+    ('fb2-embedded-binaries', ['tests/fb2-embedded-binaries.cpp'], True, []),
+    ('document-directory', ['tests/document-directory.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', html_book, html_cache]),
+    ('ordered-list-numbering', ['tests/ordered-list-numbering.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf']),
     ('performance-caches', ['tests/performance-caches.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', out]),
+    ('in-book-search', ['tests/in-book-search.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf']),
     ('reader-checkpoint', ['tests/reader-checkpoint.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', firmware / 'ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', firmware / 'ebrmain/cramfs/fonts/DroidSans.ttf', out]),
-    ('settings-editor', ['tests/settings-editor.cpp', 'cr3gui/src/settings.cpp', 'cr3gui/src/fsmenu.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', firmware / 'ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', build / 'cr3gui/pb631fw5.cr3skin', out, build / 'i18n/ru/LC_MESSAGES/cr3.mo']),
+    ('settings-editor', ['tests/settings-editor.cpp', 'cr3gui/src/settings.cpp', 'cr3gui/src/fsmenu.cpp', 'cr3gui/src/pb_file_associations.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', firmware / 'ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', build / 'cr3gui/pb631fw5.cr3skin', out, build / 'i18n/ru/LC_MESSAGES/cr3.mo']),
+    ('file-associations', ['tests/file-associations.cpp', 'cr3gui/src/pb_file_associations.cpp'], True, [out]),
+    ('reader-screens', ['tests/reader-screens.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', firmware / 'ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', build / 'cr3gui/pb631fw5.cr3skin', build / 'i18n/ru/LC_MESSAGES/cr3.mo', out]),
+    ('quick-menu-icons', ['tests/quick-menu-icons.cpp'], True, [build / 'cr3gui/pb631fw5.cr3skin', build / 'cr3gui/pb626fw5.cr3skin']),
+    ('translation-lookup', ['tests/translation-lookup.cpp'], True, [build / 'i18n/ru/LC_MESSAGES/cr3.mo']),
     ('skin-language-symbol', ['tests/skin-language-symbol.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', firmware / 'ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', build / 'cr3gui/pb631fw5.cr3skin', out]),
     ('document-render', ['tests/document-render-startup.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', firmware / 'ebrmain/cramfs/fonts/DejaVuSans-Bold.ttf', firmware / 'ebrmain/cramfs/fonts/DroidSans.ttf', root / profile['package']['assets'] / 'cr3-defaults.ini', root / 'cr3gui/data/hyph/', epub, root / 'cr3gui/data/fb2.css', flibusta_epub, root / 'cr3gui/data/epub.css', tolstoy_notes]),
     ('reading-state-migration', ['tests/reading-state-migration.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', out / 'migration.fb2', out / 'migration.zip']),
@@ -240,10 +299,10 @@ for name, sources, engine, arguments in [
     ('dictionary-browser', ['tests/dictionary-browser.cpp'], True, []),
     ('dictionary-safety', ['tests/dictionary-safety.cpp'], True, []),
     ('native-dictionary-api', ['tests/native-dictionary-api.cpp', 'cr3gui/src/pb_dictionary_engine.cpp', 'cr3gui/src/stardict.cpp'], True, []),
-    ('dictionary-download', ['tests/dictionary-download.cpp', 'cr3gui/src/stardict.cpp', 'cr3gui/src/stardict_install.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', build / 'cr3gui/pb631fw5.cr3skin', out]),
+    ('dictionary-download', ['tests/dictionary-download.cpp', 'cr3gui/src/stardict.cpp', 'cr3gui/src/stardict_install.cpp'], True, [firmware / 'ebrmain/cramfs/fonts/DejaVuSans.ttf', build / 'cr3gui/pb631fw5.cr3skin', out, build / 'i18n/ru/LC_MESSAGES/cr3.mo']),
     ('stardict', ['tests/stardict.cpp', 'cr3gui/src/stardict.cpp', 'cr3gui/src/stardict_install.cpp'], True, [out]),
     ('history-persistence', ['tests/history-persistence.cpp'], True, [out]),
-    ('ota-ui', ['tests/ota-ui.cpp'], True, [out]),
+    ('ota-ui', ['tests/ota-ui.cpp'], True, [out, build / 'i18n/ru/LC_MESSAGES/cr3.mo']),
     ('ota-package', ['tests/ota-package.cpp'], True, [out]),
     ('archive-boundaries', ['tests/archive-boundaries.cpp'], True, [out]),
     ('atomic-faults', ['tests/atomic-faults.cpp'], True, [out]),
@@ -255,11 +314,19 @@ for name, sources, engine, arguments in [
         subprocess.run([str(compiler).replace('-g++', '-gcc'), '-shared', '-fPIC',
                         'tests/native-dictionary-api-library.c', '-o', str(fixture)], check=True)
         test_options = options + ['-DCR3_NATIVE_DICTIONARY_LIBRARY="' + str(fixture) + '"']
-    if name == 'settings-editor':
+    if name in ('settings-editor', 'reader-screens', 'quick-menu-icons'):
         # The real menu must exercise the application's OTA/touch feature flags.
         app_flags = (build / 'cr3gui/CMakeFiles/cr3-pb.app.dir/flags.make').read_text()
         test_options = flags('CXX_DEFINES', app_flags) + flags('CXX_INCLUDES', app_flags) + flags('CXX_FLAGS', app_flags)
     command = [compiler] + test_options + sources
+    if name in ('reader-screens', 'quick-menu-icons'):
+        # Exercise the actual frontend screens without entering InkViewMain.
+        objects = sorted((build / 'cr3gui/CMakeFiles/cr3-pb.app.dir').rglob('*.o'))
+        entry = next(p for p in objects if p.name == 'cr3pocketbook.cpp.o')
+        renamed = out / (name + '-app.o')
+        subprocess.run([str(compiler).replace('-g++', '-objcopy'), '--redefine-sym',
+                        'main=cr3_application_main', str(entry), str(renamed)], check=True)
+        command += [renamed if p == entry else p for p in objects]
     if engine:
         command += ['-Wl,--exclude-libs,ALL', '-Wl,--start-group'] + libraries + ['-Wl,--end-group', '-linkview'] + ['-l' + name for name in dependencies['runtime']]
     subprocess.run([str(x) for x in command + ['-o', binary]], check=True)

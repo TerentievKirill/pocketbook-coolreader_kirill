@@ -82,10 +82,16 @@ else(NOT EXISTS "${po_build_file}")
 
     # Merge the strings, store the result in a variable instead of a PO file
 
+    # Repository translations are authoritative, including on incremental builds.
+    set(merge_input "${po_build_file}")
+    if(EXISTS "${po_file}")
+      set(merge_input "${po_file}")
+    endif()
+
     exec_program(${GETTEXT_MSGMERGE_EXECUTABLE} 
       RETURN_VALUE msgmerge_return
       OUTPUT_VARIABLE msgmerge_output
-      ARGS --quiet --output-file="-" \"${po_build_file}\" \"${pot_build_file}\")
+      ARGS --quiet --output-file="-" \"${merge_input}\" \"${pot_build_file}\")
     if(msgmerge_return)
       message("${msgmerge_output}")
       set(SUCCESS 0)

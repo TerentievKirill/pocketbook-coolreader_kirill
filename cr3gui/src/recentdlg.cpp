@@ -1,3 +1,4 @@
+#include "reader_ui.h"
 //
 // C++ Implementation: bookmarks dialog
 //
@@ -22,6 +23,7 @@ private:
     CRFileHistRecord * _book;
 public:
     CRRecentBookMenuItem( CRMenu * menu, int index, CRFileHistRecord * book );
+    virtual lString32 getSubmenuValue() { return _book ? _book->getAuthor() : lString32(); }
     virtual void Draw( LVDrawBuf & buf, lvRect & rc, CRRectSkinRef skin, CRRectSkinRef valueSkin, bool selected );
 };
 
@@ -53,6 +55,12 @@ void CRRecentBookMenuItem::Draw( LVDrawBuf & buf, lvRect & rc, CRRectSkinRef ski
     else if ( !series.empty() )
         title << " - " << series;
 
+    if (_menu && _menu->isSettingsEditor()) {
+        _label = title;
+        _menu->drawSettingsItem(*this, buf, rc, selected);
+        _itemDirty = false;
+        return;
+    }
     lvRect posRect = textRect;
     if ( !author.empty() ) {
         posRect.bottom = posRect.top + skin->getFont()->getHeight() + itemBorders.top + itemBorders.bottom;
@@ -130,6 +138,7 @@ CRRecentBooksMenu::CRRecentBooksMenu(CRGUIWindowManager * wm, LVDocView * docvie
         acc = _wm->getAccTables().get("menu");
     setAccelerators( acc );
     setSkinName(lString32("#recent-books"), lString32("#bookmarks"));
+    styleReaderMenu(this);
     lString32 pattern(_("$1 - open book\n$2, $3 - close"));
 #ifdef CR_POCKETBOOK
 	pattern.replaceParam(1, getCommandKeyName( MCMD_SELECT ));

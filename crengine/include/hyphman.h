@@ -115,7 +115,8 @@ public:
 	int length() { return _list.length(); }
 	HyphDictionary * get( int index ) { return (index>=0 && index<+_list.length()) ? _list[index] : NULL; }
 	HyphDictionaryList() { addDefault(); }
-    bool open(lString32 hyphDirectory, bool clear = true);
+    bool open(lString32 hyphDirectory, bool clear = true,
+              const lString32 &metadataCache = lString32::empty_str);
 	HyphDictionary * find( const lString32& id );
 	bool activate( lString32 id );
 };
@@ -158,7 +159,8 @@ class HyphMan
     static HyphMethod* getHyphMethodForLang_impl(lString32 lang_tag);
 public:
     static void uninit();
-    static bool initDictionaries(lString32 dir, bool clear = true);
+    static bool initDictionaries(lString32 dir, bool clear = true,
+                                 const lString32 &metadataCache = lString32::empty_str);
     static HyphDictionaryList * getDictList() { return _dictList; }
     static bool addDictionaryItem(HyphDictionary* dict);
     static void setDataLoader(HyphDataLoader* loader);

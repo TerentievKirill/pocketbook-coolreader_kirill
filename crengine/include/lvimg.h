@@ -58,6 +58,16 @@ LVImageSourceRef LVCreateNodeImageSource( ldomNode * node );
 LVImageSourceRef LVCreateDummyImageSource( ldomNode * node, int width, int height );
 /// creates image source from stream
 LVImageSourceRef LVCreateStreamImageSource( LVStreamRef stream );
+enum class LVImageFormat { Unknown, Png, Jpeg, Gif, Svg, Dummy };
+struct LVImageMetadata {
+    int width = 0;
+    int height = 0;
+    LVImageFormat format = LVImageFormat::Unknown;
+};
+/// Probe the format and dimensions without decoding pixels.
+bool LVReadImageMetadata(LVStreamRef stream, LVImageMetadata &metadata);
+/// Create a decoder for a stream whose format was already probed.
+LVImageSourceRef LVCreateStreamImageDecoder(LVStreamRef stream, LVImageFormat format);
 /// creates image source as memory copy of file contents
 LVImageSourceRef LVCreateFileCopyImageSource( lString32 fname );
 /// creates image source as memory copy of stream contents

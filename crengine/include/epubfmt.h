@@ -34,8 +34,13 @@
 // That's how many nav/ncx toc nodes we parse before giving up
 #define EPUB_TOC_MAX_ITER 5000
 
+/// Opens the ZIP and returns it only if it has the EPUB mimetype.
+LVContainerRef OpenEpubArchive( LVStreamRef stream );
 bool DetectEpubFormat( LVStreamRef stream );
 bool ImportEpubDocument( LVStreamRef stream, ldomDocument * doc, LVDocViewCallback * progressCallback, CacheLoadingCallback * formatCallback, bool metadataOnly = false );
+/// Imports using the archive already opened from stream.
+bool ImportEpubDocument( LVStreamRef stream, ldomDocument * doc, LVDocViewCallback * progressCallback,
+                         CacheLoadingCallback * formatCallback, bool metadataOnly, LVContainerRef archive );
 lString32 EpubGetRootFilePath( LVContainerRef m_arc );
 LVStreamRef GetEpubCoverpage(LVContainerRef arc);
 

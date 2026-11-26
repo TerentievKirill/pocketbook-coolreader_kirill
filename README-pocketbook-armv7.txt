@@ -1,15 +1,24 @@
 CoolReader for PocketBook - shared ARMv7 Linux package
 =================================================================
 
-One application executable is used on all four models below. Runtime device
+One application executable provides 22 Linux device profiles, including the
+five firmware-qualified models below. Runtime device
 profiles select display defaults. This package is a laboratory-tested candidate;
 its current binary has NOT been tested on a physical reader.
 
 Models and firmware snapshots used for verification:
   Touch HD 3 / PB632   U632.6.11.2001
+  Verse / PB629       U629.6.11.2020
   Verse Pro / PB634    U634.6.10.3425
   Era / PB700         U700.6.10.3209
   InkPad 4 / PB743G   U743g.6.11.1683
+
+Experimental USB profiles: PB618, PB619, PB627, PB628, PB631, PB633,
+PB634K3, PB700K3, PB710, PB740, PB740-2, PB740-3, PB741, PB743C,
+PB743K3, PB970 and PB1040. These need firmware and hardware validation;
+they share the automatic update channel. Color screens display grayscale.
+InkPad One requires a separate hard-float build; Android models require an
+Android application and cannot run this package.
 
 These firmware snapshots are evidence, not an exact-version whitelist.
 Known models select the highest supported API level at or below the installed
@@ -19,6 +28,26 @@ are allowed; compatible system libraries remain necessary. This package requires
 modern ARM Linux soft-float userland; it is not an Android, ARM64 or hard-float
 build. Older PocketBook firmware may not supply its required system libraries.
 The compiled CPU baseline is ARMv7-A, NEON/VFPv3, softfp calling convention.
+
+New in 1.0.9
+------------
+EPUB and FB2 opening, search, page lookup, contents and painting avoid repeated
+work. Bounded image caches and archive indexes reduce decoding and scanning.
+Opening a book directly skips the welcome document. Default-reader settings can
+apply multiple format groups together. All 22 registered Linux profiles share
+the automatic-update channel; the 17 additional profiles remain experimental.
+Color readers display grayscale. InkPad One and Android models need separate builds.
+See the bundled release notes for validation and compatibility limits.
+
+New in 1.0.8
+------------
+Settings no longer reads past the translation catalog when a key is missing,
+fixing the Russian-language Settings crash. The Russian catalog covers all
+current UI keys, including dictionary downloads, update dialogs and errors.
+Verse PB629 with U629.6.11.2020 now has a device profile with 212 DPI defaults.
+Book info, bookmarks, notes, recent books, contents, Help, shortcuts and tap-zone
+settings use the current navigation and typography. Book metadata is shown as
+stacked labels and values; long values wrap and special characters are preserved.
 
 Reader menu
 -----------
@@ -68,11 +97,12 @@ Install and return to a previous installation
    welcome book; subsequent launches reopen the last existing book.
 5. To return to the previous build, close CoolReader and restore your backups.
 
-Library file associations are optional and differ across firmware. Preserve the
-existing system/config/extensions.cfg. For a supported text format such as EPUB
-or FB2, append ,cr3-pb.app to its comma-separated application list, keeping the
-existing stock readers. Do not replace the configuration with the comment-only
-system/share/cr3/doc/extensions.cfg.example. PDFs remain with the existing PDF readers.
+To make CoolReader the default in PocketBook Library, open Settings > Default
+reader. Select one or more groups, such as FictionBook and EPUB, or select
+All supported formats. Tap Done to apply the selection. Other readers remain
+available through Open with. CoolReader backs up an existing
+system/config/extensions.cfg to extensions.cfg.bak when it changes the file.
+Reopen the Library if it still uses the previous reader.
 
 Defaults and runtime device selection
 ------------------------------------
@@ -139,7 +169,7 @@ model, exact firmware and logs:
   system/cr3-pb.crash.log
 
 system/share/cr3/metadata/build-info.json binds this package to its source, exact executable, primary ARM
-regressions and the three additional firmware qualification reports. Automated
+regressions and the four additional firmware qualification reports. Automated
 checks exercise software interfaces and rendering, not actual hardware behavior.
 
 Source and license: GPL version 2; see system/share/cr3/licenses/COPYING and

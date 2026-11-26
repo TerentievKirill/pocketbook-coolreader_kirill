@@ -107,7 +107,9 @@ void CRMoFileTranslator::sort()
 
 const char * CRMoFileTranslator::getText( const char * src )
 {
-    if (!src || !src[0])
+    // Keep the empty-string catalog key accessible (gettext metadata).
+    // translate() filters empty UI labels before reaching this lookup.
+    if (!src)
         return "";
     // Standard lower_bound: the previous search could set a == len when
     // the requested key sorted after the last catalog entry and then read

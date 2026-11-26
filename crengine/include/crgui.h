@@ -721,6 +721,9 @@ class CRGUIWindowBase : public CRGUIWindow
         virtual void drawStatusText( LVDrawBuf & buf, const lvRect & rc, CRRectSkinRef skin );
         /// draw title bar using current skin, with optional scroll/tab/page indicator
         virtual void drawTitleBar();
+        void drawReaderHeader(const lString32 &title, const lString32 &context,
+                              LVFontRef titleFont, LVFontRef buttonFont,
+                              const lString32 &left, const lString32 &right, int rightButton);
         /// draw input box, if any
         virtual void drawInputBox();
         /// draw title bar using current skin, with optional scroll/tab/page indicator
@@ -1009,11 +1012,11 @@ class CRDocViewWindow : public CRGUIWindowBase
         {
             return _docview;
         }
-        CRDocViewWindow( CRGUIWindowManager * wm )
+        CRDocViewWindow( CRGUIWindowManager * wm, bool noDefaultDocument = false )
         : CRGUIWindowBase( wm )
         {
             CRLog::trace("CRDocViewWindow()");
-            _docview = new LVDocView( wm->getScreen()->getCanvas()->GetBitsPerPixel() );
+            _docview = new LVDocView( wm->getScreen()->getCanvas()->GetBitsPerPixel(), noDefaultDocument );
             CRLog::trace("resizing...");
             _docview->Resize( getWidth(), getHeight() );
             _docview->setPageMargins( lvRect(10, 10, 10, 10) );
@@ -1152,6 +1155,8 @@ class CRMenuItem
         virtual ~CRMenuItem() { }
         /// submenu for options dialog support
         virtual lString32 getSubmenuValue() { return lString32::empty_str; }
+        enum class CheckState { None, Unchecked, Checked, Mixed };
+        virtual CheckState getCheckState() const { return CheckState::None; }
         /// property value, for options editor support
         virtual lString32 getPropValue() { return _propValue; }
         virtual bool isItemDirty() { return _itemDirty; }

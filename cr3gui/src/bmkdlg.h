@@ -23,6 +23,7 @@ private:
 public:
     CRBookmarkMenuItem( CRMenu * menu, int shortcut, CRBookmark * bookmark, int page );
     virtual void Draw( LVDrawBuf & buf, lvRect & rc, CRRectSkinRef skin, CRRectSkinRef valueSkin, bool selected );
+    virtual lString32 getSubmenuValue() { return _bookmark ? _bookmark->getPosText() : lString32(); }
     CRBookmark * getBookmark() { return _bookmark; }
     void setBookmark(CRBookmark *bookmark) { _bookmark = bookmark; _itemDirty = true; }
     int getPage() { return _page; }

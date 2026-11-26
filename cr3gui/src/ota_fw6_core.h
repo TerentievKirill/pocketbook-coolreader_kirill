@@ -1,3 +1,4 @@
+#include "cri18n.h"
 // SHA-256-verified FW6 updates are staged before the launcher switches directories.
 #include <openssl/sha.h>
 #include <sys/stat.h>
@@ -35,10 +36,10 @@ static std::string otaStageError;
 static bool otaStageFailure(const char *text) { otaStageError = text; return false; }
 static bool otaStagePackage(const std::string &checksum, const std::string &revision,
                             const std::string &model = "", const std::string &firmware = "") {
-    otaStageError = "The update archive is invalid or contains unsafe paths.";
+    otaStageError = _("The update archive is invalid or contains unsafe paths.");
     const char *zip = FLASHDIR "/.cr3-ota.zip";
     FILE *file = fopen(zip, "rb");
-    if (!file) return otaStageFailure("Could not read the downloaded package.");
+    if (!file) return otaStageFailure(_("Could not read the downloaded package."));
     SHA256_CTX ctx; SHA256_Init(&ctx);
     unsigned char buffer[32768], hash[SHA256_DIGEST_LENGTH];
     size_t count;
@@ -46,9 +47,9 @@ static bool otaStagePackage(const std::string &checksum, const std::string &revi
     bool ok = !ferror(file); fclose(file); SHA256_Final(hash, &ctx);
     char hex[65];
     for (int i = 0; i < 32; ++i) sprintf(hex + i * 2, "%02x", hash[i]);
-    if (!ok) return otaStageFailure("Could not read the downloaded package.");
-    if (checksum != hex) return otaStageFailure("Checksum mismatch. The download may be damaged. Please try again.");
-    if (!otaRemoveTree(FW6_OTA_STAGE) || mkdir(FW6_OTA_STAGE, 0755)) return otaStageFailure("Could not create staging files. Check free storage and USB storage access.");
+    if (!ok) return otaStageFailure(_("Could not read the downloaded package."));
+    if (checksum != hex) return otaStageFailure(_("Checksum mismatch. The download may be damaged. Please try again."));
+    if (!otaRemoveTree(FW6_OTA_STAGE) || mkdir(FW6_OTA_STAGE, 0755)) return otaStageFailure(_("Could not create staging files. Check free storage and USB storage access."));
     LVContainerRef archive = LVOpenArchieve(LVOpenFileStream(zip, LVOM_READ));
     if (archive.isNull()) return false;
     std::set<std::string> names;
@@ -64,25 +65,25 @@ static bool otaStagePackage(const std::string &checksum, const std::string &revi
         while (std::getline(parts, part, '/')) {
             if (part.empty() || part == "." || part == "..") return false;
             target += "/" + part;
-            if (parts.peek() != EOF && mkdir(target.c_str(), 0755) && errno != EEXIST) return otaStageFailure("Could not create staging folders. Check free storage.");
+            if (parts.peek() != EOF && mkdir(target.c_str(), 0755) && errno != EEXIST) return otaStageFailure(_("Could not create staging folders. Check free storage."));
         }
         LVStreamRef input = archive->OpenStream(info->GetName(), LVOM_READ);
         if (input.isNull() || input->GetSize() > 64 * 1024 * 1024) return false;
         total += input->GetSize(); if (total > 128 * 1024 * 1024) return false;
-        FILE *out = fopen(target.c_str(), "wb"); if (!out) return otaStageFailure("Could not write staging files. Check free storage.");
+        FILE *out = fopen(target.c_str(), "wb"); if (!out) return otaStageFailure(_("Could not write staging files. Check free storage."));
         lvsize_t remaining = input->GetSize();
         while (remaining) {
             lvsize_t n = 0;
-            if (input->Read(buffer, remaining < sizeof(buffer) ? remaining : sizeof(buffer), &n) != LVERR_OK || !n || fwrite(buffer, 1, n, out) != n) { fclose(out); return otaStageFailure("Could not unpack or save the update. Check free storage and try downloading again."); }
+            if (input->Read(buffer, remaining < sizeof(buffer) ? remaining : sizeof(buffer), &n) != LVERR_OK || !n || fwrite(buffer, 1, n, out) != n) { fclose(out); return otaStageFailure(_("Could not unpack or save the update. Check free storage and try downloading again.")); }
             remaining -= n;
         }
-        if (fclose(out)) return otaStageFailure("Could not save staging files. Check free storage.");
+        if (fclose(out)) return otaStageFailure(_("Could not save staging files. Check free storage."));
         if ((name == "bin/cr3-pb.app" || name == "bin/cr3-pb-executable.app") && chmod(target.c_str(), 0755)) return false;
     }
     std::ifstream versionFile(FW6_OTA_STAGE "/release-version.txt");
     std::string packageVersion; std::getline(versionFile, packageVersion);
     if (packageVersion != revision || !names.count("bin/cr3-pb.app") || !names.count("cr3-defaults.ini") || !names.count("skins/pb631fw5.cr3skin"))
-        return otaStageFailure("The downloaded package is for a different version or is incomplete.");
+        return otaStageFailure(_("The downloaded package is for a different version or is incomplete."));
 #ifdef CR3_SHARED_PACKAGE
     std::ifstream familyFile(FW6_OTA_STAGE "/package-family.txt");
     std::string family; std::getline(familyFile, family);
@@ -94,7 +95,7 @@ static bool otaStagePackage(const std::string &checksum, const std::string &revi
     if (family != CR3_OTA_FAMILY || !cr3ota::parseSharedRelease(
             std::string(apiPolicy ? "CR3-OTA-SHARED-2\n" : "CR3-OTA-SHARED-1\n") + family + "\n" + revision + "\n" + checksum + "\n" + compatibility, release) ||
             !cr3ota::compatible(release, CR3_OTA_FAMILY, model, firmware))
-        return otaStageFailure("The downloaded package is not compatible with this reader and firmware.");
+        return otaStageFailure(_("The downloaded package is not compatible with this reader and firmware."));
 #endif
     return true;
 }

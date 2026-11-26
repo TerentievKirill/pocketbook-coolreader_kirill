@@ -23,18 +23,28 @@ int main(int argc, char **argv) {
     CHECK(pbdevice::supported("PB743G", "U743g.6.12.1"));
     CHECK(pbdevice::supported("PB632", "U632.6.10.1"));
     CHECK(!pbdevice::supported("PB743G", "malformed"));
+    CHECK(pbfirmware::apiLevel("U629.6.11.2020") == 611);
+    CHECK(pbdevice::supported("PB629", "U629.6.11.2020"));
+    CHECK(pbdevice::supported("PocketBook Verse (PB629)", "U629.6.11.2020"));
+    CHECK(pbdevice::identify("PocketBook 629")->dpi == 212);
+    CHECK(!pbdevice::supported("PB629", "U629.6.9.862"));
+    CHECK(!pbdevice::supported("PB629K3", "U629.6.11.2020"));
     CHECK(InitFontManager(lString8::empty_str));
     CHECK(fontMan->RegisterFont(lString8(argv[1])));
     for (const pbdevice::Profile &profile : pbdevice::profiles) {
-        CHECK(pbdevice::supported(profile.model, profile.firmware));
+        const std::string firmware = profile.firmware ? profile.firmware :
+            std::string("U") + profile.model + ".6.10.1";
+        CHECK(pbdevice::supported(profile.model, firmware.c_str()));
         CRPropRef defaults = LVCreatePropsContainer();
         LVStreamRef stream = LVOpenFileStream(argv[2], LVOM_READ);
         CHECK(!stream.isNull() && defaults->loadFromStream(stream.get()));
         pbdevice::applyDefaults(defaults, profile);
         CHECK(defaults->getStringDef(PROP_FONT_FACE) == U"DejaVu Sans");
-        CHECK(defaults->getIntDef(PROP_FONT_SIZE) == 42);
-        CHECK(defaults->getIntDef(PROP_PAGE_MARGIN_LEFT) == 24);
-        CHECK(defaults->getIntDef(PROP_PAGE_MARGIN_RIGHT) == 24);
+        const int fontSize = (42 * profile.dpi + 150) / 300;
+        const int margin = (24 * profile.dpi + 150) / 300;
+        CHECK(defaults->getIntDef(PROP_FONT_SIZE) == fontSize);
+        CHECK(defaults->getIntDef(PROP_PAGE_MARGIN_LEFT) == margin);
+        CHECK(defaults->getIntDef(PROP_PAGE_MARGIN_RIGHT) == margin);
         CHECK(defaults->getStringDef(PROP_HYPHENATION_DICT) == U"@algorithm");
         for (int rotation = 0; rotation < 2; ++rotation) {
             LVDocView view(8);
@@ -51,7 +61,7 @@ int main(int argc, char **argv) {
             LVStreamRef book = LVCreateMemoryStream(const_cast<char *>(text.data()), text.size(), true);
             CHECK(view.LoadDocument(book, U"shared.fb2"));
             view.Render();
-            CHECK(view.getPageCount() > 0 && view.getFontSize() == 42);
+            CHECK(view.getPageCount() > 0 && view.getFontSize() == fontSize);
             LVDrawBuf *pixels = view.getPageImage(0)->getDrawBuf();
             bool painted = false;
             for (int y=0; y<pixels->GetHeight() && !painted; y+=4)

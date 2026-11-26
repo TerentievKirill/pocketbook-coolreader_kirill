@@ -13,6 +13,7 @@
 #include <cri18n.h>
 #include "mainwnd.h"
 #include "fsmenu.h"
+#include "reader_ui.h"
 
 
 CRFullScreenMenu::CRFullScreenMenu(CRGUIWindowManager * wm, int id, const lString32 & caption, int numItems, lvRect & rc)
@@ -21,6 +22,7 @@ CRFullScreenMenu::CRFullScreenMenu(CRGUIWindowManager * wm, int id, const lStrin
     _rect = rc;
     _pageItems = numItems;
     _fullscreen = true;
+    styleReaderMenu(this);
 }
 
 lString32 CRFullScreenMenu::getCommandKeyName( int cmd, int param )
